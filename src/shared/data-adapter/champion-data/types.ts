@@ -1,4 +1,4 @@
-export type ChampionDataSourceId = 'opgg' | 'qq101'
+export type ChampionDataSourceId = 'opgg' | 'qq101' | 'lolps'
 
 export type ChampionDataMode =
   'ranked' | 'classic' | 'aram' | 'aram_mayhem' | 'arena' | 'nexus_blitz' | 'urf'

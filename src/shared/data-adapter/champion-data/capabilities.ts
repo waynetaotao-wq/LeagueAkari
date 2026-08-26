@@ -89,6 +89,22 @@ export const CHAMPION_DATA_CAPABILITIES: Readonly<
         'synergies'
       ]
     }
+  ],
+  lolps: [
+    {
+      mode: 'ranked',
+      filters: ['patch', 'tier', 'position'],
+      features: [
+        'champion-overview',
+        'champion-summary',
+        'matchups',
+        'summoner-spells',
+        'ability-builds',
+        'item-builds',
+        'rune-pages',
+        'position-stats'
+      ]
+    }
   ]
 }
 
