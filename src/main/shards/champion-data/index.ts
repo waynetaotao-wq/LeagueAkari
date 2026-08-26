@@ -1,5 +1,6 @@
 import { IAkariShardInitDispose, Shard } from '@shared/akari-shard'
 import type { ChampionDataPreferences } from '@shared/data-adapter/champion-data'
+import { LolpsHttpApiAxiosHelper } from '@shared/http-api-axios-helper/lolps'
 import { OpggHttpApiAxiosHelper } from '@shared/http-api-axios-helper/opgg'
 import { Qq101HttpApiAxiosHelper } from '@shared/http-api-axios-helper/qq101'
 import axios, { type AxiosInstance } from 'axios'
@@ -20,6 +21,7 @@ import {
   type ChampionDataMainContext,
   resolveChampionDataSourceGateAvailability
 } from './context'
+import { ChampionDataCounterIntel } from './counter-intel'
 import { ChampionDataIpcHandlers } from './ipc-handlers'
 import { ChampionDataServiceController } from './service-controller'
 import { ChampionDataMainSourceLoader } from './source-loader'
@@ -46,9 +48,12 @@ export class ChampionDataMain implements IAkariShardInitDispose {
   private readonly _context: ChampionDataMainContext
   private readonly _opggHttpClient: AxiosInstance
   private readonly _qq101HttpClient: AxiosInstance
+  private readonly _lolpsHttpClient: AxiosInstance
+  private readonly _opggWebHttpClient: AxiosInstance
   private readonly _sourceLoader: ChampionDataMainSourceLoader
   private readonly _service: ChampionDataServiceController
   private readonly _ipcHandlers: ChampionDataIpcHandlers
+  private readonly _counterIntel: ChampionDataCounterIntel
 
   constructor(
     private readonly _appCommon: AppCommonMain,
@@ -64,7 +69,7 @@ export class ChampionDataMain implements IAkariShardInitDispose {
       {
         preferredSource: {
           default: this.settings.preferredSource,
-          schema: z.enum(['opgg', 'qq101'])
+          schema: z.enum(['opgg', 'qq101', 'lolps'])
         },
         preferences: { default: this.settings.preferences, schema: preferencesSchema }
       },
@@ -76,9 +81,21 @@ export class ChampionDataMain implements IAkariShardInitDispose {
       Referer: 'https://101.qq.com/',
       'User-Agent': 'LeagueAkari'
     })
+    this._lolpsHttpClient = this._createHttpClient({
+      Accept: 'application/json, text/plain, */*',
+      Referer: 'https://lol.ps/',
+      'User-Agent': 'LeagueAkari'
+    })
     const opggApi = new OpggHttpApiAxiosHelper(this._opggHttpClient)
     const qq101Api = new Qq101HttpApiAxiosHelper(this._qq101HttpClient)
-    this._sourceLoader = new ChampionDataMainSourceLoader(this._logger, opggApi, qq101Api)
+    const lolpsApi = new LolpsHttpApiAxiosHelper(this._lolpsHttpClient)
+    this._opggWebHttpClient = this._createHttpClient()
+    this._counterIntel = new ChampionDataCounterIntel({
+      logger: this._logger,
+      opggApi,
+      web: this._opggWebHttpClient
+    })
+    this._sourceLoader = new ChampionDataMainSourceLoader(this._logger, opggApi, qq101Api, lolpsApi)
     this._context = {
       namespace: ChampionDataMain.id,
       logger: this._logger,
@@ -105,10 +122,12 @@ export class ChampionDataMain implements IAkariShardInitDispose {
     this._watchAvailability()
     this._watchHttpProxy()
     this._ipcHandlers.register()
+    this._counterIntel.register(this._ipc, ChampionDataMain.id)
   }
 
   async onDispose() {
     this._ipcHandlers.dispose()
+    this._counterIntel.dispose()
   }
 
   loadOverview(query: Parameters<ChampionDataServiceController['loadOverview']>[0]) {
@@ -160,7 +179,11 @@ export class ChampionDataMain implements IAkariShardInitDispose {
       ({ preferredSource, opgg, qq101 }) => {
         this.state.setAvailability({
           preferredSource,
-          sources: { opgg: { enabled: opgg }, qq101: { enabled: qq101 } }
+          sources: {
+            opgg: { enabled: opgg },
+            qq101: { enabled: qq101 },
+            lolps: { enabled: true }
+          }
         })
       },
       { fireImmediately: true }
@@ -171,7 +194,12 @@ export class ChampionDataMain implements IAkariShardInitDispose {
     this._mobxUtils.reaction(
       () => this._appCommon.settings.httpProxy,
       (httpProxy) => {
-        for (const client of [this._opggHttpClient, this._qq101HttpClient]) {
+        for (const client of [
+          this._opggHttpClient,
+          this._qq101HttpClient,
+          this._lolpsHttpClient,
+          this._opggWebHttpClient
+        ]) {
           if (httpProxy.strategy === 'force') {
             client.defaults.proxy = { host: httpProxy.host, port: httpProxy.port }
           } else if (httpProxy.strategy === 'disable') {

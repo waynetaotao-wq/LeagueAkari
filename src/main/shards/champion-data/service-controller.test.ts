@@ -28,7 +28,7 @@ function setup(preferredSource: ChampionDataSourceId = 'qq101') {
   const state = new ChampionDataState()
   state.setAvailability({
     preferredSource,
-    sources: { opgg: { enabled: true }, qq101: { enabled: true } }
+    sources: { opgg: { enabled: true }, qq101: { enabled: true }, lolps: { enabled: true } }
   })
   const loader: ChampionDataSourceLoader = {
     loadPatches: vi.fn(async () => ['16.16']),
@@ -65,7 +65,7 @@ describe('ChampionDataServiceController', () => {
     const { controller, loader, settings, state } = setup('qq101')
     state.setAvailability({
       preferredSource: 'qq101',
-      sources: { opgg: { enabled: true }, qq101: { enabled: false } }
+      sources: { opgg: { enabled: true }, qq101: { enabled: false }, lolps: { enabled: true } }
     })
 
     const result = await controller.loadOverview({ mode: 'ranked' })

@@ -6,6 +6,8 @@ import {
   type ChampionDataSourceId,
   type Qq101MayhemInput,
   type Qq101RankedDetailsInput,
+  adaptLolpsChampionDetails,
+  adaptLolpsChampionOverview,
   adaptOpggChampionDetails,
   adaptOpggChampionOverview,
   adaptOpggMayhemDetails,
@@ -19,6 +21,7 @@ import {
   toQq101Position,
   toQq101Tier
 } from '@shared/data-adapter/champion-data'
+import type { LolpsHttpApiAxiosHelper } from '@shared/http-api-axios-helper/lolps'
 import type { OpggHttpApiAxiosHelper } from '@shared/http-api-axios-helper/opgg'
 import type { Qq101HttpApiAxiosHelper, Qq101RiftQuery } from '@shared/http-api-axios-helper/qq101'
 import type { PositionType, RegionType, TierType } from '@shared/types/opgg'
@@ -42,7 +45,8 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
   constructor(
     private readonly _logger: AkariLogger,
     private readonly _opggApi: OpggHttpApiAxiosHelper,
-    private readonly _qq101Api: Qq101HttpApiAxiosHelper
+    private readonly _qq101Api: Qq101HttpApiAxiosHelper,
+    private readonly _lolpsApi: LolpsHttpApiAxiosHelper
   ) {}
 
   private async _resolveOpggVersion(query: ChampionDataQuery, options: ChampionDataLoadOptions) {
@@ -83,6 +87,12 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
       return response.data.data
     }
 
+    if (source === 'lolps') {
+      if (query.mode !== 'ranked') return []
+      const response = await this._lolpsApi.getVersions(options)
+      return response.data
+    }
+
     if (query.mode === 'classic') return []
     const patches = await this._qq101Api.getPatches(options)
     return patches.map((patch) => patch.name)
@@ -93,9 +103,13 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
     query: ChampionDataQuery,
     options: ChampionDataLoadOptions = {}
   ) {
-    return source === 'opgg'
-      ? this._loadOpggOverview(query, options)
-      : this._loadQq101Overview(query, options)
+    if (source === 'opgg') {
+      return this._loadOpggOverview(query, options)
+    }
+    if (source === 'lolps') {
+      return this._loadLolpsOverview(query, options)
+    }
+    return this._loadQq101Overview(query, options)
   }
 
   async loadDetails(
@@ -104,9 +118,13 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
     championId: number,
     options: ChampionDataLoadOptions = {}
   ) {
-    return source === 'opgg'
-      ? this._loadOpggDetails(query, championId, options)
-      : this._loadQq101Details(query, championId, options)
+    if (source === 'opgg') {
+      return this._loadOpggDetails(query, championId, options)
+    }
+    if (source === 'lolps') {
+      return this._loadLolpsDetails(query, championId, options)
+    }
+    return this._loadQq101Details(query, championId, options)
   }
 
   private async _loadOpggOverview(
@@ -154,6 +172,40 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
       signal: options.signal
     })
     return adaptOpggChampionDetails(response.data, {
+      mode: query.mode,
+      position: query.position
+    })
+  }
+
+  private async _loadLolpsOverview(
+    query: ChampionDataQuery,
+    options: ChampionDataLoadOptions
+  ): Promise<ChampionDataOverview> {
+    if (query.mode !== 'ranked') {
+      throw new Error(`LOL.PS does not support mode ${query.mode}`)
+    }
+    const response = await this._lolpsApi.getChampions(
+      { tier: query.tier, version: query.patch },
+      options
+    )
+    return adaptLolpsChampionOverview(response, {
+      mode: query.mode,
+      position: query.position
+    })
+  }
+
+  private async _loadLolpsDetails(
+    query: ChampionDataQuery,
+    championId: number,
+    options: ChampionDataLoadOptions
+  ): Promise<ChampionDataDetails | null> {
+    if (query.mode !== 'ranked') return null
+    const response = await this._lolpsApi.getChampion(
+      championId,
+      { position: query.position, tier: query.tier, version: query.patch },
+      options
+    )
+    return adaptLolpsChampionDetails(response, {
       mode: query.mode,
       position: query.position
     })

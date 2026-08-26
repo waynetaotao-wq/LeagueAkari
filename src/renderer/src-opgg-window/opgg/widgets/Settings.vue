@@ -102,8 +102,8 @@ const wm = useInstance(WindowManagerRenderer)
 const { flashPosition, preferredSource, changeSource, setFlashPosition } = useOpgg()
 
 const sourceOptions = computed(() =>
-  (['opgg', 'qq101'] as const).map((source) => ({
-    label: t(`opgg.filters.sources.${source}`),
+  (['opgg', 'qq101', 'lolps'] as const).map((source) => ({
+    label: source === 'lolps' ? 'LOL.PS' : t(`opgg.filters.sources.${source}`),
     value: source,
     disabled: !championDataStore.availability.sources[source].enabled
   }))

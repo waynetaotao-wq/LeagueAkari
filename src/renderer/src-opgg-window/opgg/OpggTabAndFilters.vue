@@ -191,8 +191,8 @@ const versionOptions = computed(() =>
 )
 
 const sourceOptions = computed(() =>
-  (['opgg', 'qq101'] as const).map((source) => ({
-    label: t(`opgg.filters.sources.${source}`),
+  (['opgg', 'qq101', 'lolps'] as const).map((source) => ({
+    label: source === 'lolps' ? 'LOL.PS' : t(`opgg.filters.sources.${source}`),
     value: source,
     disabled: !championDataStore.availability.sources[source].enabled
   }))
@@ -205,13 +205,23 @@ const capability = computed(() =>
 const supportsFilter = (filter: ChampionDataFilter) =>
   capability.value?.filters.includes(filter) ?? false
 
-const sourceHomeUrl = computed(() =>
-  preferredSource.value === 'qq101' ? 'https://101.qq.com' : 'https://op.gg'
-)
+const sourceHomeUrl = computed(() => {
+  switch (preferredSource.value) {
+    case 'qq101':
+      return 'https://101.qq.com'
+    case 'lolps':
+      return 'https://lol.ps'
+    default:
+      return 'https://op.gg'
+  }
+})
 
 const sourceHomeTitle = computed(() =>
   t('opgg.filters.openSource', {
-    source: t(`opgg.filters.sources.${preferredSource.value}`)
+    source:
+      preferredSource.value === 'lolps'
+        ? 'LOL.PS'
+        : t(`opgg.filters.sources.${preferredSource.value}`)
   })
 )
 

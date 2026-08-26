@@ -35,7 +35,8 @@ export class ChampionDataState {
     preferredSource: 'opgg',
     sources: {
       opgg: { enabled: true },
-      qq101: { enabled: false }
+      qq101: { enabled: false },
+      lolps: { enabled: true }
     }
   }
   lastEffectiveSource: ChampionDataSourceId | null = null

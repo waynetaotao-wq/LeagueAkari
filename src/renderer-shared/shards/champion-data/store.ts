@@ -21,7 +21,8 @@ export const useChampionDataStore = defineStore('shard:champion-data-renderer', 
     preferredSource: 'opgg',
     sources: {
       opgg: { enabled: true },
-      qq101: { enabled: false }
+      qq101: { enabled: false },
+      lolps: { enabled: true }
     }
   })
   const lastEffectiveSource = shallowRef<ChampionDataSourceId | null>(null)
