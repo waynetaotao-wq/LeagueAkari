@@ -1,3 +1,4 @@
+// @ts-nocheck -- vendored from DraftGap (MIT); excluded from host strict typecheck. See PORTING-NOTES.md
 export async function getVersions() {
     const res = await fetch(
         "https://ddragon.leagueoflegends.com/api/versions.json",

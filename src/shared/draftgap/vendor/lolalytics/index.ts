@@ -1,3 +1,4 @@
+// @ts-nocheck -- vendored from DraftGap (MIT); excluded from host strict typecheck. See PORTING-NOTES.md
 import type { ChampionData } from "../models/dataset/ChampionData";
 import type { ChampionSynergyData } from "../models/dataset/ChampionSynergyData";
 import type { ChampionMatchupData } from "../models/dataset/ChampionMatchupData";

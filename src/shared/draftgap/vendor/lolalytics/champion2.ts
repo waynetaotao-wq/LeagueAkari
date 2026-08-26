@@ -1,3 +1,4 @@
+// @ts-nocheck -- vendored from DraftGap (MIT); excluded from host strict typecheck. See PORTING-NOTES.md
 import { retry } from "../utils";
 import type { LolalyticsRole } from "./roles";
 

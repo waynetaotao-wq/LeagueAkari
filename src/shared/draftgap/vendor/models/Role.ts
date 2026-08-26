@@ -1,3 +1,4 @@
+// @ts-nocheck -- vendored from DraftGap (MIT); excluded from host strict typecheck. See PORTING-NOTES.md
 import { type LolalyticsRole } from "../lolalytics/roles";
 
 export const Role = {

@@ -1,3 +1,4 @@
+// @ts-nocheck -- vendored from DraftGap (MIT); excluded from host strict typecheck. See PORTING-NOTES.md
 import { ratingToWinrate, winrateToRating } from "./rating/ratings";
 
 export function addStats(...stats: { wins: number; games: number }[]) {

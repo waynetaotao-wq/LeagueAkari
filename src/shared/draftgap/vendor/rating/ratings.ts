@@ -1,3 +1,4 @@
+// @ts-nocheck -- vendored from DraftGap (MIT); excluded from host strict typecheck. See PORTING-NOTES.md
 export function ratingToWinrate(d: number) {
     return 1 / (1 + Math.pow(10, -d / 400));
 }

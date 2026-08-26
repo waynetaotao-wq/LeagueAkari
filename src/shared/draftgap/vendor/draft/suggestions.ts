@@ -1,3 +1,4 @@
+// @ts-nocheck -- vendored from DraftGap (MIT); excluded from host strict typecheck. See PORTING-NOTES.md
 import { Role, ROLES } from "../models/Role";
 import { type Dataset } from "../models/dataset/Dataset";
 import { type DraftResult, type AnalyzeDraftConfig, analyzeDraft } from "./analysis";

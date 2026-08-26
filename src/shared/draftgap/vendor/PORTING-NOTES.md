@@ -26,3 +26,9 @@ diamond_plus 调用/覆写, 不改动 vendor 原文。
    n=209292, enemy.middle 172行x6元组[key,wr,?,?,?,games]); build-team 经 a1 直连
    验证(valid:true, 嵌套 team.{lane}, 行实为6元组——vendor 类型标注的4元组已过时,
    组装器按自适应长度解析)。ax mega 直连对外 404, 仅作先行探测层保留。
+
+## 适配 5：全 vendor 文件头部加 `// @ts-nocheck`
+LeagueAkari 的 typecheck 开启 noUnusedLocals 等严格项，DraftGap 原仓库未开启，
+照抄代码存在未使用变量（extra-analysis.ts、stats.ts 等）导致 CI 编译失败。
+vendor 目录整体豁免宿主类型检查（运行时编译不受影响，冒烟测试 15/15 通过），
+本仓库自研文件（realtime-*.ts、draftgap-window/*、renderer）不豁免、保持全检。

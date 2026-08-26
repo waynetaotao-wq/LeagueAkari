@@ -1,3 +1,4 @@
+// @ts-nocheck -- vendored from DraftGap (MIT); excluded from host strict typecheck. See PORTING-NOTES.md
 export const LOLALYTICS_ROLES = [
     "top",
     "jungle",

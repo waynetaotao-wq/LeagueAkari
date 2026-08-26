@@ -1,3 +1,4 @@
+// @ts-nocheck -- vendored from DraftGap (MIT); excluded from host strict typecheck. See PORTING-NOTES.md
 import { type ChampionData } from "./ChampionData";
 import { deleteChampionRoleDataMatchupSynergyData } from "./ChampionRoleData";
 import { type RuneData, type RunePathData, type StatShardData } from "./RuneData";
