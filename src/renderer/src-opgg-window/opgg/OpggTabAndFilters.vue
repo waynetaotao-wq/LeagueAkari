@@ -149,7 +149,7 @@ import {
 import { OpenOutline, RefreshSharp, Settings } from '@vicons/ionicons5'
 import { useTranslation } from 'i18next-vue'
 import { NButton, NIcon, NModal, NSelect, NTab, NTabs, SelectRenderLabel } from 'naive-ui'
-import { computed, ref } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 
 import { useOpgg } from './context'
 import SettingsPane from './widgets/Settings.vue'
@@ -183,7 +183,45 @@ const isSettingsShow = ref(false)
 
 const { modeOptions } = useModeOptions(preferredSource)
 const { regionOptions } = useRegionOptions()
-const { tierOptions } = useTierOptions()
+const { tierOptions: opggTierOptions } = useTierOptions()
+
+// lol.ps 仅有四档段位（接口实测：1=青铜~铂金, 2=翡翠+, 13=钻石+, 3=大师+）
+const LOLPS_TIER_OPTIONS = [
+  { label: '青铜 ~ 铂金', value: 'bronze_plat' },
+  { label: '翡翠 +', value: 'emerald_plus' },
+  { label: '钻石 +', value: 'diamond_plus' },
+  { label: '大师 +', value: 'master_plus' }
+]
+const LOLPS_TIER_VALUES = new Set(LOLPS_TIER_OPTIONS.map((o) => o.value))
+
+// 切到 lol.ps 时，把 OP.GG 风格的段位就近折算到四档
+const OPGG_TO_LOLPS_TIER: Record<string, string> = {
+  all: 'bronze_plat',
+  ibsg: 'bronze_plat',
+  gold_minus: 'bronze_plat',
+  gold: 'bronze_plat',
+  gold_plus: 'bronze_plat',
+  platinum_plus: 'emerald_plus',
+  master: 'master_plus',
+  grandmaster: 'master_plus',
+  challenger: 'master_plus'
+}
+
+const tierOptions = computed(() =>
+  preferredSource.value === 'lolps' ? LOLPS_TIER_OPTIONS : opggTierOptions.value
+)
+
+watchEffect(() => {
+  const current = String(tier.value ?? '')
+  if (preferredSource.value === 'lolps') {
+    if (!LOLPS_TIER_VALUES.has(current)) {
+      changeTier(OPGG_TO_LOLPS_TIER[current] ?? 'emerald_plus')
+    }
+  } else if (current === 'bronze_plat') {
+    // 从 lol.ps 切回其它数据源时，其独有档位回落为「全部段位」
+    changeTier('all')
+  }
+})
 const { positionOptions } = usePositionOptions()
 
 const versionOptions = computed(() =>

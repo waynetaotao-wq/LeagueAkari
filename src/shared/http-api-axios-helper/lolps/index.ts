@@ -75,24 +75,29 @@ const LANE_TO_POSITION_NAME = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT'] as cons
 const TIER_TO_LOLPS: Record<string, number> = {
   all: 1,
   ibsg: 1,
+  bronze_plat: 1,
+  gold_minus: 1,
+  gold: 1,
   gold_plus: 1,
-  platinum_plus: 2,
+  platinum_plus: 1,
   emerald_plus: 2,
-  diamond_plus: 3,
+  diamond_plus: 13,
   master: 3,
   master_plus: 3,
   grandmaster: 3,
   challenger: 3
 }
 
+/** lol.ps 接口实测（2026-08-26，按对位样本量指纹逐一比对确认）：
+ *  tier=1 青铜~铂金 · tier=2 翡翠+ · tier=13 钻石+ · tier=3 大师+，其余值均返回 500 */
+const LOLPS_VALID_TIERS = new Set([1, 2, 3, 13])
+
 function toLolpsTier(tier: string | number | undefined): number {
   if (tier === undefined || tier === null || tier === '') {
     return 2
   }
   if (typeof tier === 'number') {
-    if (tier >= 3) return 3
-    if (tier <= 1) return 1
-    return 2
+    return LOLPS_VALID_TIERS.has(tier) ? tier : 2
   }
   return TIER_TO_LOLPS[tier] ?? 2
 }

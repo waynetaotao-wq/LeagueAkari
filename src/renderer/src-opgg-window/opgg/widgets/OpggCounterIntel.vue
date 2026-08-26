@@ -32,6 +32,9 @@
     </div>
 
     <div v-if="errorText" class="mt-1 text-[11px] text-red-500">{{ errorText }}</div>
+    <div v-if="hoverNotice" class="mt-1 text-[11px] text-black/60 dark:text-white/60">
+      {{ hoverNotice }}
+    </div>
 
     <div v-else-if="resolvedTargetId && intel" class="mt-1.5 grid grid-cols-2 gap-2">
       <div>
@@ -52,6 +55,17 @@
             <span class="w-9 text-right text-[10px] tabular-nums text-black/40 dark:text-white/35">
               {{ row.games }}场
             </span>
+            <NButton
+              v-if="canHover(row.championId)"
+              size="tiny"
+              tertiary
+              class="ml-0.5 h-4.5! w-7! min-w-0 px-0!"
+              title="选用该英雄（不会锁定）"
+              @click="hoverChampion(row.championId)"
+            >
+              选
+            </NButton>
+            <span v-else class="ml-0.5 w-7 shrink-0"></span>
           </div>
         </NScrollbar>
       </div>
@@ -81,6 +95,17 @@
             <span class="w-9 text-right text-[10px] tabular-nums text-black/40 dark:text-white/35">
               {{ row.games }}场
             </span>
+            <NButton
+              v-if="canHover(row.championId)"
+              size="tiny"
+              tertiary
+              class="ml-0.5 h-4.5! w-7! min-w-0 px-0!"
+              title="选用该英雄（不会锁定）"
+              @click="hoverChampion(row.championId)"
+            >
+              选
+            </NButton>
+            <span v-else class="ml-0.5 w-7 shrink-0"></span>
           </div>
         </NScrollbar>
       </div>
@@ -100,6 +125,7 @@
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
 import { useInstance } from '@renderer-shared/shards'
+import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
 import { CHAMPION_DATA_MAIN_NAMESPACE } from '@renderer-shared/shards/champion-data/context'
 import { AkariIpcRenderer } from '@renderer-shared/shards/ipc'
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
@@ -123,9 +149,45 @@ const LANE_LABELS: Record<LaneName, string> = {
 const lcs = useLeagueClientStore()
 const resources = useAkariResourceProvider()
 const ipc = useInstance(AkariIpcRenderer)
+const lc = useInstance(LeagueClientRenderer)
 const { region, tier } = useOpgg()
 
 const session = computed(() => lcs.champSelect.session)
+
+// ===== 一键选用（不锁定）=====
+const pickableIds = computed(() => lcs.champSelect.currentPickableChampionIds)
+
+const myPickActionId = computed<string | number | null>(() => {
+  const s = session.value
+  if (!s) return null
+  for (const group of s.actions) {
+    for (const a of group) {
+      if (a.actorCellId === s.localPlayerCellId && a.type === 'pick' && !a.completed) {
+        return a.id
+      }
+    }
+  }
+  return null
+})
+
+function canHover(championId: number) {
+  return myPickActionId.value !== null && pickableIds.value.has(championId)
+}
+
+const hoverNotice = ref('')
+let hoverNoticeTimer: ReturnType<typeof setTimeout> | null = null
+async function hoverChampion(championId: number) {
+  const actionId = myPickActionId.value
+  if (actionId === null) return
+  try {
+    await lc.api.champSelect.action(actionId, { championId, completed: false })
+    hoverNotice.value = `已选择 ${championName(championId)}（未锁定，请自行确认）`
+  } catch (error: any) {
+    hoverNotice.value = `选择失败：${error?.response?.data?.message ?? error?.message ?? error}`
+  }
+  if (hoverNoticeTimer) clearTimeout(hoverNoticeTimer)
+  hoverNoticeTimer = setTimeout(() => (hoverNotice.value = ''), 2500)
+}
 
 const enemyChampionIds = computed(() => {
   const s = session.value
@@ -292,6 +354,7 @@ if (session.value) {
 
 onBeforeUnmount(() => {
   if (debounceTimer) clearTimeout(debounceTimer)
+  if (hoverNoticeTimer) clearTimeout(hoverNoticeTimer)
 })
 
 const winRateRows = computed(() => {
