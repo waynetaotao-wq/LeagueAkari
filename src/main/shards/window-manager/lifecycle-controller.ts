@@ -1,5 +1,6 @@
 import type { AkariAuxWindow } from './aux-window/window'
 import type { AkariCdTimerWindow } from './cd-timer-window/windows'
+import type { AkariDraftgapWindow } from './draftgap-window/window'
 import type { WindowManagerMainContext } from './context'
 import type { AkariMainWindow } from './main-window/window'
 import type { AkariOngoingGameWindow } from './ongoing-game-window/window'
@@ -11,6 +12,7 @@ interface WindowManagerWindows {
   opggWindow: AkariOpggWindow
   ongoingGameWindow: AkariOngoingGameWindow
   cdTimerWindow: AkariCdTimerWindow
+  draftgapWindow: AkariDraftgapWindow
 }
 
 export class WindowManagerLifecycleController {
@@ -48,6 +50,7 @@ export class WindowManagerLifecycleController {
     await this._windows.opggWindow.onInit()
     await this._windows.ongoingGameWindow.onInit()
     await this._windows.cdTimerWindow.onInit()
+    await this._windows.draftgapWindow.onInit()
   }
 
   finish() {
