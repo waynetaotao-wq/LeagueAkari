@@ -24,10 +24,10 @@ export class AkariDraftgapWindow extends BaseAkariWindow<
   static readonly NAMESPACE_SUFFIX = 'draftgap-window'
   static readonly HTML_ENTRY = 'draftgap-window.html'
   static readonly TITLE = 'League Akari - 团队之选'
-  static readonly BASE_WIDTH = 560
-  static readonly BASE_HEIGHT = 760
-  static readonly MIN_WIDTH = 480
-  static readonly MIN_HEIGHT = 520
+  static readonly BASE_WIDTH = 1600
+  static readonly BASE_HEIGHT = 850
+  static readonly MIN_WIDTH = 960
+  static readonly MIN_HEIGHT = 600
 
   constructor(_context: WindowManagerMainContext) {
     const state = new DraftgapWindowState()
@@ -72,12 +72,10 @@ export class AkariDraftgapWindow extends BaseAkariWindow<
       switch (this._context.leagueClient.data.gameflow.phase) {
         case 'ChampSelect':
           return 'show'
-        case 'GameStart':
-        case 'InProgress':
-          return 'hide'
       }
 
-      return 'normal'
+      // 非选人阶段（含启动时、对局中、回大厅）一律隐藏
+      return 'hide'
     })
 
     this._context.mobxUtils.reaction(

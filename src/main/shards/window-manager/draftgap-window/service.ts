@@ -18,7 +18,7 @@ import type { AkariLogger } from '@main/shards/logger-factory'
 
 import { buildRealtimeDataset } from '@shared/draftgap/realtime-dataset'
 import { DEFAULT_TIER, loadChampionIndex } from '@shared/draftgap/realtime-source'
-import type { DraftResult } from '@shared/draftgap/vendor/draft/analysis'
+import { analyzeDraft, type DraftResult } from '@shared/draftgap/vendor/draft/analysis'
 import { getSuggestions } from '@shared/draftgap/vendor/draft/suggestions'
 import { Role } from '@shared/draftgap/vendor/models/Role'
 
@@ -29,6 +29,8 @@ export interface DraftgapSlot {
 
 export interface DraftgapRequest {
   myRole: Role
+  /** 我已锁定的英雄（用于盘面整体胜率） */
+  myPick?: number
   allies: DraftgapSlot[]
   enemies: DraftgapSlot[]
   candidateIds: number[]
@@ -38,6 +40,7 @@ export interface DraftgapRequest {
 export interface DraftgapSuggestionDto {
   championId: number
   name: string
+  icon: string
   /** 引擎综合胜率（0~1） */
   winrate: number
   totalRating: number
@@ -61,6 +64,8 @@ export interface DraftgapSuggestionDto {
 
 export interface DraftgapResponse {
   ok: boolean
+  /** 当前已锁盘面的我方整体胜率（0~1，双方无人时为 0.5） */
+  boardWinrate: number
   suggestions: DraftgapSuggestionDto[]
   teamCheck: {
     physicalPct: number | null
@@ -136,8 +141,11 @@ export function registerDraftgapService(deps: {
   let masteriesCache: Record<number, number> | null = null
 
   ipc.onCall(namespace, 'getMasteries', async () => {
-    if (!masteriesCache) {
-      masteriesCache = await fetchMasteries(leagueClient, logger)
+    if (!masteriesCache || Object.keys(masteriesCache).length === 0) {
+      const fetched = await fetchMasteries(leagueClient, logger)
+      // 空结果不缓存（多为 LCU 尚未连接），留待下次重试
+      masteriesCache = Object.keys(fetched).length > 0 ? fetched : null
+      return fetched
     }
     return masteriesCache
   })
@@ -153,7 +161,9 @@ export function registerDraftgapService(deps: {
       const enemies = new Map<Role, string>()
       for (const s of req.enemies) enemies.set(s.role, String(s.championId))
 
-      const candidateKeys = [...new Set(req.candidateIds)].map(String)
+      const candidateIdSet = new Set(req.candidateIds)
+      if (typeof req.myPick === 'number' && req.myPick > 0) candidateIdSet.add(req.myPick)
+      const candidateKeys = [...candidateIdSet].map(String)
 
       const built = await buildRealtimeDataset({
         myRole: req.myRole,
@@ -163,10 +173,11 @@ export function registerDraftgapService(deps: {
         tier
       })
 
-      if (!masteriesCache) {
-        masteriesCache = await fetchMasteries(leagueClient, logger)
+      if (!masteriesCache || Object.keys(masteriesCache).length === 0) {
+        const fetched = await fetchMasteries(leagueClient, logger)
+        masteriesCache = Object.keys(fetched).length > 0 ? fetched : null
       }
-      const masteries = masteriesCache
+      const masteries = masteriesCache ?? {}
 
       const candidateSet = new Set(candidateKeys)
       const raw = getSuggestions(
@@ -216,9 +227,13 @@ export function registerDraftgapService(deps: {
         const masteryPoints = masteries[cid] ?? 0
         const masteryRating = masteryPointsToRating(masteryPoints)
 
+        const entry = index.byKey.get(key)
         return {
           championId: cid,
-          name: index.byKey.get(key)?.name ?? `#${key}`,
+          name: entry?.name ?? `#${key}`,
+          icon: entry
+            ? `https://ddragon.leagueoflegends.com/cdn/${index.version}/img/champion/${entry.id}.png`
+            : '',
           winrate: dr.winrate,
           totalRating: dr.totalRating,
           sortRating: dr.totalRating + masteryRating,
@@ -232,6 +247,17 @@ export function registerDraftgapService(deps: {
           }
         }
       })
+
+      // —— 盘面整体胜率（我方含我已锁英雄） ——
+      const boardAllies = new Map(allies)
+      if (typeof req.myPick === 'number' && req.myPick > 0) {
+        boardAllies.set(req.myRole, String(req.myPick))
+      }
+      const boardWinrate =
+        boardAllies.size + enemies.size > 0
+          ? analyzeDraft(built.dataset, built.fullDataset, boardAllies, enemies, ENGINE_CONFIG)
+              .winrate
+          : 0.5
 
       // —— 阵容体检：我方已锁英雄伤害构成（仅提示，不入分）——
       const teamCheck: DraftgapResponse['teamCheck'] = {
@@ -270,6 +296,7 @@ export function registerDraftgapService(deps: {
 
       const resp: DraftgapResponse = {
         ok: true,
+        boardWinrate,
         suggestions,
         teamCheck,
         warnings: built.warnings.slice(0, 20),
@@ -287,6 +314,7 @@ export function registerDraftgapService(deps: {
       logger.warn(`draftgap: 推荐计算失败: ${String(e)}`)
       const resp: DraftgapResponse = {
         ok: false,
+        boardWinrate: 0.5,
         suggestions: [],
         teamCheck: { physicalPct: null, magicPct: null, warnings: [] },
         warnings: [],
@@ -299,6 +327,24 @@ export function registerDraftgapService(deps: {
       }
       return resp
     }
+  })
+
+  // 盘面栏用：批量取英雄元信息（中文名 / 方头像 / 宽幅原画）
+  ipc.onCall(namespace, 'championMeta', async (_e, ids: number[]) => {
+    const index = await loadChampionIndex()
+    return (ids ?? []).map((id) => {
+      const entry = index.byKey.get(String(id))
+      return {
+        id,
+        name: entry?.name ?? `#${id}`,
+        icon: entry
+          ? `https://ddragon.leagueoflegends.com/cdn/${index.version}/img/champion/${entry.id}.png`
+          : '',
+        splash: entry
+          ? `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${entry.id}_0.jpg`
+          : ''
+      }
+    })
   })
 
   // 用于换段位/新版本时的缓存主动失效（预留）
