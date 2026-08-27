@@ -58,7 +58,7 @@
           <SettingsRow
             setting-id="automation.gameflow.auto-report.enabled"
             label="启用"
-            label-description="结算界面出现时自动举报本局玩家。始终排除：自己、同房间开黑的队友、以及好友列表中的人。"
+            label-description="进入结算数据页后自动举报本局玩家（含挂机等无法被点赞的人）。始终排除：自己、同房间开黑的队友、以及好友列表中的人。每局执行后会在下方显示结果。"
             :label-width="260"
           >
             <NSwitch
@@ -66,6 +66,14 @@
               @update:value="(val) => shard.setAutoReportEnabled(val)"
               size="small"
             />
+          </SettingsRow>
+          <SettingsRow
+            v-if="store.lastAutoReportSummary"
+            setting-id="automation.gameflow.auto-report.last-result"
+            label="上一局结果"
+            :label-width="260"
+          >
+            <span class="text-[12px]" style="opacity: 0.8">{{ store.lastAutoReportSummary }}</span>
           </SettingsRow>
           <SettingsRow
             setting-id="automation.gameflow.auto-report.scope"

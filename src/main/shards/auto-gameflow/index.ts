@@ -241,7 +241,8 @@ export class AutoGameflowMain implements IAkariShardInitDispose {
       'willSearchMatch',
       'willSearchMatchAt',
       'activityStartStatus',
-      'friendsToBeInvited'
+      'friendsToBeInvited',
+      'lastAutoReportSummary'
     ])
   }
 

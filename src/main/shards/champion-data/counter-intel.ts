@@ -2,6 +2,8 @@ import type {
   CounterIntelParams,
   CounterIntelResult,
   CounterIntelRow,
+  MatchupBuildParams,
+  MatchupBuildResult,
   RolePriors
 } from '@shared/types/counter-intel'
 import type { OpggHttpApiAxiosHelper } from '@shared/http-api-axios-helper/opgg'
@@ -17,6 +19,7 @@ import {
   fetchChampionSlugMap,
   fetchLaneKillRates
 } from './counter-intel-web'
+import { buildMatchupPageUrl, fetchMatchupPage } from './matchup-build'
 
 /**
  * 对位克制助手（Counter Intel）
@@ -30,6 +33,7 @@ import {
  */
 
 const INTEL_CACHE_TTL = 8 * 60 * 1000
+const MATCHUP_CACHE_TTL = 10 * 60 * 1000
 const PRIORS_CACHE_TTL = 10 * 60 * 1000
 const SLUG_CACHE_TTL = 6 * 60 * 60 * 1000
 
@@ -58,6 +62,7 @@ export class ChampionDataCounterIntel {
   private _slugCache: CacheEntry<Map<number, ChampionSlugInfo>> | null = null
   private _priorsCache = new Map<string, CacheEntry<RolePriors>>()
   private _intelCache = new Map<string, CacheEntry<CounterIntelResult>>()
+  private _matchupCache = new Map<string, CacheEntry<MatchupBuildResult>>()
   private _inflight = new Map<number, AbortController>()
 
   constructor(
@@ -74,6 +79,9 @@ export class ChampionDataCounterIntel {
     )
     ipc.onCall(namespace, 'counterIntel/rolePriors', (_event: any, region: string, tier: string | number) =>
       this.getRolePriors(region, tier)
+    )
+    ipc.onCall(namespace, 'counterIntel/matchupBuild', (_event: any, params: MatchupBuildParams) =>
+      this.getMatchupBuild(params)
     )
   }
 
@@ -235,5 +243,95 @@ export class ChampionDataCounterIntel {
         this._inflight.delete(senderId)
       }
     }
+  }
+
+  /**
+   * [lolps] 对位构筑：抓取「我的英雄 × 对位英雄」的专属符文 / 召唤师 / 出装。
+   * 网页解析失败时 pageParsed=false 并保留 meta（官方接口的对位场次与胜场）。
+   */
+  async getMatchupBuild(params: MatchupBuildParams): Promise<MatchupBuildResult> {
+    const key = `${params.myChampionId}|${params.opponentChampionId}|${params.position}|${params.region}|${params.tier}`
+    const now = Date.now()
+    const cached = this._matchupCache.get(key)
+    if (cached && cached.expiresAt > now) {
+      return cached.value
+    }
+
+    const slugMap = await this._ensureSlugMap()
+    const mySlug = slugMap.get(params.myChampionId)?.slug
+    const opponentSlug = slugMap.get(params.opponentChampionId)?.slug
+    if (!mySlug || !opponentSlug) {
+      throw new Error(
+        `未找到英雄 slug (my=${params.myChampionId}:${mySlug ?? '?'}, opp=${params.opponentChampionId}:${opponentSlug ?? '?'})`
+      )
+    }
+
+    // 元信息：官方接口 counters 字段（play=对局数, win 为对位英雄胜场 → 我方胜场取补）
+    let meta: MatchupBuildResult['meta'] = null
+    try {
+      const apiPosition = UNIFIED_TO_OPGG_POSITION[params.position]
+      const response = await this._deps.opggApi.getChampion(
+        this._toApiRegion(params.region),
+        'ranked',
+        params.myChampionId,
+        apiPosition,
+        { tier: this._toApiTier(params.tier) }
+      )
+      const counters = response.data.data.counters ?? []
+      const hit = counters.find((item) => item.champion_id === params.opponentChampionId)
+      if (hit && hit.play > 0) {
+        meta = { play: hit.play, win: hit.play - hit.win }
+      }
+    } catch (error: any) {
+      this._deps.logger.info(`[MatchupBuild] 元信息获取失败(不致命): ${error?.message ?? error}`)
+    }
+
+    // 网页通道：对位专属构筑
+    let runePages: MatchupBuildResult['runePages'] = []
+    let sections: MatchupBuildResult['sections'] = []
+    let pageParsed = false
+    const url = buildMatchupPageUrl({
+      mySlug,
+      opponentSlug,
+      position: params.position,
+      region: params.region,
+      tier: typeof params.tier === 'string' ? params.tier : String(params.tier ?? '')
+    })
+    try {
+      const page = await fetchMatchupPage(this._deps.web, url)
+      runePages = page.runePages
+      sections = page.sections
+      pageParsed = runePages.length > 0 || sections.length > 0
+      this._deps.logger.info(
+        `[MatchupBuild] ${mySlug} vs ${opponentSlug}@${params.position}: runePages=${runePages.length}, sections=[${sections
+          .map((s) => `${s.key}:${s.entries.length}`)
+          .join(', ')}]`
+      )
+    } catch (error: any) {
+      this._deps.logger.warn(
+        `[MatchupBuild] 网页解析失败(已降级): ${error?.message ?? error} | url: ${url}`
+      )
+    }
+
+    const result: MatchupBuildResult = {
+      myChampionId: params.myChampionId,
+      opponentChampionId: params.opponentChampionId,
+      position: params.position,
+      region: params.region,
+      tier: params.tier,
+      meta,
+      runePages,
+      sections,
+      pageParsed,
+      updatedAt: new Date().toISOString()
+    }
+    this._matchupCache.set(key, { expiresAt: Date.now() + MATCHUP_CACHE_TTL, value: result })
+    if (this._matchupCache.size > 40) {
+      const oldest = this._matchupCache.keys().next().value
+      if (oldest !== undefined) {
+        this._matchupCache.delete(oldest)
+      }
+    }
+    return result
   }
 }

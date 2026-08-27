@@ -39,6 +39,7 @@ export const useAutoGameflowStore = defineStore('shard:auto-gameflow-renderer', 
   const willReconnectAt = ref(-1)
   const activityStartStatus = ref('unavailable')
   const friendsToBeInvited = shallowRef<string[]>([])
+  const lastAutoReportSummary = ref('')
 
   return {
     settings,
@@ -48,6 +49,7 @@ export const useAutoGameflowStore = defineStore('shard:auto-gameflow-renderer', 
     willSearchMatchAt,
     willReconnectAt,
     activityStartStatus,
-    friendsToBeInvited
+    friendsToBeInvited,
+    lastAutoReportSummary
   }
 })

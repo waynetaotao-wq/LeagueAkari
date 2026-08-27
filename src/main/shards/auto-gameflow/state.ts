@@ -173,6 +173,9 @@ export class AutoGameflowState {
    */
   friendsToBeInvited: string[] = []
 
+  /** [lolps] 上一局自动举报的执行结果（显示在设置页） */
+  lastAutoReportSummary: string = ''
+
   get activityStartStatus() {
     if (!this._leagueClientData.lobby.lobby) {
       return 'unavailable'
@@ -253,6 +256,10 @@ export class AutoGameflowState {
 
   setFriendsToBeInvited(puuids: string[]) {
     this.friendsToBeInvited = puuids
+  }
+
+  setLastAutoReportSummary(summary: string) {
+    this.lastAutoReportSummary = summary
   }
 
   constructor(
