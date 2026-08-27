@@ -60,8 +60,11 @@ export interface MatchupOverlayData {
   last_items?: OpggPickLike[]
 }
 
+/** 装备/召唤师区块键（不含 runes——符文走独立 JSON 通道） */
+type ItemSectionKey = Exclude<keyof MatchupOverlayData, 'runes'>
+
 /** 各区块标题锚点（请求固定英文），按页面出现顺序；哨兵段不产出仅作边界 */
-const SECTION_ANCHORS: ReadonlyArray<{ key: keyof MatchupOverlayData | '_sentinel'; label: string }> =
+const SECTION_ANCHORS: ReadonlyArray<{ key: ItemSectionKey | '_sentinel'; label: string }> =
   [
     { key: 'summoner_spells', label: 'Summoner spells' },
     { key: '_sentinel', label: 'Skill order' },
@@ -322,8 +325,8 @@ export function parseRunes(clean: string): OpggRuneLike[] {
 }
 
 /** 路线二：装备/召唤师（标题分段 + 文本状态机），产出官方形状各区块 */
-export function parseItemSections(clean: string): Partial<MatchupOverlayData> {
-  const positions: Array<{ key: keyof MatchupOverlayData | '_sentinel'; pos: number }> = []
+export function parseItemSections(clean: string): Partial<Pick<MatchupOverlayData, ItemSectionKey>> {
+  const positions: Array<{ key: ItemSectionKey | '_sentinel'; pos: number }> = []
   for (const { key, label } of SECTION_ANCHORS) {
     const p = clean.lastIndexOf(`"${label}"`)
     if (p >= 0) positions.push({ key, pos: p })
@@ -337,7 +340,7 @@ export function parseItemSections(clean: string): Partial<MatchupOverlayData> {
     if (p > 0 && p < tail) tail = p
   }
 
-  const acc: Partial<Record<keyof MatchupOverlayData, OpggPickLike[]>> = {}
+  const acc: Partial<Record<ItemSectionKey, OpggPickLike[]>> = {}
   for (let s = 0; s < positions.length; s++) {
     const { key, pos } = positions[s]
     if (key === '_sentinel') continue
