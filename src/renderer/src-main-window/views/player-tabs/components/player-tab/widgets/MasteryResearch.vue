@@ -370,7 +370,6 @@ import {
   fetchListItems,
   fetchSgpAll,
   fetchTimelinesInto,
-  formatGameTime,
   normalizeTimeline,
   summarizeChampions
 } from '../mastery-research'
@@ -630,9 +629,6 @@ function bucketRows(stat: { games: number; levelBuckets: number[] }): string[] {
 
 function pct(w: number, g: number) {
   return g > 0 ? `${((w / g) * 100).toFixed(0)}%` : '—'
-}
-function fmtTime(ms: number | null) {
-  return ms === null ? '—' : formatGameTime(ms)
 }
 function fmtDate(ts: number) {
   const d = new Date(ts)
