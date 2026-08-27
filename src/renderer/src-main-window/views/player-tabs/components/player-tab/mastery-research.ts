@@ -26,6 +26,20 @@ export const STARTER_WINDOW_MS = 90_000
 /** 详情/时间线串行拉取的间隔（毫秒），保护客户端接口 */
 export const FETCH_INTERVAL_MS = 40
 
+/** 首次单杀/被单杀 等级分桶（高手视角：6 级当级单列是刺客签名） */
+export const LEVEL_BUCKETS = [
+  { key: '1-3', label: '1-3级', min: 1, max: 3 },
+  { key: '4-5', label: '4-5级', min: 4, max: 5 },
+  { key: '6', label: '6级当级', min: 6, max: 6 },
+  { key: '7-8', label: '7-8级', min: 7, max: 8 },
+  { key: '9+', label: '9级+', min: 9, max: 99 }
+] as const
+
+export function levelBucketIndex(level: number): number {
+  const i = LEVEL_BUCKETS.findIndex((b) => level >= b.min && level <= b.max)
+  return i >= 0 ? i : LEVEL_BUCKETS.length - 1
+}
+
 /** 成品鞋 id 清单（可调区：新版鞋在此追加） */
 export const BOOTS_IDS: ReadonlySet<number> = new Set([
   3005, 3006, 3009, 3010, 3013, 3020, 3047, 3111, 3117, 3158, 2422
@@ -102,6 +116,8 @@ export interface SoloStat {
   games: number
   avgLevel: number | null
   avgTimeMs: number | null
+  /** 各等级桶命中局数（与 LEVEL_BUCKETS 对齐） */
+  levelBuckets: number[]
 }
 
 export interface MasteryAggregate {
@@ -539,6 +555,12 @@ export function aggregate(facts: MasteryGameFact[], opts: AggregateOptions = {})
   const avg = (xs: number[]) =>
     xs.length === 0 ? null : Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10
 
+  const bucketize = (points: { level: number }[]): number[] => {
+    const counts = LEVEL_BUCKETS.map(() => 0)
+    for (const pt of points) counts[levelBucketIndex(pt.level)]++
+    return counts
+  }
+
   const byGames = <T extends { games: number }>(a: T, b: T) => b.games - a.games
 
   return {
@@ -556,14 +578,16 @@ export function aggregate(facts: MasteryGameFact[], opts: AggregateOptions = {})
       avgLevel: avg(soloKills.map((x) => x.level)),
       avgTimeMs: soloKills.length
         ? Math.round(soloKills.reduce((a, b) => a + b.timeMs, 0) / soloKills.length)
-        : null
+        : null,
+      levelBuckets: bucketize(soloKills)
     },
     firstSoloDeath: {
       games: soloDeaths.length,
       avgLevel: avg(soloDeaths.map((x) => x.level)),
       avgTimeMs: soloDeaths.length
         ? Math.round(soloDeaths.reduce((a, b) => a + b.timeMs, 0) / soloDeaths.length)
-        : null
+        : null,
+      levelBuckets: bucketize(soloDeaths)
     },
     soloSampleGames
   }

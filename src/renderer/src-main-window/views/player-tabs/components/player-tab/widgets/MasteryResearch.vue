@@ -137,21 +137,25 @@
           >
             <template v-if="agg.soloSampleGames > 0">
               <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span>
+                <span class="min-w-0">
                   ⚔ 首次单杀对位：
                   <template v-if="agg.firstSoloKill.games > 0">
                     <b>{{ agg.firstSoloKill.games }}/{{ agg.soloSampleGames }}</b> 局发生 ·
-                    平均 <b>{{ agg.firstSoloKill.avgLevel }}</b> 级 · 平均
-                    <b>{{ fmtTime(agg.firstSoloKill.avgTimeMs) }}</b>
+                    <template v-for="(b, bi) of bucketRows(agg.firstSoloKill)" :key="bi">
+                      <b v-if="bi === 0" class="text-emerald-500">{{ b }}</b>
+                      <template v-else> · {{ b }}</template>
+                    </template>
                   </template>
                   <template v-else>{{ agg.soloSampleGames }} 局中从未发生</template>
                 </span>
-                <span>
+                <span class="min-w-0">
                   💀 首次被对位单杀：
                   <template v-if="agg.firstSoloDeath.games > 0">
                     <b>{{ agg.firstSoloDeath.games }}/{{ agg.soloSampleGames }}</b> 局发生 ·
-                    平均 <b>{{ agg.firstSoloDeath.avgLevel }}</b> 级 · 平均
-                    <b>{{ fmtTime(agg.firstSoloDeath.avgTimeMs) }}</b>
+                    <template v-for="(b, bi) of bucketRows(agg.firstSoloDeath)" :key="bi">
+                      <b v-if="bi === 0" class="text-red-400">{{ b }}</b>
+                      <template v-else> · {{ b }}</template>
+                    </template>
                   </template>
                   <template v-else>{{ agg.soloSampleGames }} 局中从未发生</template>
                 </span>
@@ -356,6 +360,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 
 import { usePlayerTab } from '../context'
 import {
+  LEVEL_BUCKETS,
   type MasteryChampionSummary,
   type MasteryFetchApi,
   type MasteryGameFact,
@@ -613,6 +618,16 @@ const scopeTitle = computed(() => {
 function championName(id: number) {
   return resources.champions.name(id)
 }
+/** 等级桶展示行：非零桶按占比降序，如「6级当级 43%」 */
+function bucketRows(stat: { games: number; levelBuckets: number[] }): string[] {
+  if (!stat.games) return []
+  return stat.levelBuckets
+    .map((n, i) => ({ n, i }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n)
+    .map((x) => `${LEVEL_BUCKETS[x.i].label} ${Math.round((x.n / stat.games) * 100)}%`)
+}
+
 function pct(w: number, g: number) {
   return g > 0 ? `${((w / g) * 100).toFixed(0)}%` : '—'
 }

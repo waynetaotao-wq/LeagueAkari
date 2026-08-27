@@ -19,6 +19,7 @@
     <PlayerInfoCardHeader :puuid="puuid" />
     <PlayerInfoCardStats :puuid="puuid" />
     <PlayerInfoCardJunglePathing :puuid="puuid" />
+    <PlayerInfoCardMidlaneResearch :puuid="puuid" />
 
     <PlayerCardTagsArea :puuid="puuid" />
     <PlayerInfoCardChampionUsage :puuid="puuid" />
@@ -41,6 +42,7 @@ import PlayerInfoCardChampionUsage from './PlayerInfoCardChampionUsage.vue'
 import PlayerInfoCardHeader from './PlayerInfoCardHeader.vue'
 import PlayerInfoCardJunglePathing from './PlayerInfoCardJunglePathing.vue'
 import PlayerInfoCardMatchHistory from './PlayerInfoCardMatchHistory.vue'
+import PlayerInfoCardMidlaneResearch from './PlayerInfoCardMidlaneResearch.vue'
 import PlayerInfoCardStats from './PlayerInfoCardStats.vue'
 
 const { puuid } = defineProps<{
