@@ -194,7 +194,7 @@ function assembleEntries(seg: string, isSpells: boolean): OpggPickLike[] {
           ids: pending.ids,
           play: pending.play,
           win: Math.round(pending.play * winRate),
-          pick_rate: pending.pick / 100
+          pick_rate: Math.round(pending.pick * 100) / 10000
         }
         if (entry.ids.length > 0 && (!isSpells || entry.ids.length === 2)) out.push(entry)
         pending = null

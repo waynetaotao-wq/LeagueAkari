@@ -1,6 +1,7 @@
 <template>
   <div class="flex flex-col gap-2">
     <MatchHistoryPagination />
+    <MasteryResearch />
     <NormalTagBlock />
     <SummaryPane />
     <ChampionMasteryPane />
@@ -14,6 +15,7 @@
 <script setup lang="ts">
 import ChampionMasteryPane from './widgets/ChampionMasteryPane.vue'
 import EncounteredGames from './widgets/EncounteredGames.vue'
+import MasteryResearch from './widgets/MasteryResearch.vue'
 import MatchHistoryPagination from './widgets/match-history-pagination'
 import NormalTagBlock from './widgets/NormalTagBlock.vue'
 import PlayerChallenges from './widgets/PlayerChallenges.vue'

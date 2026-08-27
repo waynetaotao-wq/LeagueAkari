@@ -7,11 +7,29 @@
       <span class="dgx-grad" />
       <span class="dgx-badge">钻石+ · 近30天 · 全球</span>
       <span v-if="resp" class="dgx-updated">上次计算 {{ resp.tookMs }}ms · 拉取{{ resp.requested }}<template v-if="resp.failed">/失败{{ resp.failed }}</template></span>
-      <button class="dgx-sync" :disabled="loading || !inChampSelect" @click="refresh()">
-        {{ loading ? '计算中…' : '重新计算' }}
-      </button>
-      <button class="dgx-win" title="最小化" @click="winop('minimize')">─</button>
-      <button class="dgx-win" title="隐藏（进选人自动出现）" @click="winop('hide')">✕</button>
+      <NButton
+        class="no-drag"
+        size="small"
+        secondary
+        :loading="loading"
+        :disabled="!inChampSelect"
+        @click="refresh()"
+      >
+        重新计算
+      </NButton>
+      <NButton class="no-drag" size="small" quaternary circle title="最小化" @click="winop('minimize')">
+        <template #icon><NIcon><Subtract16Regular /></NIcon></template>
+      </NButton>
+      <NButton
+        class="no-drag"
+        size="small"
+        quaternary
+        circle
+        title="隐藏（进选人自动出现）"
+        @click="winop('hide')"
+      >
+        <template #icon><NIcon><Dismiss16Regular /></NIcon></template>
+      </NButton>
     </header>
 
     <!-- 待机 -->
@@ -26,20 +44,25 @@
 
       <main class="dgx-center">
         <div class="dgx-tools">
-          <div class="dgx-search">
-            <span class="dgx-search-ico">⌕</span>
-            <input v-model="filterText" placeholder="搜索候选…" />
-          </div>
+          <NInput
+            v-model:value="filterText"
+            size="small"
+            clearable
+            placeholder="搜索候选…"
+            class="max-w-45"
+          >
+            <template #prefix><NIcon :size="14"><Search16Regular /></NIcon></template>
+          </NInput>
           <template v-if="autoRole === null">
-            <select v-model="manualRole" class="dgx-select">
-              <option :value="-1">选择我的分路…</option>
-              <option v-for="(n, i) in roleNames" :key="i" :value="i">{{ n }}</option>
-            </select>
+            <NSelect
+              v-model:value="manualRole"
+              size="small"
+              class="w-36"
+              :options="roleSelectOptions"
+            />
           </template>
           <span v-else class="dgx-role">{{ roleNames[autoRole] }}</span>
-          <label class="dgx-seg" :class="{ on: sortMastery }">
-            <input type="checkbox" v-model="sortMastery" />熟练加权
-          </label>
+          <NCheckbox v-model:checked="sortMastery" size="small">熟练加权</NCheckbox>
           <span v-if="hiddenCount > 0" class="dgx-count">一屏前 {{ displayed.length }} 名 · 其余 {{ hiddenCount }} 个可搜索</span>
         </div>
 
@@ -72,7 +95,7 @@
               <span class="c-rank">{{ idx + 1 }}</span>
               <span class="c-role"><img v-if="roleIcon" :src="roleIcon" class="role-ico" /></span>
               <span class="c-champ">
-                <img v-if="s.icon" class="champ-ico" :src="s.icon" loading="lazy" />
+                <ChampionIcon round class="champ-ico" :champion-id="s.championId" />
                 <span class="champ-name">{{ s.name }}</span>
                 <span class="champ-stars">{{ '★'.repeat(s.confidence.stars) }}</span>
               </span>
@@ -81,9 +104,18 @@
                 <template v-else>—</template>
               </span>
               <span class="c-wr" :class="s.winrate >= 0.5 ? 'up' : 'down'">{{ (s.winrate * 100).toFixed(2) }}</span>
-              <span class="c-info" :title="partsTitle(s)">ⓘ</span>
+              <span class="c-info" :title="partsTitle(s)">
+                <NIcon :size="13" class="opacity-45"><Info16Regular /></NIcon>
+              </span>
               <span class="c-pick">
-                <button class="pick-btn" :disabled="!canHover(s.championId)" @click="hoverChampion(s.championId)">选</button>
+                <NButton
+                  size="tiny"
+                  secondary
+                  :disabled="!canHover(s.championId)"
+                  @click="hoverChampion(s.championId)"
+                >
+                  选用
+                </NButton>
               </span>
             </div>
           </div>
@@ -113,6 +145,9 @@ import {
   LANE_ORDER,
   type LaneAssignmentInput
 } from '@shared/utils/lane-assignment'
+import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
+import { Dismiss16Regular, Info16Regular, Search16Regular, Subtract16Regular } from '@vicons/fluent'
+import { NButton, NCheckbox, NIcon, NInput, NSelect } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import TeamColumn, { type TeamCard } from './TeamColumn.vue'
@@ -157,6 +192,10 @@ const lcs = useLeagueClientStore()
 const resources = useAkariResourceProvider()
 
 const roleNames = ['上单', '打野', '中单', '下路', '辅助'] as const
+const roleSelectOptions = [
+  { label: '选择我的分路…', value: -1 },
+  ...roleNames.map((n, i) => ({ label: n, value: i }))
+]
 const POS_TO_ROLE: Record<string, number> = {
   top: 0,
   jungle: 1,
@@ -577,10 +616,10 @@ async function hoverChampion(championId: number) {
 .dgx-root {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  background: #060608;
+  height: 100vh;
+  width: 100vw;
+  background: #121216;
   color: #e5e7eb;
-  font-family: Bahnschrift, 'Arial Narrow', 'Segoe UI', sans-serif;
   overflow: hidden;
 }
 /* ===== 顶栏 ===== */
@@ -596,13 +635,16 @@ async function hoverChampion(championId: number) {
 .dgx-logo {
   font-size: 24px;
   font-weight: 800;
-  letter-spacing: 3px;
+  letter-spacing: 1px;
   color: #fff;
 }
 .dgx-logo-sub {
   font-size: 10px;
   color: #6b7280;
   letter-spacing: 1px;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
 }
 .dgx-grad {
   flex: 1;
@@ -613,52 +655,20 @@ async function hoverChampion(championId: number) {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 3px;
+  height: 2px;
+  opacity: 0.7;
   background: linear-gradient(90deg, #ef4444 0%, #ef4444 45%, #3b82f6 55%, #3b82f6 100%);
 }
 .dgx-badge {
   font-size: 11px;
   color: #9ca3af;
-  border: 1px solid #26262e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   padding: 2px 10px;
 }
 .dgx-updated {
   font-size: 10px;
   color: #6b7280;
-}
-.dgx-sync {
-  -webkit-app-region: no-drag;
-  border: 1px solid #3a3a44;
-  background: #17171c;
-  color: #fff;
-  font-weight: 700;
-  letter-spacing: 1px;
-  font-size: 12px;
-  padding: 5px 16px;
-  border-radius: 16px;
-  cursor: pointer;
-}
-.dgx-sync:hover:not(:disabled) {
-  background: #23232b;
-}
-.dgx-sync:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.dgx-win {
-  -webkit-app-region: no-drag;
-  width: 28px;
-  height: 22px;
-  border: none;
-  border-radius: 4px;
-  background: rgba(128, 128, 128, 0.14);
-  color: #d1d5db;
-  cursor: pointer;
-  font-size: 12px;
-}
-.dgx-win:hover {
-  background: rgba(128, 128, 128, 0.32);
 }
 /* ===== 待机 ===== */
 .dgx-idle {
@@ -671,14 +681,14 @@ async function hoverChampion(championId: number) {
   font-size: 42px;
   font-weight: 800;
   letter-spacing: 8px;
-  color: #26262e;
+  color: rgba(255, 255, 255, 0.12);
   margin-bottom: 14px;
 }
 /* ===== 三栏 ===== */
 .dgx-body {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(220px, 300px) 1fr minmax(220px, 300px);
+  grid-template-columns: minmax(240px, 26vw) 1fr minmax(240px, 26vw);
   gap: 8px;
   padding: 8px;
   min-height: 0;
@@ -686,7 +696,7 @@ async function hoverChampion(championId: number) {
 .dgx-center {
   display: flex;
   flex-direction: column;
-  background: #0d0d11;
+  background: #18181c;
   border-radius: 8px;
   padding: 10px;
   min-width: 0;
@@ -699,35 +709,6 @@ async function hoverChampion(championId: number) {
   gap: 10px;
   margin-bottom: 8px;
 }
-.dgx-search {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #17171c;
-  border: 1px solid #26262e;
-  border-radius: 8px;
-  padding: 5px 10px;
-}
-.dgx-search-ico {
-  color: #6b7280;
-}
-.dgx-search input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: #fff;
-  font-size: 13px;
-}
-.dgx-select {
-  background: #17171c;
-  color: #fff;
-  border: 1px solid #26262e;
-  border-radius: 8px;
-  font-size: 12px;
-  padding: 4px 8px;
-}
 .dgx-role {
   font-size: 12px;
   font-weight: 700;
@@ -736,24 +717,6 @@ async function hoverChampion(championId: number) {
   border-radius: 10px;
   background: rgba(245, 166, 35, 0.15);
   color: #f5a623;
-}
-.dgx-seg {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 12px;
-  border-radius: 8px;
-  border: 1px solid #26262e;
-  background: #17171c;
-  color: #9ca3af;
-  cursor: pointer;
-  user-select: none;
-}
-.dgx-seg.on {
-  color: #fff;
-  background: #26262e;
 }
 /* ===== 提示条 ===== */
 .dgx-infer {
@@ -805,7 +768,7 @@ async function hoverChampion(championId: number) {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border: 1px solid #1c1c23;
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -825,7 +788,7 @@ async function hoverChampion(championId: number) {
   color: #6b7280;
   text-transform: uppercase;
   background: #101015;
-  border-bottom: 1px solid #1c1c23;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
 }
 .dgx-tbody {
   flex: 1;
@@ -916,24 +879,6 @@ async function hoverChampion(championId: number) {
 }
 .c-info:hover {
   color: #9ca3af;
-}
-.pick-btn {
-  width: 100%;
-  padding: 2px 0;
-  border: none;
-  border-radius: 6px;
-  background: rgba(245, 166, 35, 0.22);
-  color: #f5a623;
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 12px;
-}
-.pick-btn:hover:not(:disabled) {
-  background: rgba(245, 166, 35, 0.38);
-}
-.pick-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
 }
 .dgx-details {
   margin-top: 6px;

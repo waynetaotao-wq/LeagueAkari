@@ -1,147 +1,194 @@
 <template>
   <div
     v-if="session"
-    class="mb-1 rounded-md bg-neutral-100 px-2 py-1.5 text-xs dark:bg-neutral-800/70"
+    class="mb-1 rounded border border-black/10 p-2 last:mb-0 dark:border-[#37373c]"
   >
-    <div class="flex items-center gap-1.5">
-      <span class="font-bold text-black/80 dark:text-white/90">对位克制</span>
-      <NSelect
-        size="tiny"
-        class="w-30!"
-        :consistent-menu-width="false"
-        :value="manualTarget"
-        :options="targetOptions"
-        @update:value="(v: number) => (manualTarget = v)"
-      />
-      <NSelect
-        v-if="!assignedLane"
-        size="tiny"
-        class="w-22!"
-        :consistent-menu-width="false"
-        placeholder="我的分路"
-        :value="manualLane"
-        :options="laneOptions"
-        @update:value="(v: string) => (manualLane = v)"
-      />
-      <NButton size="tiny" secondary :loading="isLoading" @click="() => refresh(true)">
-        <template #icon>
-          <NIcon><RefreshSharp /></NIcon>
-        </template>
-      </NButton>
-      <span class="ml-auto text-[11px] text-black/45 dark:text-white/40">{{ statusText }}</span>
-    </div>
-
-    <div class="mt-1 flex items-center gap-1.5 text-[11px]">
-      <span class="shrink-0 text-black/60 dark:text-white/55">对位替换</span>
+    <!-- 标题行（官方区块同款）：标题 + 摘要 + 展开开关 -->
+    <div class="flex items-center justify-between text-[13px] font-bold">
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="shrink-0">对位克制</span>
+        <span class="min-w-0 truncate text-xs font-normal text-[#666666] dark:text-[#bebebe]">
+          {{ summaryText }}
+        </span>
+      </div>
       <NSwitch
         size="small"
-        :value="matchupOn"
-        @update:value="(v: boolean) => (matchupOn = v)"
-      />
-      <span class="ml-auto min-w-0 truncate text-black/45 dark:text-white/40">
-        {{ matchupStatus }}
-      </span>
+        v-model:value="expanded"
+        :round="false"
+        class="mr-2 shrink-0"
+        :rail-style="({ checked }: any) => ({ backgroundColor: checked ? '#2a947d' : '#565660' })"
+      >
+        <template #checked>收起</template>
+        <template #unchecked>展开</template>
+      </NSwitch>
     </div>
 
-    <div v-if="errorText" class="mt-1 text-[11px] text-red-500">{{ errorText }}</div>
-    <div v-if="hoverNotice" class="mt-1 text-[11px] text-black/60 dark:text-white/60">
-      {{ hoverNotice }}
-    </div>
-
-    <div v-else-if="resolvedTargetId && intel" class="mt-1.5 grid grid-cols-2 gap-2">
-      <div>
-        <div class="mb-0.5 flex items-center justify-between text-[11px] font-bold">
-          <span>打他胜率</span>
-          <span class="font-normal text-black/40 dark:text-white/35">高 → 低</span>
-        </div>
-        <NScrollbar class="max-h-45">
-          <div
-            v-for="row in winRateRows"
-            :key="'w' + row.championId"
-            class="flex items-center gap-1 py-0.5"
-            :class="{ 'opacity-45': row.games < 50 }"
-          >
-            <ChampionIcon round class="size-4 shrink-0" :champion-id="row.championId" />
-            <span class="min-w-0 flex-1 truncate">{{ championName(row.championId) }}</span>
-            <span
-              class="font-bold tabular-nums"
-              :class="row.myWinRate > 0.5 ? 'text-green-500' : 'text-red-500'"
-            >{{ formatPercent(row.myWinRate) }}</span>
-            <span class="w-9 text-right text-[10px] tabular-nums text-black/40 dark:text-white/35">
-              {{ row.games }}场
-            </span>
-            <NButton
-              v-if="canHover(row.championId)"
-              size="tiny"
-              tertiary
-              class="ml-0.5 h-4.5! w-7! min-w-0 px-0!"
-              title="选用该英雄（不会锁定）"
-              @click="hoverChampion(row.championId)"
-            >
-              选
-            </NButton>
-            <span v-else class="ml-0.5 w-7 shrink-0"></span>
-          </div>
-        </NScrollbar>
+    <template v-if="expanded">
+      <!-- 控制行 -->
+      <div class="mt-2 flex items-center gap-1.5">
+        <NSelect
+          size="tiny"
+          class="w-30!"
+          :consistent-menu-width="false"
+          :value="manualTarget"
+          :options="targetOptions"
+          @update:value="(v: number) => (manualTarget = v)"
+        />
+        <NSelect
+          v-if="!assignedLane"
+          size="tiny"
+          class="w-22!"
+          :consistent-menu-width="false"
+          placeholder="我的分路"
+          :value="manualLane"
+          :options="laneOptions"
+          @update:value="(v: string) => (manualLane = v)"
+        />
+        <NButton size="tiny" secondary :loading="isLoading" @click="() => refresh(true)">
+          <template #icon>
+            <NIcon><RefreshSharp /></NIcon>
+          </template>
+        </NButton>
+        <span class="ml-auto min-w-0 truncate text-xs text-[#666666] dark:text-[#bebebe]">
+          {{ statusText }}
+        </span>
       </div>
-      <div>
-        <div class="mb-0.5 flex items-center justify-between text-[11px] font-bold">
-          <span>单杀他概率</span>
-          <span class="font-normal text-black/40 dark:text-white/35">高 → 低</span>
-        </div>
-        <div
-          v-if="!intel.laneKillAvailable"
-          class="py-2 text-center text-[11px] text-black/40 dark:text-white/35"
+
+      <!-- 对位替换（官方绿红开关样式） -->
+      <div class="mt-1.5 flex items-center gap-1.5 text-xs">
+        <span class="shrink-0 text-[#666666] dark:text-[#b2b2b2]">对位替换</span>
+        <NSwitch
+          size="small"
+          :value="matchupOn"
+          :round="false"
+          :rail-style="({ checked }: any) => ({ backgroundColor: checked ? '#2a947d' : '#dc2626' })"
+          @update:value="(v: boolean) => (matchupOn = v)"
         >
-          数据源改版，暂不可用（胜率不受影响）
-        </div>
-        <NScrollbar v-else class="max-h-45">
-          <div
-            v-for="row in laneKillRows"
-            :key="'k' + row.championId"
-            class="flex items-center gap-1 py-0.5"
-            :class="{ 'opacity-45': row.games < 50 }"
-          >
-            <ChampionIcon round class="size-4 shrink-0" :champion-id="row.championId" />
-            <span class="min-w-0 flex-1 truncate">{{ championName(row.championId) }}</span>
-            <span
-              class="font-bold tabular-nums"
-              :class="
-                row.laneKillRate === null
-                  ? ''
-                  : row.laneKillRate > 0.5
-                    ? 'text-green-500'
-                    : 'text-red-500'
-              "
-            >
-              {{ row.laneKillRate === null ? '—' : formatPercent(row.laneKillRate) }}
-            </span>
-            <span class="w-9 text-right text-[10px] tabular-nums text-black/40 dark:text-white/35">
-              {{ row.games }}场
-            </span>
-            <NButton
-              v-if="canHover(row.championId)"
-              size="tiny"
-              tertiary
-              class="ml-0.5 h-4.5! w-7! min-w-0 px-0!"
-              title="选用该英雄（不会锁定）"
-              @click="hoverChampion(row.championId)"
-            >
-              选
-            </NButton>
-            <span v-else class="ml-0.5 w-7 shrink-0"></span>
-          </div>
-        </NScrollbar>
+          <template #checked>开</template>
+          <template #unchecked>关</template>
+        </NSwitch>
+        <span class="ml-auto min-w-0 truncate text-[#666666] dark:text-[#bebebe]">
+          {{ matchupStatus }}
+        </span>
       </div>
-    </div>
 
-    <div v-else-if="isLoading" class="flex items-center justify-center py-3">
-      <NSpin :size="14" />
-    </div>
+      <div v-if="errorText" class="mt-1 text-xs text-[#dc2626] dark:text-[#d75a5a]">
+        {{ errorText }}
+      </div>
+      <div v-if="hoverNotice" class="mt-1 text-xs text-[#666666] dark:text-[#bebebe]">
+        {{ hoverNotice }}
+      </div>
 
-    <div v-else class="py-2 text-center text-[11px] text-black/40 dark:text-white/35">
-      {{ placeholderText }}
-    </div>
+      <div v-else-if="resolvedTargetId && intel" class="mt-2 grid grid-cols-2 gap-2">
+        <div>
+          <div
+            class="mb-1 flex items-center justify-between text-[10px] text-[#666666] dark:text-[#b2b2b2]"
+          >
+            <span>打他胜率</span>
+            <span>高 → 低</span>
+          </div>
+          <NScrollbar class="max-h-45">
+            <div
+              v-for="row in winRateRows"
+              :key="'w' + row.championId"
+              class="mb-1 flex items-center gap-1 last:mb-0"
+              :class="{ 'opacity-45': row.games < 50 }"
+            >
+              <ChampionIcon round class="size-4.5 shrink-0" :champion-id="row.championId" />
+              <span class="min-w-0 flex-1 truncate text-xs">{{ championName(row.championId) }}</span>
+              <span
+                class="text-xs font-bold tabular-nums"
+                :class="
+                  row.myWinRate > 0.5
+                    ? 'text-[#2a947d] dark:text-[#5fd3a5]'
+                    : 'text-[#dc2626] dark:text-[#d75a5a]'
+                "
+                >{{ formatPercent(row.myWinRate) }}</span
+              >
+              <span
+                class="w-9 text-right text-[10px] tabular-nums text-[#666666] dark:text-[#b2b2b2]"
+              >
+                {{ row.games }}场
+              </span>
+              <NButton
+                v-if="canHover(row.championId)"
+                size="tiny"
+                type="primary"
+                secondary
+                class="ml-0.5 h-4.5! w-7! min-w-0 px-0!"
+                title="选用该英雄（不会锁定）"
+                @click="hoverChampion(row.championId)"
+              >
+                选
+              </NButton>
+              <span v-else class="ml-0.5 w-7 shrink-0"></span>
+            </div>
+          </NScrollbar>
+        </div>
+        <div>
+          <div
+            class="mb-1 flex items-center justify-between text-[10px] text-[#666666] dark:text-[#b2b2b2]"
+          >
+            <span>单杀他概率</span>
+            <span>高 → 低</span>
+          </div>
+          <div
+            v-if="!intel.laneKillAvailable"
+            class="py-2 text-center text-xs text-[#666666] dark:text-[#b2b2b2]"
+          >
+            数据源改版，暂不可用（胜率不受影响）
+          </div>
+          <NScrollbar v-else class="max-h-45">
+            <div
+              v-for="row in laneKillRows"
+              :key="'k' + row.championId"
+              class="mb-1 flex items-center gap-1 last:mb-0"
+              :class="{ 'opacity-45': row.games < 50 }"
+            >
+              <ChampionIcon round class="size-4.5 shrink-0" :champion-id="row.championId" />
+              <span class="min-w-0 flex-1 truncate text-xs">{{ championName(row.championId) }}</span>
+              <span
+                class="text-xs font-bold tabular-nums"
+                :class="
+                  row.laneKillRate === null
+                    ? ''
+                    : row.laneKillRate > 0.5
+                      ? 'text-[#2a947d] dark:text-[#5fd3a5]'
+                      : 'text-[#dc2626] dark:text-[#d75a5a]'
+                "
+              >
+                {{ row.laneKillRate === null ? '—' : formatPercent(row.laneKillRate) }}
+              </span>
+              <span
+                class="w-9 text-right text-[10px] tabular-nums text-[#666666] dark:text-[#b2b2b2]"
+              >
+                {{ row.games }}场
+              </span>
+              <NButton
+                v-if="canHover(row.championId)"
+                size="tiny"
+                type="primary"
+                secondary
+                class="ml-0.5 h-4.5! w-7! min-w-0 px-0!"
+                title="选用该英雄（不会锁定）"
+                @click="hoverChampion(row.championId)"
+              >
+                选
+              </NButton>
+              <span v-else class="ml-0.5 w-7 shrink-0"></span>
+            </div>
+          </NScrollbar>
+        </div>
+      </div>
+
+      <div v-else-if="isLoading" class="flex items-center justify-center py-3">
+        <NSpin :size="14" />
+      </div>
+
+      <div v-else class="py-2 text-center text-xs text-[#666666] dark:text-[#b2b2b2]">
+        {{ placeholderText }}
+      </div>
+    </template>
   </div>
 </template>
 
@@ -179,7 +226,15 @@ const lcs = useLeagueClientStore()
 const resources = useAkariResourceProvider()
 const ipc = useInstance(AkariIpcRenderer)
 const lc = useInstance(LeagueClientRenderer)
-const { region, tier, championId: myChampionId } = useOpgg()
+const {
+  region,
+  tier,
+  championId: myChampionId,
+  mode: opggMode,
+  version: opggVersion,
+  versions: opggVersions,
+  effectiveSource
+} = useOpgg()
 
 const session = computed(() => lcs.champSelect.session)
 
@@ -316,19 +371,49 @@ const placeholderText = computed(() => {
 // 识别到对位后拉取官方形状 overlay 写入共享状态；OpggView 就近 provide 覆盖 champion，
 // 原界面所有区块（符文/召唤师/出装）与"应用"按钮自动切换为对位版数据，UI 零改动。
 const { setMatchupOverlay } = useMatchupOverlay()
+// [lolps] 默认折叠为一行摘要，不遮挡下方符文/出装区块
+const expanded = ref(false)
+
 const matchupOn = ref(true)
 const matchupStatus = ref('')
 let matchupSeq = 0
 let matchupTimer: ReturnType<typeof setTimeout> | null = null
 
+const summaryText = computed(() => {
+  if (matchupStatus.value) return matchupStatus.value
+  if (resolvedTargetId.value && statusText.value) return statusText.value
+  return '等待对位确认'
+})
+
 async function refreshMatchupOverlay() {
   const me = myChampionId.value
   const opp = resolvedTargetId.value
   const lane = effectiveLane.value
-  if (!matchupOn.value || !me || !opp || !lane || me === opp) {
+  // 守卫：仅排位模式有对位数据；OP.GG 源选了历史版本时网页只有最新版，暂停替换防口径漂移
+  const latestVersion = opggVersions.value[0] ?? null
+  const versionMismatch =
+    effectiveSource.value === 'opgg' &&
+    !!opggVersion.value &&
+    !!latestVersion &&
+    opggVersion.value !== latestVersion
+  if (
+    !matchupOn.value ||
+    opggMode.value !== 'ranked' ||
+    versionMismatch ||
+    !me ||
+    !opp ||
+    !lane ||
+    me === opp
+  ) {
     matchupSeq++
     setMatchupOverlay(null)
-    matchupStatus.value = matchupOn.value ? '' : '对位替换已关闭，显示通用构筑'
+    matchupStatus.value = !matchupOn.value
+      ? '对位替换已关闭，显示通用构筑'
+      : opggMode.value !== 'ranked'
+        ? '当前模式无对位数据，显示通用构筑'
+        : versionMismatch
+          ? '已选历史版本，暂不做对位替换'
+          : ''
     return
   }
   const seq = ++matchupSeq
@@ -351,7 +436,7 @@ async function refreshMatchupOverlay() {
           ? `${result.meta.play} 场 · 胜率 ${((result.meta.win / result.meta.play) * 100).toFixed(1)}%`
           : ''
       setMatchupOverlay(result.overlay, metaText)
-      matchupStatus.value = `构筑已切换为对位版 vs ${championName(opp)}${metaText ? `（${metaText}）` : ''}`
+      matchupStatus.value = `已切换对位构筑 vs ${championName(opp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
     } else {
       setMatchupOverlay(null)
       matchupStatus.value = '该对位样本不足，显示通用构筑'
@@ -375,6 +460,8 @@ watch(
     effectiveLane,
     () => region.value,
     () => tier.value,
+    () => opggMode.value,
+    () => opggVersion.value,
     matchupOn
   ],
   () => scheduleMatchupOverlay()

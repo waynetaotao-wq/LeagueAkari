@@ -54,7 +54,7 @@ const wrClass = computed(() => {
 .tc-col {
   display: flex;
   flex-direction: column;
-  background: #0d0d11;
+  background: #18181c;
   border-radius: 8px;
   overflow: hidden;
   min-height: 0;
@@ -65,9 +65,9 @@ const wrClass = computed(() => {
   flex-shrink: 0;
 }
 .tc-title {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   color: #fff;
   text-transform: uppercase;
 }
@@ -100,7 +100,7 @@ const wrClass = computed(() => {
   min-height: 64px;
   border-radius: 6px;
   overflow: hidden;
-  background: #141419;
+  background: #1d1d22;
 }
 .tc-card.me {
   outline: 2px solid #f5a623;
@@ -122,9 +122,8 @@ const wrClass = computed(() => {
   position: absolute;
   top: 6px;
   left: 8px;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-size: 14px;
+  font-weight: 600;
   color: #fff;
   text-transform: uppercase;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
@@ -153,7 +152,7 @@ const wrClass = computed(() => {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 2px;
-  border: 1px dashed #26262e;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
   border-radius: 6px;
 }
 </style>
