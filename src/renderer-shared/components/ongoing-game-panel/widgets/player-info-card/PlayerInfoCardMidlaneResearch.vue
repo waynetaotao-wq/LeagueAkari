@@ -5,17 +5,6 @@
         <div
           class="flex w-full cursor-default items-center gap-2 rounded border border-fuchsia-500/60 bg-fuchsia-500/8 px-2 py-1 transition-[filter] hover:brightness-110 dark:border-fuchsia-300/56 dark:bg-fuchsia-300/8"
         >
-          <div
-            class="flex size-12 shrink-0 flex-col items-center justify-center rounded bg-black/10 dark:bg-white/10"
-          >
-            <template v-if="hasData && topKillBucket">
-              <span class="text-[10px] leading-3 text-black/45 dark:text-white/45">⚔ 首杀</span>
-              <span class="text-[13px] leading-4 font-bold text-fuchsia-900/80 dark:text-fuchsia-100/85">
-                {{ topKillBucket.short }}
-              </span>
-            </template>
-            <span v-else class="text-[10px] text-black/35 dark:text-white/35">中单</span>
-          </div>
 
           <div class="flex min-w-0 flex-1 flex-col justify-center gap-1 text-[11px]">
             <template v-if="hasData">

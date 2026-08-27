@@ -22,7 +22,8 @@
         <NSelect
           v-model:value="versionFilter"
           size="tiny"
-          class="w-32"
+          class="w-40"
+          :consistent-menu-width="false"
           :options="versionOptions"
           :disabled="phase === 'list' || phase === 'facts' || !listItems.length"
         />

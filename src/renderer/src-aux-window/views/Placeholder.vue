@@ -25,7 +25,7 @@
         上局举报：{{ agfs.lastAutoReportSummary }}
       </div>
       <div class="mt-1 text-[10px] text-black/35 dark:text-white/30">
-        进入排队 / 选人后，此窗口会自动切换为对应操作面板
+        组队 / 排队 / 接受对局时此窗自动出现操作面板；选人与对局期间自动隐藏
       </div>
     </div>
   </div>

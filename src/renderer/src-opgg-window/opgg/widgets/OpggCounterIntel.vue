@@ -379,6 +379,27 @@ const matchupStatus = ref('')
 let matchupSeq = 0
 let matchupTimer: ReturnType<typeof setTimeout> | null = null
 
+/** [lolps] 对位锁定态：选人期挂上对位构筑后，整个对局周期内保持不还原 */
+const matchupLock = ref<{
+  myChampionId: number
+  opponentChampionId: number
+  lane: string
+  validated: boolean
+} | null>(null)
+
+/** 视为"对局进行中"的阶段（含加载与断线重连），期间任何依赖抖动都不触碰 overlay */
+const IN_GAME_PHASES = new Set(['GameStart', 'InProgress', 'Reconnect'])
+/** 对局周期结束（含结算与回到大厅/秒退）——此时才还原通用构筑 */
+const GAME_OVER_PHASES = new Set(['WaitingForStats', 'PreEndOfGame', 'EndOfGame', 'None'])
+
+const LANE_TO_LCU: Record<string, string> = {
+  top: 'TOP',
+  jungle: 'JUNGLE',
+  mid: 'MIDDLE',
+  adc: 'BOTTOM',
+  support: 'UTILITY'
+}
+
 const summaryText = computed(() => {
   if (matchupStatus.value) return matchupStatus.value
   if (resolvedTargetId.value && statusText.value) return statusText.value
@@ -386,6 +407,10 @@ const summaryText = computed(() => {
 })
 
 async function refreshMatchupOverlay() {
+  // 对局进行中且已锁定：保持对位构筑原样（进游戏后 session 消失引发的依赖抖动一律忽略）
+  if (matchupLock.value && IN_GAME_PHASES.has(String(lcs.gameflow.phase))) {
+    return
+  }
   const me = myChampionId.value
   const opp = resolvedTargetId.value
   const lane = effectiveLane.value
@@ -406,6 +431,7 @@ async function refreshMatchupOverlay() {
     me === opp
   ) {
     matchupSeq++
+    matchupLock.value = null
     setMatchupOverlay(null)
     matchupStatus.value = !matchupOn.value
       ? '对位替换已关闭，显示通用构筑'
@@ -436,13 +462,16 @@ async function refreshMatchupOverlay() {
           ? `${result.meta.play} 场 · 胜率 ${((result.meta.win / result.meta.play) * 100).toFixed(1)}%`
           : ''
       setMatchupOverlay(result.overlay, metaText)
+      matchupLock.value = { myChampionId: me, opponentChampionId: opp, lane, validated: false }
       matchupStatus.value = `已切换对位构筑 vs ${championName(opp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
     } else {
+      matchupLock.value = null
       setMatchupOverlay(null)
       matchupStatus.value = '该对位样本不足，显示通用构筑'
     }
   } catch (error: any) {
     if (seq !== matchupSeq) return
+    matchupLock.value = null
     setMatchupOverlay(null)
     matchupStatus.value = `对位数据获取失败：${error?.message ?? error}`
   }
@@ -465,6 +494,83 @@ watch(
     matchupOn
   ],
   () => scheduleMatchupOverlay()
+)
+
+/** 进入加载/对局后：用真实双方阵容校验选人期的对位推测，必要时精确重定或诚实回退 */
+async function validateMatchupAgainstRealTeams() {
+  const lock = matchupLock.value
+  if (!lock || lock.validated) return
+  const gd = (lcs.gameflow.session as any)?.gameData
+  const one: any[] = gd?.teamOne ?? []
+  const two: any[] = gd?.teamTwo ?? []
+  if (!one.length && !two.length) return // 阵容尚未就绪，等下一次相位变化再试
+  const inTeam = (t: any[]) => t.some((x) => x?.championId === lock.myChampionId)
+  const enemyTeam = inTeam(one) ? two : inTeam(two) ? one : null
+  if (!enemyTeam || !enemyTeam.length) return
+  const enemyIds = enemyTeam
+    .map((x: any) => x?.championId)
+    .filter((x: any) => typeof x === 'number' && x > 0)
+  if (!enemyIds.length) return
+  lock.validated = true
+
+  if (enemyIds.includes(lock.opponentChampionId)) {
+    matchupStatus.value = `已确认真实对位 vs ${championName(lock.opponentChampionId)}，对位构筑锁定至对局结束`
+    return
+  }
+
+  // 推测英雄不在真实敌方阵容：优先用真实位置字段精确重定
+  const laneLcu = LANE_TO_LCU[lock.lane] ?? ''
+  const posOf = (x: any) => String(x?.selectedPosition ?? x?.position ?? '').toUpperCase()
+  const byPos = enemyTeam.filter((x: any) => laneLcu && posOf(x) === laneLcu)
+  if (byPos.length === 1 && typeof byPos[0].championId === 'number' && byPos[0].championId > 0) {
+    const newOpp = byPos[0].championId
+    const seq = ++matchupSeq
+    try {
+      const result = await ipc.call<MatchupBuildResult>(
+        CHAMPION_DATA_MAIN_NAMESPACE,
+        'counterIntel/matchupBuild',
+        {
+          myChampionId: lock.myChampionId,
+          opponentChampionId: newOpp,
+          position: lock.lane,
+          region: region.value,
+          tier: tier.value
+        }
+      )
+      if (seq !== matchupSeq) return
+      if (result.overlay) {
+        const metaText =
+          result.meta && result.meta.play > 0
+            ? `${result.meta.play} 场 · 胜率 ${((result.meta.win / result.meta.play) * 100).toFixed(1)}%`
+            : ''
+        setMatchupOverlay(result.overlay, metaText)
+        lock.opponentChampionId = newOpp
+        matchupStatus.value = `已按真实阵容修正对位 vs ${championName(newOpp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
+        return
+      }
+    } catch {}
+  }
+
+  // 无法确定真实对位：诚实回退通用构筑
+  matchupLock.value = null
+  matchupSeq++
+  setMatchupOverlay(null)
+  matchupStatus.value = '对面真实阵容与选人期推测不符，已回通用构筑'
+}
+
+watch(
+  () => lcs.gameflow.phase,
+  (p) => {
+    const phase = String(p)
+    if (IN_GAME_PHASES.has(phase)) {
+      void validateMatchupAgainstRealTeams()
+    } else if (GAME_OVER_PHASES.has(phase) && matchupLock.value) {
+      matchupLock.value = null
+      matchupSeq++
+      setMatchupOverlay(null)
+      matchupStatus.value = ''
+    }
+  }
 )
 
 onBeforeUnmount(() => {

@@ -67,9 +67,9 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
             return 'ignore'
           }
 
-          // [lolps] 原版在 OP.GG 窗口启用时会于选人阶段隐藏 Mini 窗；
-          // 按需求改为选人阶段恒显示（秒退计时等操作需要它在场）
-          return 'show'
+          // [lolps] 选人 / 加载 / 对局期间此窗无实际功能，自动隐藏；
+          // 组队 / 排队 / 接受对局阶段自动回来（加载与对局命中下方默认 hide）
+          return 'hide'
         case 'Lobby':
         case 'Matchmaking':
         case 'ReadyCheck':
