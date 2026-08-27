@@ -41,7 +41,7 @@ export class AkariDraftgapWindow extends BaseAkariWindow<
       htmlEntry: AkariDraftgapWindow.HTML_ENTRY,
       rememberPosition: true,
       rememberSize: true,
-      repositionWindowIfInvisible: true,
+      repositionWindowIfInvisible: false,
       settingSchema: {
         enabled: { default: settings.enabled, schema: z.boolean() },
         autoShow: { default: settings.autoShow, schema: z.boolean() }
@@ -50,6 +50,7 @@ export class AkariDraftgapWindow extends BaseAkariWindow<
         title: AkariDraftgapWindow.TITLE,
         icon: icon,
         show: false,
+        backgroundColor: '#060608',
         fullscreenable: false,
         frame: false,
         maximizable: false,

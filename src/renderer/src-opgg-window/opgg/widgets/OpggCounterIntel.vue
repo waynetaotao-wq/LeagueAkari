@@ -51,7 +51,10 @@
           >
             <ChampionIcon round class="size-4 shrink-0" :champion-id="row.championId" />
             <span class="min-w-0 flex-1 truncate">{{ championName(row.championId) }}</span>
-            <span class="font-bold tabular-nums">{{ formatPercent(row.myWinRate) }}</span>
+            <span
+              class="font-bold tabular-nums"
+              :class="row.myWinRate > 0.5 ? 'text-green-500' : 'text-red-500'"
+            >{{ formatPercent(row.myWinRate) }}</span>
             <span class="w-9 text-right text-[10px] tabular-nums text-black/40 dark:text-white/35">
               {{ row.games }}场
             </span>
@@ -89,7 +92,16 @@
           >
             <ChampionIcon round class="size-4 shrink-0" :champion-id="row.championId" />
             <span class="min-w-0 flex-1 truncate">{{ championName(row.championId) }}</span>
-            <span class="font-bold tabular-nums">
+            <span
+              class="font-bold tabular-nums"
+              :class="
+                row.laneKillRate === null
+                  ? ''
+                  : row.laneKillRate > 0.5
+                    ? 'text-green-500'
+                    : 'text-red-500'
+              "
+            >
               {{ row.laneKillRate === null ? '—' : formatPercent(row.laneKillRate) }}
             </span>
             <span class="w-9 text-right text-[10px] tabular-nums text-black/40 dark:text-white/35">

@@ -5,7 +5,7 @@ export class DraftgapWindowSettings {
   enabled: boolean = true
   autoShow: boolean = true
   opacity: number = 1
-  pinned: boolean = true
+  pinned: boolean = false
 
   setOpacity(opacity: number) {
     this.opacity = opacity
