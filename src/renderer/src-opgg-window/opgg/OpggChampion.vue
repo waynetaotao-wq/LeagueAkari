@@ -93,8 +93,9 @@
         </div>
 
         <!-- 堆叠的艺术 -->
+        <!-- [lolps] 原版"劣势对位"大区块（OpggChampionCounters）已移除：
+             与顶部"对位克制"助手功能重叠且占据数屏空间，让位给对线胜率 / 单杀率双表 -->
         <OpggChampionBalance />
-        <OpggChampionCounters />
         <OpggChampionKiwiAugments />
         <OpggChampionSpells />
         <OpggChampionRunes />
@@ -133,7 +134,6 @@ import OpggChampionAugments from './widgets/OpggChampionAugments.vue'
 import OpggChampionBalance from './widgets/OpggChampionBalance.vue'
 import OpggChampionBoots from './widgets/OpggChampionBoots.vue'
 import OpggChampionCoreItems from './widgets/OpggChampionCoreItems.vue'
-import OpggChampionCounters from './widgets/OpggChampionCounters.vue'
 import OpggChampionImportItemSet from './widgets/OpggChampionImportItemSet.vue'
 import OpggChampionKiwiAugments from './widgets/OpggChampionKiwiAugments.vue'
 import OpggChampionLastItems from './widgets/OpggChampionLastItems.vue'

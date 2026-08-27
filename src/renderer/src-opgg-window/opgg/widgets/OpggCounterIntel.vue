@@ -87,14 +87,14 @@
             <span>打他胜率</span>
             <span>高 → 低</span>
           </div>
-          <NScrollbar class="max-h-45">
+          <NScrollbar class="max-h-100">
             <div
               v-for="row in winRateRows"
               :key="'w' + row.championId"
               class="mb-1 flex items-center gap-1 last:mb-0"
               :class="{ 'opacity-45': row.games < 50 }"
             >
-              <ChampionIcon round class="size-4.5 shrink-0" :champion-id="row.championId" />
+              <ChampionIcon round class="size-5 shrink-0" :champion-id="row.championId" />
               <span class="min-w-0 flex-1 truncate text-xs">{{ championName(row.championId) }}</span>
               <span
                 class="text-xs font-bold tabular-nums"
@@ -138,14 +138,14 @@
           >
             数据源改版，暂不可用（胜率不受影响）
           </div>
-          <NScrollbar v-else class="max-h-45">
+          <NScrollbar v-else class="max-h-100">
             <div
               v-for="row in laneKillRows"
               :key="'k' + row.championId"
               class="mb-1 flex items-center gap-1 last:mb-0"
               :class="{ 'opacity-45': row.games < 50 }"
             >
-              <ChampionIcon round class="size-4.5 shrink-0" :champion-id="row.championId" />
+              <ChampionIcon round class="size-5 shrink-0" :champion-id="row.championId" />
               <span class="min-w-0 flex-1 truncate text-xs">{{ championName(row.championId) }}</span>
               <span
                 class="text-xs font-bold tabular-nums"
