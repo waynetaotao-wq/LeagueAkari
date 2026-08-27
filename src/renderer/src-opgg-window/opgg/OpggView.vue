@@ -3,6 +3,7 @@
     <OpggTabAndFilters class="mb-1" />
 
     <OpggCounterIntel />
+    <OpggMayhemPicker />
 
     <NEmpty
       v-if="isDataUnavailable"
@@ -36,6 +37,7 @@ import OpggTabAndFilters from './OpggTabAndFilters.vue'
 import { OpggContextKey, useOpgg } from './context'
 import { useMatchupOverlay } from './matchup-overlay'
 import OpggCounterIntel from './widgets/OpggCounterIntel.vue'
+import OpggMayhemPicker from './widgets/OpggMayhemPicker.vue'
 import SessionChampions from './widgets/SessionChampions.vue'
 
 const { t } = useTranslation()
