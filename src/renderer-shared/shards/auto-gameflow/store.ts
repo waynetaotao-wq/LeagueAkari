@@ -1,4 +1,9 @@
-import { AutoHonorStrategy, AutoMatchmakingStrategy } from '@shared/shards/auto-gameflow'
+import {
+  AutoHonorStrategy,
+  AutoMatchmakingStrategy,
+  AutoReportCategory,
+  AutoReportScope
+} from '@shared/shards/auto-gameflow'
 import { defineStore } from 'pinia'
 import { ref, shallowReactive, shallowRef } from 'vue'
 
@@ -22,7 +27,10 @@ export const useAutoGameflowStore = defineStore('shard:auto-gameflow-renderer', 
     invitationHandlingStrategies: {} as Record<string, string>,
     rejectInvitationWhenAway: false,
     autoSendARAMTeamSideEnabled: false,
-    autoSendARAMTeamSideVisibleToTeam: true
+    autoSendARAMTeamSideVisibleToTeam: true,
+    autoReportEnabled: false,
+    autoReportScope: 'opponents-only' as AutoReportScope,
+    autoReportCategories: ['NEGATIVE_ATTITUDE'] as AutoReportCategory[]
   })
 
   const willAcceptAt = ref(-1)

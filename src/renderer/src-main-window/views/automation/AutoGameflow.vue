@@ -54,6 +54,58 @@
           </SettingsRow>
         </SettingsSection>
 
+        <SettingsSection setting-id="automation.gameflow.auto-report" title="赛后自动举报">
+          <SettingsRow
+            setting-id="automation.gameflow.auto-report.enabled"
+            label="启用"
+            label-description="结算界面出现时自动举报本局玩家。始终排除：自己、同房间开黑的队友、以及好友列表中的人。"
+            :label-width="260"
+          >
+            <NSwitch
+              :value="store.settings.autoReportEnabled"
+              @update:value="(val) => shard.setAutoReportEnabled(val)"
+              size="small"
+            />
+          </SettingsRow>
+          <SettingsRow
+            setting-id="automation.gameflow.auto-report.scope"
+            label="举报范围"
+            label-description="无论选择哪一项，开黑队友与好友都不会被举报"
+            :label-width="260"
+          >
+            <NRadioGroup
+              :value="store.settings.autoReportScope"
+              @update:value="(s) => shard.setAutoReportScope(s)"
+              size="small"
+            >
+              <NFlex :size="8" class="justify-end">
+                <NRadio value="opponents-only">仅敌方</NRadio>
+                <NRadio value="all">敌我全部</NRadio>
+              </NFlex>
+            </NRadioGroup>
+          </SettingsRow>
+          <SettingsRow
+            setting-id="automation.gameflow.auto-report.categories"
+            label="举报理由"
+            label-description="可多选。未勾选任何理由时不会执行举报"
+            :label-width="260"
+            align="start"
+          >
+            <NFlex :size="8" class="max-w-full justify-end">
+              <NCheckbox
+                v-for="c of REPORT_CATEGORIES"
+                :key="c.value"
+                size="small"
+                class="text-[13px]"
+                :checked="isReportCategoryChecked(c.value)"
+                @update:checked="(val) => toggleReportCategory(c.value, val)"
+              >
+                {{ c.label }}
+              </NCheckbox>
+            </NFlex>
+          </SettingsRow>
+        </SettingsSection>
+
         <SettingsSection
           setting-id="automation.gameflow.play-again"
           :title="t('automation.gameflow.sections.playAgain')"
@@ -388,6 +440,27 @@ import { computed } from 'vue'
 
 const store = useAutoGameflowStore()
 const shard = useInstance(AutoGameflowRenderer)
+
+const REPORT_CATEGORIES: { value: string; label: string }[] = [
+  { value: 'NEGATIVE_ATTITUDE', label: '消极态度' },
+  { value: 'VERBAL_ABUSE', label: '言语辱骂' },
+  { value: 'LEAVING_AFK', label: '挂机/逃跑' },
+  { value: 'ASSISTING_ENEMY_TEAM', label: '协助敌方（演员）' },
+  { value: 'HATE_SPEECH', label: '仇恨言论' },
+  { value: 'THIRD_PARTY_TOOLS', label: '第三方软件' },
+  { value: 'INAPPROPRIATE_NAME', label: '不当命名' }
+]
+
+const isReportCategoryChecked = (category: string) =>
+  (store.settings.autoReportCategories as string[]).includes(category)
+
+const toggleReportCategory = (category: string, checked: boolean) => {
+  const current = store.settings.autoReportCategories as string[]
+  const next = checked
+    ? [...new Set([...current, category])]
+    : current.filter((c) => c !== category)
+  shard.setAutoReportCategories(next)
+}
 
 const invitationStrategiesPopselectArray = computed(() => {
   return Object.keys(store.settings.invitationHandlingStrategies)

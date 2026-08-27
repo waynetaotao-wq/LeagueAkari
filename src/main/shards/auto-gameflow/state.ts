@@ -9,6 +9,20 @@ export type AutoHonorStrategy =
   | 'opt-out' // 直接跳过
   | 'all-member-including-opponent' // 随机所有可点赞玩家，包括对手
 
+export type AutoReportScope =
+  | 'opponents-only' // 仅举报敌方
+  | 'all' // 敌我全部（仍会排除开黑队友与好友）
+
+/** 举报理由（LCU end-of-game-reports 的 categories） */
+export type AutoReportCategory =
+  | 'NEGATIVE_ATTITUDE'
+  | 'VERBAL_ABUSE'
+  | 'LEAVING_AFK'
+  | 'ASSISTING_ENEMY_TEAM'
+  | 'HATE_SPEECH'
+  | 'THIRD_PARTY_TOOLS'
+  | 'INAPPROPRIATE_NAME'
+
 export type AutoMatchmakingStrategy = 'never' | 'fixed-duration' | 'estimated-duration'
 
 export class AutoGameflowSettings {
@@ -36,6 +50,10 @@ export class AutoGameflowSettings {
   rejectInvitationWhenAway: boolean = false
 
   invitationHandlingStrategies: Record<string, string> = {}
+
+  autoReportEnabled: boolean = false
+  autoReportScope: AutoReportScope = 'opponents-only'
+  autoReportCategories: AutoReportCategory[] = ['NEGATIVE_ATTITUDE']
 
   autoSendARAMTeamSideEnabled: boolean = false
   autoSendARAMTeamSideVisibleToTeam: boolean = false
@@ -104,6 +122,18 @@ export class AutoGameflowSettings {
     this.autoSkipLeaderEnabled = enabled
   }
 
+  setAutoReportEnabled(enabled: boolean) {
+    this.autoReportEnabled = enabled
+  }
+
+  setAutoReportScope(scope: AutoReportScope) {
+    this.autoReportScope = scope
+  }
+
+  setAutoReportCategories(categories: AutoReportCategory[]) {
+    this.autoReportCategories = categories
+  }
+
   setAutoSendARAMTeamSideEnabled(enabled: boolean) {
     this.autoSendARAMTeamSideEnabled = enabled
   }
@@ -114,7 +144,8 @@ export class AutoGameflowSettings {
 
   constructor() {
     makeAutoObservable(this, {
-      invitationHandlingStrategies: observableStruct
+      invitationHandlingStrategies: observableStruct,
+      autoReportCategories: observableStruct
     })
   }
 }

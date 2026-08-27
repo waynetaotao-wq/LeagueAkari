@@ -130,6 +130,18 @@ export class AutoGameflowRenderer implements IAkariShardInitDispose {
     )
   }
 
+  setAutoReportEnabled(enabled: boolean) {
+    return this._settingUtils.set(MAIN_SHARD_NAMESPACE, 'autoReportEnabled', enabled)
+  }
+
+  setAutoReportScope(scope: string) {
+    return this._settingUtils.set(MAIN_SHARD_NAMESPACE, 'autoReportScope', scope)
+  }
+
+  setAutoReportCategories(categories: string[]) {
+    return this._settingUtils.set(MAIN_SHARD_NAMESPACE, 'autoReportCategories', categories)
+  }
+
   setFriendsToBeInvited(puuids: string[]) {
     return this._ipc.call(MAIN_SHARD_NAMESPACE, 'setFriendsToBeInvited', puuids)
   }

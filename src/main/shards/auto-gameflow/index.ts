@@ -22,6 +22,7 @@ import { AutoGameflowInvitationController } from './invitation-controller'
 import { AutoGameflowIpcHandlers } from './ipc-handlers'
 import { AutoGameflowLobbyFlowController } from './lobby-flow-controller'
 import { AutoGameflowMatchmakingController } from './matchmaking-controller'
+import { AutoGameflowReportController } from './report-controller'
 import { AutoGameflowSettings, AutoGameflowState } from './state'
 
 /**
@@ -50,6 +51,7 @@ export class AutoGameflowMain implements IAkariShardInitDispose {
   private readonly _invitations: AutoGameflowInvitationController
   private readonly _honorController: AutoGameflowHonorController
   private readonly _aramTeamSide: AutoGameflowAramTeamSideController
+  private readonly _reportController: AutoGameflowReportController
   private readonly _ipcHandlers: AutoGameflowIpcHandlers
 
   constructor(
@@ -137,6 +139,28 @@ export class AutoGameflowMain implements IAkariShardInitDispose {
           default: this.settings.rejectInvitationWhenAway,
           schema: z.boolean()
         },
+        autoReportEnabled: {
+          default: this.settings.autoReportEnabled,
+          schema: z.boolean()
+        },
+        autoReportScope: {
+          default: this.settings.autoReportScope,
+          schema: z.enum(['opponents-only', 'all'])
+        },
+        autoReportCategories: {
+          default: this.settings.autoReportCategories,
+          schema: z.array(
+            z.enum([
+              'NEGATIVE_ATTITUDE',
+              'VERBAL_ABUSE',
+              'LEAVING_AFK',
+              'ASSISTING_ENEMY_TEAM',
+              'HATE_SPEECH',
+              'THIRD_PARTY_TOOLS',
+              'INAPPROPRIATE_NAME'
+            ])
+          )
+        },
         autoSendARAMTeamSideEnabled: {
           default: this.settings.autoSendARAMTeamSideEnabled,
           schema: z.boolean()
@@ -166,6 +190,7 @@ export class AutoGameflowMain implements IAkariShardInitDispose {
     this._invitations = new AutoGameflowInvitationController(this._context)
     this._honorController = new AutoGameflowHonorController(this._context, this._actionController)
     this._aramTeamSide = new AutoGameflowAramTeamSideController(this._context)
+    this._reportController = new AutoGameflowReportController(this._context)
     this._ipcHandlers = new AutoGameflowIpcHandlers(
       this._context,
       this._actionController,
@@ -205,7 +230,10 @@ export class AutoGameflowMain implements IAkariShardInitDispose {
       'invitationHandlingStrategies',
       'rejectInvitationWhenAway',
       'autoSendARAMTeamSideEnabled',
-      'autoSendARAMTeamSideVisibleToTeam'
+      'autoSendARAMTeamSideVisibleToTeam',
+      'autoReportEnabled',
+      'autoReportScope',
+      'autoReportCategories'
     ])
 
     this._mobxUtils.propSync(AutoGameflowMain.id, 'state', this.state, [
@@ -233,6 +261,7 @@ export class AutoGameflowMain implements IAkariShardInitDispose {
     this._invitations.watch()
     this._matchmaking.watch()
     this._aramTeamSide.watch()
+    this._reportController.watch()
     this._watchLogging()
   }
 

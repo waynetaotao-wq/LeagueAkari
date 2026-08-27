@@ -41,6 +41,7 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
         title: AkariAuxWindow.TITLE,
         icon: icon,
         show: false,
+        backgroundColor: '#141416', // [lolps] Mini 待机窗垫黑底，防止默认白窗透出
         frame: false,
         fullscreenable: false,
         maximizable: false,

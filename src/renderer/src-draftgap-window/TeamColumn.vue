@@ -60,19 +60,19 @@ const wrClass = computed(() => {
   min-height: 0;
 }
 .tc-head {
-  padding: 14px 12px 10px;
+  padding: 10px 12px 8px;
   text-align: center;
   flex-shrink: 0;
 }
 .tc-title {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: 2px;
   color: #fff;
   text-transform: uppercase;
 }
 .tc-wr {
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 700;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
@@ -97,7 +97,7 @@ const wrClass = computed(() => {
 .tc-card {
   position: relative;
   flex: 1;
-  min-height: 84px;
+  min-height: 64px;
   border-radius: 6px;
   overflow: hidden;
   background: #141419;

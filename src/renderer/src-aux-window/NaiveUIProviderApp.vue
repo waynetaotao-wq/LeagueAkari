@@ -39,8 +39,9 @@ import App from './App.vue'
 const as = useAppCommonStore()
 const akariResourceProvider = createAkariResourceProvider()
 
+// [lolps] Mini 待机窗固定暗色主题（原版未选主题时默认亮色调色板，整窗发白）
 const themeOverrides = computed(() => {
-  return getNaiveUiThemeOverrides(as.themeId, true)
+  return getNaiveUiThemeOverrides('dark', true)
 })
 
 const naiveUiLocale = computed(() => {
@@ -48,12 +49,12 @@ const naiveUiLocale = computed(() => {
 })
 
 const naiveUiTheme = computed(() => {
-  return getNaiveUiTheme(as.colorTheme)
+  return getNaiveUiTheme('dark')
 })
 
 useColorThemeAttr(
-  () => as.colorTheme,
-  () => as.themeId
+  () => 'dark',
+  () => 'dark'
 )
 </script>
 

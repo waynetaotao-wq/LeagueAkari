@@ -40,6 +40,7 @@
           <label class="dgx-seg" :class="{ on: sortMastery }">
             <input type="checkbox" v-model="sortMastery" />熟练加权
           </label>
+          <span v-if="hiddenCount > 0" class="dgx-count">一屏前 {{ displayed.length }} 名 · 其余 {{ hiddenCount }} 个可搜索</span>
         </div>
 
         <div v-if="enemyInferList.length" class="dgx-infer">
@@ -64,10 +65,10 @@
             <span class="c-info"></span>
             <span class="c-pick"></span>
           </div>
-          <div class="dgx-tbody">
+          <div class="dgx-tbody" ref="tbodyEl">
             <div v-if="loading && !sorted.length" class="dgx-hint">首次计算需拉取数据，约 5~20 秒…</div>
             <div v-else-if="!filtered.length" class="dgx-hint">{{ sorted.length ? '没有匹配的候选' : '暂无候选（等待分路/可选英雄信息，或点重新计算）' }}</div>
-            <div v-for="(s, idx) in filtered" :key="s.championId" class="dgx-row">
+            <div v-for="(s, idx) in displayed" :key="s.championId" class="dgx-row">
               <span class="c-rank">{{ idx + 1 }}</span>
               <span class="c-role"><img v-if="roleIcon" :src="roleIcon" class="role-ico" /></span>
               <span class="c-champ">
@@ -487,6 +488,33 @@ const filtered = computed(() => {
   if (!q) return sorted.value
   return sorted.value.filter((s) => s.name.toLowerCase().includes(q))
 })
+
+// [lolps] 一屏自适应：量出表格可视高度，默认只渲染放得下的前 N 名（永不出滚动条）；
+// 搜索时显示全部匹配（主动找人时允许滚动）
+const ROW_PX = 35 // 行高 34px + 1px 分隔线
+const tbodyEl = ref<HTMLElement | null>(null)
+const fitCount = ref(14)
+let fitRo: ResizeObserver | null = null
+onMounted(() => {
+  fitRo = new ResizeObserver((entries) => {
+    const h = entries[0]?.contentRect.height ?? 0
+    if (h > 0) fitCount.value = Math.max(4, Math.floor(h / ROW_PX))
+  })
+  if (tbodyEl.value) fitRo.observe(tbodyEl.value)
+})
+watch(tbodyEl, (el) => {
+  if (!fitRo) return
+  fitRo.disconnect()
+  if (el) fitRo.observe(el)
+})
+onUnmounted(() => {
+  fitRo?.disconnect()
+  fitRo = null
+})
+const displayed = computed(() =>
+  filterText.value.trim() ? filtered.value : filtered.value.slice(0, fitCount.value)
+)
+const hiddenCount = computed(() => filtered.value.length - displayed.value.length)
 const teamCheckWarnings = computed(() => resp.value?.teamCheck.warnings ?? [])
 
 const allyWinrate = computed<number | null>(() => (resp.value ? resp.value.boardWinrate : null))
@@ -790,10 +818,10 @@ async function hoverChampion(championId: number) {
   padding: 0 10px;
 }
 .dgx-thead {
-  height: 34px;
+  height: 26px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   color: #6b7280;
   text-transform: uppercase;
   background: #101015;
@@ -810,7 +838,7 @@ async function hoverChampion(championId: number) {
   color: #6b7280;
 }
 .dgx-row {
-  height: 44px;
+  height: 34px;
   border-bottom: 1px solid #14141a;
 }
 .dgx-row:hover {
@@ -833,13 +861,13 @@ async function hoverChampion(championId: number) {
   min-width: 0;
 }
 .champ-ico {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 4px;
   flex-shrink: 0;
 }
 .champ-name {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 1px;
   color: #fff;
@@ -863,8 +891,13 @@ async function hoverChampion(championId: number) {
   font-style: normal;
   color: #63e2b7;
 }
+.dgx-count {
+  font-size: 10px;
+  color: #6b7280;
+  white-space: nowrap;
+}
 .c-wr {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -886,7 +919,7 @@ async function hoverChampion(championId: number) {
 }
 .pick-btn {
   width: 100%;
-  padding: 4px 0;
+  padding: 2px 0;
   border: none;
   border-radius: 6px;
   background: rgba(245, 166, 35, 0.22);
