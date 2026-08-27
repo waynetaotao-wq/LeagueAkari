@@ -296,7 +296,6 @@ import PerkstyleDisplay from '@renderer-shared/components/widgets/PerkstyleDispl
 import SummonerSpellDisplay from '@renderer-shared/components/widgets/SummonerSpellDisplay.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
 import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
-import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import { NButton, NSelect, NSpin } from 'naive-ui'
 import { computed, ref, shallowRef, watch } from 'vue'
 
@@ -314,7 +313,6 @@ import {
 } from '../mastery-research'
 
 const lc = useInstance(LeagueClientRenderer)
-const lcs = useLeagueClientStore()
 const resources = useAkariResourceProvider()
 const { puuid, isCrossRegion } = usePlayerTab()
 
