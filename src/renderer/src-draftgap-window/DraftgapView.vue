@@ -890,3 +890,13 @@ async function hoverChampion(championId: number) {
   opacity: 0.8;
 }
 </style>
+
+<style>
+/* [lolps] 独立窗口高度兜底：确保 100vh 布局链在任何入口下都成立 */
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+</style>

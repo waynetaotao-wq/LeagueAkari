@@ -90,6 +90,7 @@ const wrClass = computed(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  justify-content: space-evenly;
   gap: 6px;
   padding: 0 6px 6px;
   min-height: 0;
@@ -98,6 +99,7 @@ const wrClass = computed(() => {
   position: relative;
   flex: 1;
   min-height: 64px;
+  max-height: 176px;
   border-radius: 6px;
   overflow: hidden;
   background: #1d1d22;

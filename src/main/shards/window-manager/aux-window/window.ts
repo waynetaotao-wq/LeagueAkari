@@ -67,14 +67,8 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
             return 'ignore'
           }
 
-          if (
-            this._windowManager.opggWindow.settings.enabled &&
-            (this._windowManager.opggWindow.settings.autoShow ||
-              this._windowManager.opggWindow.state.show)
-          ) {
-            return 'hide'
-          }
-
+          // [lolps] 原版在 OP.GG 窗口启用时会于选人阶段隐藏 Mini 窗；
+          // 按需求改为选人阶段恒显示（秒退计时等操作需要它在场）
           return 'show'
         case 'Lobby':
         case 'Matchmaking':

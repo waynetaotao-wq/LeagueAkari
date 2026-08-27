@@ -10,8 +10,15 @@
         <NSelect
           v-model:value="range"
           size="tiny"
-          class="w-24"
+          class="w-26"
           :options="rangeOptions"
+          :disabled="phase === 'list' || phase === 'facts'"
+        />
+        <NSelect
+          v-model:value="versionFilter"
+          size="tiny"
+          class="w-32"
+          :options="versionOptions"
           :disabled="phase === 'list' || phase === 'facts'"
         />
         <NButton
@@ -227,7 +234,53 @@
               </div>
             </template>
             <div v-else class="text-black/50 dark:text-white/45">
-              客户端未提供这些对局的时间线，初装维度不可统计
+              需要装备购买时间线（外服客户端可能不提供），暂无法统计
+            </div>
+          </div>
+
+          <!-- 对线核心装 -->
+          <div class="mt-1.5">
+            <div class="mb-0.5 text-[11px] font-bold text-black/60 dark:text-white/55">
+              前三件核心装（按购买顺序）
+            </div>
+            <template v-if="agg.coreSampleGames > 0 && agg.coreCombos.length">
+              <div
+                v-for="s2 of agg.coreCombos.slice(0, 4)"
+                :key="s2.key"
+                class="flex items-center py-px"
+              >
+                <span class="flex min-w-0 items-center gap-1">
+                  <ItemDisplay
+                    v-for="(id, ii) of s2.ids"
+                    :key="ii"
+                    :item-id="id"
+                    :size="18"
+                  />
+                </span>
+                <span class="ml-auto shrink-0 tabular-nums text-black/55 dark:text-white/50">
+                  {{ s2.games }}场 · 胜率 {{ pct(s2.wins, s2.games) }}
+                </span>
+              </div>
+            </template>
+            <div v-else class="text-black/50 dark:text-white/45">
+              需要装备购买时间线（外服客户端可能不提供），暂无法统计
+            </div>
+          </div>
+
+          <!-- 鞋子 -->
+          <div v-if="agg.bootsStats.length" class="mt-1.5">
+            <div class="mb-0.5 text-[11px] font-bold text-black/60 dark:text-white/55">鞋子</div>
+            <div
+              v-for="s2 of agg.bootsStats.slice(0, 3)"
+              :key="s2.key"
+              class="flex items-center py-px"
+            >
+              <span class="flex min-w-0 items-center gap-1">
+                <ItemDisplay :item-id="s2.ids[0]" :size="18" />
+              </span>
+              <span class="ml-auto shrink-0 tabular-nums text-black/55 dark:text-white/50">
+                {{ s2.games }}场 · 胜率 {{ pct(s2.wins, s2.games) }}
+              </span>
             </div>
           </div>
 
@@ -296,6 +349,8 @@ import PerkstyleDisplay from '@renderer-shared/components/widgets/PerkstyleDispl
 import SummonerSpellDisplay from '@renderer-shared/components/widgets/SummonerSpellDisplay.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
 import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
+import { SgpRenderer } from '@renderer-shared/shards/sgp'
+import { useSgpStore } from '@renderer-shared/shards/sgp/store'
 import { NButton, NSelect, NSpin } from 'naive-ui'
 import { computed, ref, shallowRef, watch } from 'vue'
 
@@ -308,23 +363,33 @@ import {
   aggregate,
   fetchGameFacts,
   fetchListItems,
+  fetchSgpAll,
+  fetchTimelinesInto,
   formatGameTime,
+  normalizeTimeline,
   summarizeChampions
 } from '../mastery-research'
 
 const lc = useInstance(LeagueClientRenderer)
+const sgp = useInstance(SgpRenderer)
+const sgps = useSgpStore()
 const resources = useAkariResourceProvider()
-const { puuid, isCrossRegion } = usePlayerTab()
+const { puuid, isCrossRegion, sgpServerId } = usePlayerTab()
 
-const crossRegionBlocked = computed(() => isCrossRegion.value)
+const sgpUsable = computed(() => sgps.availability.serversSupported.matchHistory)
+// SGP 可用时跨区照常研究（腾讯系跨区走 SGP 路由）；仅 SGP 不可用且跨区才拦
+const crossRegionBlocked = computed(() => isCrossRegion.value && !sgpUsable.value)
 
 const collapsed = ref(true)
 const range = ref(100)
 const rangeOptions = [
   { label: '最近 50', value: 50 },
   { label: '最近 100', value: 100 },
-  { label: '最近 200', value: 200 }
+  { label: '最近 200', value: 200 },
+  { label: '最近 500', value: 500 },
+  { label: '最近 1000', value: 1000 }
 ]
+const versionFilter = ref('all')
 
 type Phase = 'idle' | 'list' | 'picked' | 'facts' | 'done'
 const phase = ref<Phase>('idle')
@@ -334,9 +399,10 @@ const errorText = ref('')
 const detailOpen = ref(false)
 
 const listItems = shallowRef<MatchListItem[]>([])
-const champSummaries = shallowRef<MasteryChampionSummary[]>([])
+const champSummaries = computed<MasteryChampionSummary[]>(() => summarizeChampions(filteredItems.value))
 const selectedChampion = ref(0)
 const facts = shallowRef<MasteryGameFact[]>([])
+let sgpFactCache = new Map<number, MasteryGameFact>()
 const selectedOpp = ref(0)
 
 let seq = 0
@@ -345,7 +411,20 @@ let abort: AbortController | null = null
 const api: MasteryFetchApi = {
   getMatchHistory: async (p, b, e) => (await lc.api.matchHistory.getMatchHistory(p, b, e)).data,
   getGame: async (id) => (await lc.api.matchHistory.getGame(id)).data,
-  getTimeline: async (id) => (await lc.api.matchHistory.getTimeline(id)).data
+  getTimeline: async (id) => {
+    // 原版构建页同款双通道：SGP 完整详情（含装备购买事件）优先，LCU 阉割版回落
+    if (sgps.availability.serversSupported.matchHistory) {
+      try {
+        const { data } = await sgp.api.matchHistoryQuery.getGameDetailsByGameId(id, {
+          __sgpServerId: sgpServerId.value
+        })
+        const tl = normalizeTimeline(data)
+        if (tl) return tl
+      } catch {}
+    }
+    const { data } = await lc.api.matchHistory.getTimeline(id)
+    return normalizeTimeline(data) ?? (data as any)
+  }
 }
 
 async function startAnalyze() {
@@ -358,26 +437,50 @@ async function startAnalyze() {
   progressDone.value = 0
   progressTotal.value = range.value
   listItems.value = []
-  champSummaries.value = []
   selectedChampion.value = 0
   facts.value = []
   selectedOpp.value = 0
+  sgpFactCache = new Map()
   try {
-    const items = await fetchListItems(
-      api,
-      puuid.value,
-      range.value,
-      (d, t) => {
-        if (mySeq === seq) {
-          progressDone.value = d
-          progressTotal.value = t
-        }
-      },
-      abort.signal
-    )
+    let items: MatchListItem[]
+    if (sgpUsable.value) {
+      const got = await fetchSgpAll(
+        (startIndex, count) =>
+          sgp.api.matchHistoryQuery
+            .getMatchHistorySummaryByPlayerPuuid(puuid.value, {
+              startIndex,
+              count,
+              __sgpServerId: sgpServerId.value
+            })
+            .then((r) => r.data),
+        puuid.value,
+        range.value,
+        (d, t) => {
+          if (mySeq === seq) {
+            progressDone.value = d
+            progressTotal.value = t
+          }
+        },
+        abort.signal
+      )
+      items = got.items
+      sgpFactCache = got.facts
+    } else {
+      items = await fetchListItems(
+        api,
+        puuid.value,
+        range.value,
+        (d, t) => {
+          if (mySeq === seq) {
+            progressDone.value = d
+            progressTotal.value = t
+          }
+        },
+        abort.signal
+      )
+    }
     if (mySeq !== seq) return
     listItems.value = items
-    champSummaries.value = summarizeChampions(items)
     phase.value = 'picked'
     // 自动选中场次最多的绝活英雄
     if (champSummaries.value.length) {
@@ -406,23 +509,41 @@ async function pickChampion(championId: number) {
   progressDone.value = 0
   progressTotal.value = gameIds.length
   try {
-    const { facts: got, timelineFailures } = await fetchGameFacts(
-      api,
-      puuid.value,
-      gameIds,
-      (d, t) => {
-        if (mySeq === seq) {
-          progressDone.value = d
-          progressTotal.value = t
-        }
-      },
-      abort.signal
-    )
-    if (mySeq !== seq) return
-    facts.value = got
-    phase.value = 'done'
-    if (timelineFailures > 0 && timelineFailures === got.length) {
-      errorText.value = ''
+    if (sgpFactCache.size > 0) {
+      // SGP 路：符文/召唤师/对位已随列表到手，仅逐局补时间线（初装/核心装/单杀）
+      const got = gameIds
+        .map((id) => sgpFactCache.get(id))
+        .filter((f): f is MasteryGameFact => !!f)
+      await fetchTimelinesInto(
+        got,
+        api.getTimeline,
+        (d, t) => {
+          if (mySeq === seq) {
+            progressDone.value = d
+            progressTotal.value = t
+          }
+        },
+        abort.signal
+      )
+      if (mySeq !== seq) return
+      facts.value = got
+      phase.value = 'done'
+    } else {
+      const { facts: got } = await fetchGameFacts(
+        api,
+        puuid.value,
+        gameIds,
+        (d, t) => {
+          if (mySeq === seq) {
+            progressDone.value = d
+            progressTotal.value = t
+          }
+        },
+        abort.signal
+      )
+      if (mySeq !== seq) return
+      facts.value = got
+      phase.value = 'done'
     }
   } catch (error: any) {
     if (mySeq !== seq) return
@@ -430,6 +551,23 @@ async function pickChampion(championId: number) {
     errorText.value = `部分对局分析失败：${error?.message ?? error}`
   }
 }
+
+const versionOptions = computed(() => {
+  const set = new Map<string, number>()
+  for (const it of listItems.value) {
+    if (it.gameVersion) set.set(it.gameVersion, (set.get(it.gameVersion) ?? 0) + 1)
+  }
+  const opts = [...set.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0], undefined, { numeric: true }))
+    .map(([v, n]) => ({ label: `${v}（${n}场）`, value: v }))
+  return [{ label: '全部版本', value: 'all' }, ...opts]
+})
+
+const filteredItems = computed(() =>
+  versionFilter.value === 'all'
+    ? listItems.value
+    : listItems.value.filter((it) => it.gameVersion === versionFilter.value)
+)
 
 const opponentSummaries = computed(() => {
   const map = new Map<number, { championId: number; games: number }>()
@@ -443,13 +581,28 @@ const opponentSummaries = computed(() => {
   return [...map.values()].sort((a, b) => b.games - a.games)
 })
 
-const scopedFacts = computed(() =>
-  selectedOpp.value === 0
-    ? facts.value
-    : facts.value.filter((f) => f.laneOpponent?.championId === selectedOpp.value)
-)
+const scopedFacts = computed(() => {
+  let base = facts.value
+  if (versionFilter.value !== 'all') {
+    base = base.filter((f) => f.gameVersion === versionFilter.value)
+  }
+  return selectedOpp.value === 0
+    ? base
+    : base.filter((f) => f.laneOpponent?.championId === selectedOpp.value)
+})
 
-const agg = computed(() => (phase.value === 'done' ? aggregate(scopedFacts.value) : null))
+const itemGoldOf = (id: number): number | null => {
+  try {
+    const d = (resources as any).items?.display?.(id)
+    return typeof d?.totalPrice === 'number' ? d.totalPrice : null
+  } catch {
+    return null
+  }
+}
+
+const agg = computed(() =>
+  phase.value === 'done' ? aggregate(scopedFacts.value, { itemGoldOf }) : null
+)
 
 const scopeTitle = computed(() => {
   const my = championName(selectedChampion.value)
@@ -477,8 +630,8 @@ watch(puuid, () => {
   abort?.abort()
   phase.value = 'idle'
   listItems.value = []
-  champSummaries.value = []
   facts.value = []
+  sgpFactCache = new Map()
   selectedChampion.value = 0
   selectedOpp.value = 0
   errorText.value = ''

@@ -26,6 +26,14 @@ export const STARTER_WINDOW_MS = 90_000
 /** 详情/时间线串行拉取的间隔（毫秒），保护客户端接口 */
 export const FETCH_INTERVAL_MS = 40
 
+/** 成品鞋 id 清单（可调区：新版鞋在此追加） */
+export const BOOTS_IDS: ReadonlySet<number> = new Set([
+  3005, 3006, 3009, 3010, 3013, 3020, 3047, 3111, 3117, 3158, 2422
+])
+
+/** 大件判定阈值（总价 ≥ 此值视为核心装；价格由调用方注入） */
+export const CORE_ITEM_GOLD = 1600
+
 /** 经典模式队列（排位单双/灵活/匹配/普通）；其余队列不纳入研究 */
 const CLASSIC_QUEUES = new Set([420, 440, 430, 400, 490])
 
@@ -51,6 +59,8 @@ export interface MasteryGameFact {
   kills: number
   deaths: number
   assists: number
+  /** 大版本号（如 "16.17"） */
+  gameVersion: string
   /** 召唤师技能组合（升序，保证同组合聚为一键） */
   spells: [number, number]
   /** 符文：主系样式 / 基石 / 副系样式 / 六颗符文 */
@@ -62,6 +72,8 @@ export interface MasteryGameFact {
   laneOpponent: { participantId: number; championId: number } | null
   /** 出门装（≤90s 购买的 itemId 序列，按购买顺序，含重复）；无时间线为 null */
   starterItems: number[] | null
+  /** 本人全量购买序列（按时间）；无时间线为 null */
+  purchases: { itemId: number; ts: number }[] | null
   /** 首次单杀对位：等级与时间；该局未发生为 null；无时间线为 undefined */
   firstSoloKill?: { level: number; timeMs: number } | null
   /** 首次被对位单杀 */
@@ -98,6 +110,12 @@ export interface MasteryAggregate {
   spellCombos: ComboStat[]
   runePages: RunePageStat[]
   starterCombos: ComboStat[]
+  /** 前三件核心装组合（按购买顺序；依赖注入的价格表） */
+  coreCombos: ComboStat[]
+  /** 鞋子分布 */
+  bootsStats: ComboStat[]
+  /** 核心装可统计局数（有购买序列且价格表可用） */
+  coreSampleGames: number
   /** 出门装可统计的局数（有时间线的局） */
   starterSampleGames: number
   /** 仅在选定对位时有意义 */
@@ -117,6 +135,8 @@ export interface MatchListItem {
   gameMode: string
   win: boolean
   gameCreation: number
+  /** 大版本号（如 "16.17"） */
+  gameVersion: string
 }
 
 /** 从列表页原始 Game（简表：participants 只含本人）提炼列表项；非经典/PVE 返回 null */
@@ -132,8 +152,14 @@ export function toListItem(game: Game): MatchListItem | null {
     queueId: game.queueId,
     gameMode: game.gameMode,
     win: p.stats?.win === true,
-    gameCreation: game.gameCreation
+    gameCreation: game.gameCreation,
+    gameVersion: shortVersion(game.gameVersion)
   }
+}
+
+export function shortVersion(v: string | undefined | null): string {
+  if (!v) return ''
+  return v.split('.').slice(0, 2).join('.')
 }
 
 export function summarizeChampions(items: MatchListItem[]): MasteryChampionSummary[] {
@@ -190,6 +216,7 @@ export function extractGameFact(game: Game, puuid: string): MasteryGameFact | nu
     gameDuration: game.gameDuration,
     queueId: game.queueId,
     win: st.win === true,
+    gameVersion: shortVersion(game.gameVersion),
     selfPid: self.participantId,
     kills: st.kills ?? 0,
     deaths: st.deaths ?? 0,
@@ -200,13 +227,163 @@ export function extractGameFact(game: Game, puuid: string): MasteryGameFact | nu
     subStyle: st.perkSubStyle ?? 0,
     perks,
     laneOpponent: resolveLaneOpponent(self, enemies),
-    starterItems: null
+    starterItems: null,
+    purchases: null
   }
+}
+
+// ==================================================================
+// ============ 第二步B：SGP 完整对局（Riot 形状）一步提炼 ============
+// ==================================================================
+
+/** SGP 战绩列表元素（{metadata, json}）→ 列表项 + 单局事实（符文/召唤师/对位一步到位） */
+export function extractFromSgpGame(
+  raw: any,
+  puuid: string
+): { item: MatchListItem; fact: MasteryGameFact } | null {
+  const g = raw?.json ?? raw
+  if (!g || g.gameMode !== 'CLASSIC') return null
+  if (typeof g.queueId !== 'number' || isPveQueue(g.queueId)) return null
+  if (!CLASSIC_QUEUES.has(g.queueId)) return null
+  const parts: any[] = Array.isArray(g.participants) ? g.participants : []
+  const self = parts.find((x) => x?.puuid === puuid)
+  if (!self) return null
+
+  const item: MatchListItem = {
+    gameId: g.gameId,
+    championId: self.championId,
+    queueId: g.queueId,
+    gameMode: g.gameMode,
+    win: self.win === true,
+    gameCreation: g.gameCreation ?? g.gameStartTimestamp ?? 0,
+    gameVersion: shortVersion(g.gameVersion)
+  }
+
+  // 符文：Riot 形状 perks.styles[0]=主系(基石+3)、styles[1]=副系(2)
+  const styles: any[] = self.perks?.styles ?? []
+  const primary = styles[0] ?? {}
+  const sub = styles[1] ?? {}
+  const mainPerks: number[] = (primary.selections ?? [])
+    .map((x: any) => x?.perk)
+    .filter((x: any) => typeof x === 'number' && x > 0)
+  const subPerks: number[] = (sub.selections ?? [])
+    .map((x: any) => x?.perk)
+    .filter((x: any) => typeof x === 'number' && x > 0)
+
+  // 对位：teamPosition 最可靠，缺失回落 individualPosition
+  const posOf = (x: any): string => x?.teamPosition || x?.individualPosition || ''
+  const myPos = posOf(self)
+  let laneOpponent: MasteryGameFact['laneOpponent'] = null
+  if (myPos && myPos !== 'Invalid') {
+    const cands = parts.filter((x) => x.teamId !== self.teamId && posOf(x) === myPos)
+    if (cands.length === 1) {
+      laneOpponent = { participantId: cands[0].participantId, championId: cands[0].championId }
+    }
+  }
+
+  const fact: MasteryGameFact = {
+    gameId: g.gameId,
+    gameCreation: item.gameCreation,
+    gameDuration: g.gameDuration ?? 0,
+    queueId: g.queueId,
+    win: self.win === true,
+    gameVersion: item.gameVersion,
+    selfPid: self.participantId,
+    kills: self.kills ?? 0,
+    deaths: self.deaths ?? 0,
+    assists: self.assists ?? 0,
+    spells: [self.spell1Id, self.spell2Id].sort((a, b) => a - b) as [number, number],
+    primaryStyle: primary.style ?? 0,
+    keystone: mainPerks[0] ?? 0,
+    subStyle: sub.style ?? 0,
+    perks: [...mainPerks, ...subPerks],
+    laneOpponent,
+    starterItems: null,
+    purchases: null
+  }
+  return { item, fact }
+}
+
+/** SGP 列表分页拉取（一步拿到列表 + 全部单局事实），含去重与分页失效早停 */
+export async function fetchSgpAll(
+  getPage: (startIndex: number, count: number) => Promise<{ games: any[] }>,
+  puuid: string,
+  range: number,
+  onProgress?: (done: number, total: number) => void,
+  signal?: AbortSignal
+): Promise<{ items: MatchListItem[]; facts: Map<number, MasteryGameFact> }> {
+  const items: MatchListItem[] = []
+  const facts = new Map<number, MasteryGameFact>()
+  const seen = new Set<number>()
+  const pageSize = 20
+  const pages = Math.ceil(range / pageSize)
+  for (let i = 0; i < pages; i++) {
+    if (signal?.aborted) break
+    const start = i * pageSize
+    const count = Math.min(pageSize, range - start)
+    let games: any[] = []
+    try {
+      const res = await getPage(start, count)
+      games = Array.isArray(res?.games) ? res.games : []
+    } catch {
+      break
+    }
+    let fresh = 0
+    for (const raw of games) {
+      const gid = raw?.json?.gameId ?? raw?.gameId
+      if (typeof gid !== 'number' || seen.has(gid)) continue
+      seen.add(gid)
+      fresh++
+      const got = extractFromSgpGame(raw, puuid)
+      if (got) {
+        items.push(got.item)
+        facts.set(got.item.gameId, got.fact)
+      }
+    }
+    onProgress?.(Math.min(range, start + count), range)
+    if (fresh === 0 || games.length < count) break
+    await sleep(FETCH_INTERVAL_MS)
+  }
+  return { items, facts }
+}
+
+/** 对已有事实逐局补时间线（初装/核心装/单杀），失败不致命 */
+export async function fetchTimelinesInto(
+  facts: MasteryGameFact[],
+  getTimeline: (gameId: number) => Promise<GameTimeline>,
+  onProgress?: (done: number, total: number) => void,
+  signal?: AbortSignal
+): Promise<number> {
+  let failures = 0
+  let done = 0
+  for (const fact of facts) {
+    if (signal?.aborted) break
+    try {
+      const tl = await getTimeline(fact.gameId)
+      applyTimeline(fact, tl)
+    } catch {
+      failures++
+    }
+    done++
+    onProgress?.(done, facts.length)
+    await sleep(FETCH_INTERVAL_MS)
+  }
+  return failures
 }
 
 // ==================================================================
 // ================ 第三步：时间线 → 初装 / 单杀等级 =================
 // ==================================================================
+
+/**
+ * 归一化时间线：兼容 SGP 完整详情（Riot 形状，可能包 json 一层）与 LCU 阉割版。
+ * 两者 frames/events/participantFrames 字段同构，仅外层包装不同。
+ */
+export function normalizeTimeline(raw: any): GameTimeline | null {
+  const frames = raw?.frames ?? raw?.json?.frames ?? raw?.data?.frames ?? raw?.info?.frames
+  if (!Array.isArray(frames)) return null
+  return { frames } as GameTimeline
+}
 
 /** 事件时刻的等级：取时间戳不晚于事件的最后一帧的快照（帧间升级最多差 1 级） */
 export function levelAt(timeline: GameTimeline, pid: number, timestamp: number): number {
@@ -222,6 +399,7 @@ export function levelAt(timeline: GameTimeline, pid: number, timestamp: number):
 export function applyTimeline(fact: MasteryGameFact, timeline: GameTimeline): void {
   // 初装：开局窗口内本人的购买（宽松识别：类型未在声明内也照收）
   const starters: number[] = []
+  const purchases: { itemId: number; ts: number }[] = []
   let firstSoloKill: { level: number; timeMs: number } | null = null
   let firstSoloDeath: { level: number; timeMs: number } | null = null
   const opp = fact.laneOpponent
@@ -232,10 +410,12 @@ export function applyTimeline(fact: MasteryGameFact, timeline: GameTimeline): vo
       if (
         ev.type === 'ITEM_PURCHASED' &&
         ev.participantId === fact.selfPid &&
-        typeof ev.itemId === 'number' &&
-        ev.timestamp <= STARTER_WINDOW_MS
+        typeof ev.itemId === 'number'
       ) {
-        starters.push(ev.itemId)
+        purchases.push({ itemId: ev.itemId, ts: ev.timestamp ?? 0 })
+        if ((ev.timestamp ?? 0) <= STARTER_WINDOW_MS) {
+          starters.push(ev.itemId)
+        }
       }
       if (
         opp &&
@@ -259,6 +439,7 @@ export function applyTimeline(fact: MasteryGameFact, timeline: GameTimeline): vo
   }
 
   fact.starterItems = starters
+  fact.purchases = purchases.sort((a, b) => a.ts - b.ts)
   if (opp) {
     fact.firstSoloKill = firstSoloKill
     fact.firstSoloDeath = firstSoloDeath
@@ -280,10 +461,18 @@ function pushCombo(map: Map<string, ComboStat>, ids: number[], win: boolean) {
   if (win) s.wins++
 }
 
-export function aggregate(facts: MasteryGameFact[]): MasteryAggregate {
+export interface AggregateOptions {
+  /** 装备总价查询（渲染端注入官方资源）；返回 null 表示未知 */
+  itemGoldOf?: (id: number) => number | null
+}
+
+export function aggregate(facts: MasteryGameFact[], opts: AggregateOptions = {}): MasteryAggregate {
   const spellMap = new Map<string, ComboStat>()
   const runeMap = new Map<string, RunePageStat>()
   const starterMap = new Map<string, ComboStat>()
+  const coreMap = new Map<string, ComboStat>()
+  const bootsMap = new Map<string, ComboStat>()
+  let coreSampleGames = 0
   let wins = 0
   let starterSampleGames = 0
   let soloSampleGames = 0
@@ -320,6 +509,26 @@ export function aggregate(facts: MasteryGameFact[]): MasteryAggregate {
       }
     }
 
+    if (f.purchases !== null && opts.itemGoldOf) {
+      coreSampleGames++
+      const cores: number[] = []
+      let boot: number | null = null
+      for (const pu of f.purchases) {
+        if (boot === null && BOOTS_IDS.has(pu.itemId)) {
+          boot = pu.itemId
+          continue
+        }
+        if (cores.length < 3 && !BOOTS_IDS.has(pu.itemId)) {
+          const gold = opts.itemGoldOf(pu.itemId)
+          if (gold !== null && gold >= CORE_ITEM_GOLD) {
+            cores.push(pu.itemId)
+          }
+        }
+      }
+      if (cores.length > 0) pushCombo(coreMap, cores, f.win)
+      if (boot !== null) pushCombo(bootsMap, [boot], f.win)
+    }
+
     if (f.firstSoloKill !== undefined) {
       soloSampleGames++
       if (f.firstSoloKill) soloKills.push(f.firstSoloKill)
@@ -338,6 +547,9 @@ export function aggregate(facts: MasteryGameFact[]): MasteryAggregate {
     spellCombos: [...spellMap.values()].sort(byGames),
     runePages: [...runeMap.values()].sort(byGames),
     starterCombos: [...starterMap.values()].sort(byGames),
+    coreCombos: [...coreMap.values()].sort(byGames),
+    bootsStats: [...bootsMap.values()].sort(byGames),
+    coreSampleGames,
     starterSampleGames,
     firstSoloKill: {
       games: soloKills.length,
@@ -382,6 +594,7 @@ export async function fetchListItems(
   signal?: AbortSignal
 ): Promise<MatchListItem[]> {
   const items: MatchListItem[] = []
+  const seen = new Set<number>()
   const pageSize = 20
   const pages = Math.ceil(range / pageSize)
   for (let i = 0; i < pages; i++) {
@@ -390,12 +603,18 @@ export async function fetchListItems(
     const end = Math.min(range - 1, beg + pageSize - 1)
     const res = await api.getMatchHistory(puuid, beg, end)
     const games = res.games?.games ?? []
+    // 按 gameId 去重：部分客户端环境忽略分页参数（每页返回同一批），
+    // 若整页无新对局说明分页失效或已到尽头，立即停止，绝不重复计数
+    let fresh = 0
     for (const g of games) {
+      if (seen.has(g.gameId)) continue
+      seen.add(g.gameId)
+      fresh++
       const it = toListItem(g)
       if (it) items.push(it)
     }
     onProgress?.(Math.min(range, end + 1), range)
-    if (games.length < end - beg + 1) break // 没有更多了
+    if (fresh === 0 || games.length < end - beg + 1) break
     await sleep(FETCH_INTERVAL_MS)
   }
   return items
