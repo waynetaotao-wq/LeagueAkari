@@ -84,6 +84,26 @@ export const useOpggWindowStore = defineStore('shard:window-manager-renderer/opg
   }
 })
 
+// [lolps] 团队之选窗口设置（与主进程 draftgap-window settingSchema 对齐）
+export const useDraftgapWindowStore = defineStore(
+  'shard:window-manager-renderer/draftgap-window',
+  () => {
+    const settings = shallowReactive({
+      enabled: true,
+      autoShow: true,
+      opacity: 1,
+      pinned: false
+    })
+
+    const basicWindowState = useBasicWindowStates()
+
+    return {
+      settings,
+      ...basicWindowState
+    }
+  }
+)
+
 export const useOngoingGameWindowStore = defineStore(
   'shard:window-manager-renderer/ongoing-game-window',
   () => {

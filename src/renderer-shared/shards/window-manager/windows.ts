@@ -2,6 +2,7 @@ import { BaseAkariWindowRenderer } from './base-akari-window'
 import {
   MAIN_SHARD_NAMESPACE_AUX_WINDOW,
   MAIN_SHARD_NAMESPACE_CD_TIMER_WINDOW,
+  MAIN_SHARD_NAMESPACE_DRAFTGAP_WINDOW,
   MAIN_SHARD_NAMESPACE_MAIN_WINDOW,
   MAIN_SHARD_NAMESPACE_ONGOING_GAME_WINDOW,
   MAIN_SHARD_NAMESPACE_OPGG_WINDOW,
@@ -10,6 +11,7 @@ import {
 import {
   useAuxWindowStore,
   useCdTimerWindowStore,
+  useDraftgapWindowStore,
   useMainWindowStore,
   useOngoingGameWindowStore,
   useOpggWindowStore
@@ -116,6 +118,29 @@ export class AkariOpggWindow extends BaseAkariWindowRenderer<
       'repositionToAlignLeagueClientUx',
       'top-left'
     )
+  }
+}
+
+// [lolps] 团队之选窗口（渲染端设置代理）
+export class AkariDraftgapWindow extends BaseAkariWindowRenderer<
+  ReturnType<typeof useDraftgapWindowStore>,
+  ReturnType<typeof useDraftgapWindowStore>['settings']
+> {
+  constructor(_context: WindowManagerRendererContext) {
+    super(
+      _context,
+      MAIN_SHARD_NAMESPACE_DRAFTGAP_WINDOW,
+      () => useDraftgapWindowStore(),
+      () => useDraftgapWindowStore().settings
+    )
+  }
+
+  setAutoShow(value: boolean) {
+    return this._context.setting.set(MAIN_SHARD_NAMESPACE_DRAFTGAP_WINDOW, 'autoShow', value)
+  }
+
+  setEnabled(value: boolean) {
+    return this._context.setting.set(MAIN_SHARD_NAMESPACE_DRAFTGAP_WINDOW, 'enabled', value)
   }
 }
 

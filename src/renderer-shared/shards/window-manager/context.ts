@@ -9,6 +9,8 @@ export const MAIN_SHARD_NAMESPACE_AUX_WINDOW = 'window-manager-main/aux-window'
 export const MAIN_SHARD_NAMESPACE_OPGG_WINDOW = 'window-manager-main/opgg-window'
 export const MAIN_SHARD_NAMESPACE_ONGOING_GAME_WINDOW = 'window-manager-main/ongoing-game-window'
 export const MAIN_SHARD_NAMESPACE_CD_TIMER_WINDOW = 'window-manager-main/cd-timer-window'
+// [lolps] 团队之选窗口
+export const MAIN_SHARD_NAMESPACE_DRAFTGAP_WINDOW = 'window-manager-main/draftgap-window'
 
 export interface WindowManagerRendererContext {
   ipc: AkariIpcRenderer

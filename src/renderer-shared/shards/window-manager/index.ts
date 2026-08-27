@@ -13,6 +13,7 @@ import { useWindowManagerStore } from './store'
 import {
   AkariAuxWindow,
   AkariCdTimerWindow,
+  AkariDraftgapWindow,
   AkariMainWindow,
   AkariOngoingGameWindow,
   AkariOpggWindow
@@ -20,6 +21,7 @@ import {
 
 export {
   AkariCdTimerWindow,
+  AkariDraftgapWindow,
   AkariOngoingGameWindow,
   AkariOpggWindow,
   type WindowManagerRendererContext
@@ -36,6 +38,8 @@ export class WindowManagerRenderer implements IAkariShardInitDispose {
   public opggWindow: AkariOpggWindow
   public ongoingGameWindow: AkariOngoingGameWindow
   public cdTimerWindow: AkariCdTimerWindow
+  // [lolps] 团队之选窗口
+  public draftgapWindow: AkariDraftgapWindow
 
   constructor(
     @Dep(AkariIpcRenderer) private readonly _ipc: AkariIpcRenderer,
@@ -54,6 +58,7 @@ export class WindowManagerRenderer implements IAkariShardInitDispose {
     this.opggWindow = new AkariOpggWindow(this.context)
     this.ongoingGameWindow = new AkariOngoingGameWindow(this.context)
     this.cdTimerWindow = new AkariCdTimerWindow(this.context)
+    this.draftgapWindow = new AkariDraftgapWindow(this.context)
   }
 
   async onInit() {
@@ -66,6 +71,7 @@ export class WindowManagerRenderer implements IAkariShardInitDispose {
     await this.opggWindow.onInit()
     await this.ongoingGameWindow.onInit()
     await this.cdTimerWindow.onInit()
+    await this.draftgapWindow.onInit()
   }
 
   setBackgroundMaterial(value: string) {

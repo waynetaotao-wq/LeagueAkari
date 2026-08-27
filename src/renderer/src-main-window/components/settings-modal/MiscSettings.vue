@@ -18,6 +18,33 @@
           />
         </SettingsRow>
       </SettingsSection>
+      <!-- [lolps] 团队之选窗口开关 -->
+      <SettingsSection setting-id="misc.draftgap" title="团队之选（选人推荐窗口）">
+        <SettingsRow
+          setting-id="misc.draftgap.enabled"
+          label="启用团队之选窗口"
+          label-description="关闭后窗口不再创建，也不会在进入英雄选择时弹出"
+          :label-width="400"
+        >
+          <NSwitch
+            size="small"
+            :value="dgs.settings.enabled"
+            @update:value="(val) => wm.draftgapWindow.setEnabled(val)"
+          />
+        </SettingsRow>
+        <SettingsRow
+          setting-id="misc.draftgap.auto-show"
+          label="进入英雄选择时自动弹出"
+          label-description="关闭后窗口保持启用但不自动现身，可手动打开"
+          :label-width="400"
+        >
+          <NSwitch
+            size="small"
+            :value="dgs.settings.autoShow"
+            @update:value="(val) => wm.draftgapWindow.setAutoShow(val)"
+          />
+        </SettingsRow>
+      </SettingsSection>
       <SettingsSection
         setting-id="misc.streamer-mode"
         :title="t('settings.misc.streamerMode.title')"
@@ -76,7 +103,10 @@ import { useAppCommonStore } from '@renderer-shared/shards/app-common/store'
 import { RespawnTimerRenderer } from '@renderer-shared/shards/respawn-timer'
 import { useRespawnTimerStore } from '@renderer-shared/shards/respawn-timer/store'
 import { WindowManagerRenderer } from '@renderer-shared/shards/window-manager'
-import { useWindowManagerStore } from '@renderer-shared/shards/window-manager/store'
+import {
+  useDraftgapWindowStore,
+  useWindowManagerStore
+} from '@renderer-shared/shards/window-manager/store'
 import { useTranslation } from 'i18next-vue'
 import { NCollapseTransition, NScrollbar, NSwitch } from 'naive-ui'
 
@@ -91,6 +121,7 @@ const rt = useInstance(RespawnTimerRenderer)
 
 const wm = useInstance(WindowManagerRenderer)
 const wms = useWindowManagerStore()
+const dgs = useDraftgapWindowStore()
 
 useAkariNavigationStep<MiscSettingsNavigationPayload>({
   key: MISC_SETTINGS_NAVIGATION_STEP_KEY,
