@@ -2,7 +2,8 @@ import { Rectangle } from 'electron'
 import { makeAutoObservable, observableRef } from 'mobx'
 
 export class DraftgapWindowSettings {
-  enabled: boolean = true
+  // [lolps] 默认关闭：需要时到 设置→杂项 里开启
+  enabled: boolean = false
   autoShow: boolean = true
   opacity: number = 1
   pinned: boolean = false

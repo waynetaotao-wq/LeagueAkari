@@ -89,7 +89,7 @@ export const useDraftgapWindowStore = defineStore(
   'shard:window-manager-renderer/draftgap-window',
   () => {
     const settings = shallowReactive({
-      enabled: true,
+      enabled: false,
       autoShow: true,
       opacity: 1,
       pinned: false
