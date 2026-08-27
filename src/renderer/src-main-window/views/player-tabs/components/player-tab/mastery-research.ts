@@ -364,6 +364,9 @@ export async function fetchSgpAll(
 }
 
 /** 对已有事实逐局补时间线（初装/核心装/单杀），失败不致命 */
+/** 时间线拉取并发路数（网络等待相互重叠；含软熔断防限流雪崩） */
+export const TIMELINE_CONCURRENCY = 5
+
 export async function fetchTimelinesInto(
   facts: MasteryGameFact[],
   getTimeline: (gameId: number) => Promise<GameTimeline>,
@@ -372,18 +375,27 @@ export async function fetchTimelinesInto(
 ): Promise<number> {
   let failures = 0
   let done = 0
-  for (const fact of facts) {
-    if (signal?.aborted) break
-    try {
-      const tl = await getTimeline(fact.gameId)
-      applyTimeline(fact, tl)
-    } catch {
-      failures++
+  let cursor = 0
+  const worker = async () => {
+    while (true) {
+      if (signal?.aborted) return
+      if (done > 20 && failures > done / 2) return
+      const idx = cursor++
+      if (idx >= facts.length) return
+      const fact = facts[idx]
+      try {
+        const tl = await getTimeline(fact.gameId)
+        applyTimeline(fact, tl)
+      } catch {
+        failures++
+      }
+      done++
+      onProgress?.(done, facts.length)
+      await sleep(FETCH_INTERVAL_MS)
     }
-    done++
-    onProgress?.(done, facts.length)
-    await sleep(FETCH_INTERVAL_MS)
   }
+  const lanes = Math.max(1, Math.min(TIMELINE_CONCURRENCY, facts.length))
+  await Promise.all(Array.from({ length: lanes }, () => worker()))
   return failures
 }
 

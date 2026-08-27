@@ -21,7 +21,7 @@ export const MAX_VERSIONS = 3
 /** 列表翻页上限（20 条/页；防冷门英雄无限翻页） */
 export const MAX_LIST_PAGES = 60
 /** 深度分析（时间线）场次：取最近 N 场 */
-export const DEEP_GAMES = 150
+export const DEEP_GAMES = 60
 /** 深度请求间隔（毫秒；250 连发适度放宽防限流） */
 export const FETCH_INTERVAL_MS = 60
 /** 渐进式展示：每分析 N 场吐一次中间聚合 */

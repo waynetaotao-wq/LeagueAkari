@@ -1,12 +1,17 @@
 <template>
   <div class="mb-3 rounded-lg bg-black/5 px-3 py-2 text-[12px] dark:bg-white/5">
-    <!-- 头部 -->
-    <div class="flex items-center gap-2">
-      <span class="font-bold text-black/85 dark:text-white/90">绝活研究</span>
-      <span class="text-[11px] text-black/45 dark:text-white/40">
+    <!-- 头部（两行：窄侧栏下标题说明与控件互不挤压） -->
+    <div class="flex min-w-0 items-center gap-2">
+      <span class="shrink-0 font-bold text-black/85 dark:text-white/90">绝活研究</span>
+      <span
+        class="min-w-0 flex-1 truncate text-[11px] text-black/45 dark:text-white/40"
+        title="研究他某个英雄的符文 / 召唤师 / 初装规律与对线单杀时机"
+      >
         研究他某个英雄的符文 / 召唤师 / 初装规律与对线单杀时机
       </span>
-      <div class="ml-auto flex shrink-0 items-center gap-2">
+    </div>
+    <div class="mt-1 flex items-center gap-2">
+      <div class="flex min-w-0 items-center gap-2">
         <NSelect
           v-model:value="range"
           size="tiny"
@@ -19,7 +24,7 @@
           size="tiny"
           class="w-32"
           :options="versionOptions"
-          :disabled="phase === 'list' || phase === 'facts'"
+          :disabled="phase === 'list' || phase === 'facts' || !listItems.length"
         />
         <NButton
           size="tiny"
@@ -445,6 +450,7 @@ async function startAnalyze() {
   facts.value = []
   selectedOpp.value = 0
   sgpFactCache = new Map()
+  versionFilter.value = 'all'
   try {
     let items: MatchListItem[]
     if (sgpUsable.value) {
@@ -561,8 +567,10 @@ const versionOptions = computed(() => {
   for (const it of listItems.value) {
     if (it.gameVersion) set.set(it.gameVersion, (set.get(it.gameVersion) ?? 0) + 1)
   }
+  // 只列最近 3 个小版本（当前 / 前一 / 前二），更旧的并入"全部版本"
   const opts = [...set.entries()]
     .sort((a, b) => b[0].localeCompare(a[0], undefined, { numeric: true }))
+    .slice(0, 3)
     .map(([v, n]) => ({ label: `${v}（${n}场）`, value: v }))
   return [{ label: '全部版本', value: 'all' }, ...opts]
 })
