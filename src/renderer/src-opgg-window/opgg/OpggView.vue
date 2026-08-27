@@ -27,15 +27,33 @@
 <script setup lang="ts">
 import { useTranslation } from 'i18next-vue'
 import { NEmpty } from 'naive-ui'
+import { computed, provide } from 'vue'
 
 import MayhemOverview from './MayhemOverview.vue'
 import OpggChampion from './OpggChampion.vue'
 import OpggChampionTable from './OpggChampionTable.vue'
 import OpggTabAndFilters from './OpggTabAndFilters.vue'
-import { useOpgg } from './context'
+import { OpggContextKey, useOpgg } from './context'
+import { useMatchupOverlay } from './matchup-overlay'
 import OpggCounterIntel from './widgets/OpggCounterIntel.vue'
 import SessionChampions from './widgets/SessionChampions.vue'
 
 const { t } = useTranslation()
-const { currentTab, mode, isDataUnavailable } = useOpgg()
+const parentContext = useOpgg()
+const { currentTab, mode, isDataUnavailable } = parentContext
+
+// [lolps] 对位覆盖：就近再 provide 一层，champion 变为 merge(基础数据, 对位 overlay)。
+// 子树内全部区块组件与"应用"按钮 inject 到覆盖版 → 整窗自动切换为对位数据；
+// overlay 为空时原样透传，通用版行为零变化。
+const { matchupOverlay } = useMatchupOverlay()
+const mergedChampion = computed(() => {
+  const base = parentContext.champion.value
+  const patch = matchupOverlay.value
+  if (!base || !patch) return base
+  return { ...base, data: { ...base.data, ...patch } }
+})
+provide(OpggContextKey, {
+  ...parentContext,
+  champion: mergedChampion as unknown as typeof parentContext.champion
+})
 </script>

@@ -19,7 +19,7 @@ import {
   fetchChampionSlugMap,
   fetchLaneKillRates
 } from './counter-intel-web'
-import { buildMatchupPageUrl, fetchMatchupPage } from './matchup-build'
+import { buildMatchupPageUrl, fetchMatchupOverlay } from './matchup-build'
 
 /**
  * 对位克制助手（Counter Intel）
@@ -246,8 +246,8 @@ export class ChampionDataCounterIntel {
   }
 
   /**
-   * [lolps] 对位构筑：抓取「我的英雄 × 对位英雄」的专属符文 / 召唤师 / 出装。
-   * 网页解析失败时 pageParsed=false 并保留 meta（官方接口的对位场次与胜场）。
+   * [lolps] 对位构筑 v2：抓「我的英雄 × 对位英雄」网页 vs 数据，产出官方形状 data 子集，
+   * 渲染层整窗替换（UI/应用按钮/自动应用全走官方原生管道）。
    */
   async getMatchupBuild(params: MatchupBuildParams): Promise<MatchupBuildResult> {
     const key = `${params.myChampionId}|${params.opponentChampionId}|${params.position}|${params.region}|${params.tier}`
@@ -286,26 +286,22 @@ export class ChampionDataCounterIntel {
       this._deps.logger.info(`[MatchupBuild] 元信息获取失败(不致命): ${error?.message ?? error}`)
     }
 
-    // 网页通道：对位专属构筑
-    let runePages: MatchupBuildResult['runePages'] = []
-    let sections: MatchupBuildResult['sections'] = []
-    let pageParsed = false
+    // 网页通道：官方形状 overlay
+    let overlay: MatchupBuildResult['overlay'] = null
+    let parsedSections: string[] = []
     const url = buildMatchupPageUrl({
       mySlug,
       opponentSlug,
       position: params.position,
       region: params.region,
-      tier: typeof params.tier === 'string' ? params.tier : String(params.tier ?? '')
+      tier: params.tier
     })
     try {
-      const page = await fetchMatchupPage(this._deps.web, url)
-      runePages = page.runePages
-      sections = page.sections
-      pageParsed = runePages.length > 0 || sections.length > 0
+      const page = await fetchMatchupOverlay(this._deps.web, url)
+      parsedSections = page.parsed
+      overlay = parsedSections.length > 0 ? (page.overlay as Record<string, unknown>) : null
       this._deps.logger.info(
-        `[MatchupBuild] ${mySlug} vs ${opponentSlug}@${params.position}: runePages=${runePages.length}, sections=[${sections
-          .map((s) => `${s.key}:${s.entries.length}`)
-          .join(', ')}]`
+        `[MatchupBuild] ${mySlug} vs ${opponentSlug}@${params.position} tier=${params.tier}: sections=[${parsedSections.join(', ')}]`
       )
     } catch (error: any) {
       this._deps.logger.warn(
@@ -320,9 +316,9 @@ export class ChampionDataCounterIntel {
       region: params.region,
       tier: params.tier,
       meta,
-      runePages,
-      sections,
-      pageParsed,
+      overlay,
+      parsedSections,
+      pageParsed: parsedSections.length > 0,
       updatedAt: new Date().toISOString()
     }
     this._matchupCache.set(key, { expiresAt: Date.now() + MATCHUP_CACHE_TTL, value: result })

@@ -31,112 +31,16 @@
       <span class="ml-auto text-[11px] text-black/45 dark:text-white/40">{{ statusText }}</span>
     </div>
 
-    <div
-      v-if="resolvedTargetId"
-      class="mt-1.5 rounded bg-black/5 px-1.5 py-1 dark:bg-white/5"
-    >
-      <div
-        class="flex cursor-pointer select-none items-center gap-1.5"
-        @click="matchupCollapsed = !matchupCollapsed"
-      >
-        <span class="font-bold text-black/80 dark:text-white/90">对位构筑</span>
-        <span class="text-[11px] text-black/50 dark:text-white/45">
-          vs {{ championName(resolvedTargetId) }}
-        </span>
-        <NSpin v-if="matchupLoading" :size="10" />
-        <span class="ml-auto text-[11px] text-black/45 dark:text-white/40">
-          {{ matchupMetaText }}<span class="ml-1">{{ matchupCollapsed ? '▸' : '▾' }}</span>
-        </span>
-      </div>
-      <template v-if="!matchupCollapsed">
-        <div v-if="matchupError" class="mt-1 text-[11px] text-red-500">{{ matchupError }}</div>
-        <template v-else-if="matchup && matchup.pageParsed">
-          <div
-            v-for="(page, pi) of matchup.runePages"
-            :key="'rp' + pi"
-            class="mt-1 flex items-center gap-1"
-          >
-            <span class="w-14 shrink-0 text-[10px] text-black/50 dark:text-white/45">
-              {{ pi === 0 ? '常用符文' : '高胜符文' }}
-            </span>
-            <img
-              v-for="u of page.imageUrls.slice(0, 11)"
-              :key="u"
-              :src="u"
-              class="size-4 rounded-sm bg-black/20"
-              loading="lazy"
-            />
-            <span class="ml-auto shrink-0 text-[10px] text-black/45 dark:text-white/40">
-              {{ fmtPageStat(page) }}
-            </span>
-            <NButton
-              size="tiny"
-              tertiary
-              class="shrink-0"
-              :disabled="!page.structured || !myChampionId"
-              :loading="applying === `runes${pi}`"
-              @click="applyMatchupRunes(page, pi)"
-            >
-              置入
-            </NButton>
-          </div>
-          <div v-for="sec of matchup.sections" :key="sec.key" class="mt-1">
-            <div class="mb-0.5 text-[10px] font-bold text-black/60 dark:text-white/55">
-              {{ SECTION_TITLES[sec.key] }}
-            </div>
-            <div
-              v-for="(e, ei) of sec.entries.slice(0, sec.key === 'core' ? 5 : 3)"
-              :key="ei"
-              class="flex items-center gap-1 py-px"
-            >
-              <img
-                v-for="u of e.imageUrls"
-                :key="u"
-                :src="u"
-                class="size-4 rounded-sm bg-black/20"
-                loading="lazy"
-              />
-              <span class="ml-auto text-[10px] tabular-nums text-black/55 dark:text-white/50">
-                {{ fmtEntry(e) }}
-              </span>
-              <NButton
-                v-if="sec.key === 'spells'"
-                size="tiny"
-                tertiary
-                class="shrink-0"
-                :disabled="e.itemIds.length !== 2"
-                :loading="applying === `spells${ei}`"
-                @click="applyMatchupSpells(e, ei)"
-              >
-                置入
-              </NButton>
-            </div>
-          </div>
-          <div class="mt-1 flex items-center">
-            <NButton
-              size="tiny"
-              tertiary
-              :disabled="!hasMatchupItems || !myChampionId"
-              :loading="applying === 'items'"
-              @click="applyMatchupItems()"
-            >
-              写入出装方案
-            </NButton>
-            <span class="ml-auto text-[9px] text-black/30 dark:text-white/25">
-              数据：OP.GG · vs 专属
-            </span>
-          </div>
-        </template>
-        <div
-          v-else-if="matchup && !matchup.pageParsed"
-          class="mt-1 text-[11px] text-black/50 dark:text-white/45"
-        >
-          对位构筑暂不可用（样本不足或站点改版），下方克制表不受影响
-        </div>
-        <div v-else-if="!matchupLoading" class="mt-1 text-[11px] text-black/50 dark:text-white/45">
-          等待对位构筑数据…
-        </div>
-      </template>
+    <div class="mt-1 flex items-center gap-1.5 text-[11px]">
+      <span class="shrink-0 text-black/60 dark:text-white/55">对位替换</span>
+      <NSwitch
+        size="small"
+        :value="matchupOn"
+        @update:value="(v: boolean) => (matchupOn = v)"
+      />
+      <span class="ml-auto min-w-0 truncate text-black/45 dark:text-white/40">
+        {{ matchupStatus }}
+      </span>
     </div>
 
     <div v-if="errorText" class="mt-1 text-[11px] text-red-500">{{ errorText }}</div>
@@ -251,19 +155,16 @@ import { AkariIpcRenderer } from '@renderer-shared/shards/ipc'
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import type {
   CounterIntelResult,
-  MatchupBuildEntry,
   MatchupBuildResult,
-  MatchupBuildSection,
-  MatchupRunePage,
   RolePriors
 } from '@shared/types/counter-intel'
 import { type LaneName, resolveLaneOpponent } from '@shared/utils/lane-assignment'
 import { RefreshSharp } from '@vicons/ionicons5'
-import { NButton, NIcon, NScrollbar, NSelect, NSpin } from 'naive-ui'
+import { NButton, NIcon, NScrollbar, NSelect, NSpin, NSwitch } from 'naive-ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { useOpgg } from '../context'
-import { useLoadout } from '../utils/loadout'
+import { useMatchupOverlay } from '../matchup-overlay'
 
 const LANES: readonly LaneName[] = ['top', 'jungle', 'middle', 'bottom', 'utility']
 const LANE_LABELS: Record<LaneName, string> = {
@@ -278,8 +179,7 @@ const lcs = useLeagueClientStore()
 const resources = useAkariResourceProvider()
 const ipc = useInstance(AkariIpcRenderer)
 const lc = useInstance(LeagueClientRenderer)
-const { region, tier, championId: myChampionId, flashPosition } = useOpgg()
-const { setSummonerSpells, setRunes, writeItemSets } = useLoadout()
+const { region, tier, championId: myChampionId } = useOpgg()
 
 const session = computed(() => lcs.champSelect.session)
 
@@ -412,59 +312,26 @@ const placeholderText = computed(() => {
   return '等待对位判定…'
 })
 
-// ===== [lolps] 对位构筑（vs 专属符文/召唤师/出装）=====
-const SECTION_TITLES: Record<MatchupBuildSection['key'], string> = {
-  spells: '召唤师技能',
-  starter: '起始装',
-  boots: '鞋子',
-  core: '核心三件',
-  item4: '第四件',
-  item5: '第五件'
-}
-
-const matchup = ref<MatchupBuildResult | null>(null)
-const matchupLoading = ref(false)
-const matchupError = ref('')
-const matchupCollapsed = ref(false)
+// ===== [lolps] 对位数据整窗替换 =====
+// 识别到对位后拉取官方形状 overlay 写入共享状态；OpggView 就近 provide 覆盖 champion，
+// 原界面所有区块（符文/召唤师/出装）与"应用"按钮自动切换为对位版数据，UI 零改动。
+const { setMatchupOverlay } = useMatchupOverlay()
+const matchupOn = ref(true)
+const matchupStatus = ref('')
 let matchupSeq = 0
 let matchupTimer: ReturnType<typeof setTimeout> | null = null
 
-const normPct = (v: number | null): number | null => (v === null ? null : v <= 1 ? v * 100 : v)
-
-function fmtEntry(e: MatchupBuildEntry) {
-  const wr =
-    normPct(e.winRate) ?? (e.play && e.win !== null ? (e.win / e.play) * 100 : null)
-  const parts: string[] = []
-  if (wr !== null) parts.push(`${wr.toFixed(1)}%`)
-  if (e.play !== null) parts.push(`${e.play}场`)
-  return parts.join(' · ')
-}
-
-function fmtPageStat(p: MatchupRunePage) {
-  const pr = normPct(p.pickRate)
-  const parts: string[] = []
-  if (pr !== null) parts.push(`选取 ${pr.toFixed(0)}%`)
-  if (p.play !== null) parts.push(`${p.play}场`)
-  return parts.join(' · ')
-}
-
-const matchupMetaText = computed(() => {
-  const m = matchup.value?.meta
-  if (!m || !m.play) return ''
-  return `胜率 ${((m.win / m.play) * 100).toFixed(1)}% · ${m.play} 场`
-})
-
-async function fetchMatchup() {
+async function refreshMatchupOverlay() {
   const me = myChampionId.value
   const opp = resolvedTargetId.value
   const lane = effectiveLane.value
-  if (!me || !opp || !lane || me === opp) {
-    matchup.value = null
+  if (!matchupOn.value || !me || !opp || !lane || me === opp) {
+    matchupSeq++
+    setMatchupOverlay(null)
+    matchupStatus.value = matchupOn.value ? '' : '对位替换已关闭，显示通用构筑'
     return
   }
   const seq = ++matchupSeq
-  matchupLoading.value = true
-  matchupError.value = ''
   try {
     const result = await ipc.call<MatchupBuildResult>(
       CHAMPION_DATA_MAIN_NAMESPACE,
@@ -477,120 +344,46 @@ async function fetchMatchup() {
         tier: tier.value
       }
     )
-    if (seq === matchupSeq) {
-      matchup.value = result
+    if (seq !== matchupSeq) return
+    if (result.overlay) {
+      const metaText =
+        result.meta && result.meta.play > 0
+          ? `${result.meta.play} 场 · 胜率 ${((result.meta.win / result.meta.play) * 100).toFixed(1)}%`
+          : ''
+      setMatchupOverlay(result.overlay, metaText)
+      matchupStatus.value = `构筑已切换为对位版 vs ${championName(opp)}${metaText ? `（${metaText}）` : ''}`
+    } else {
+      setMatchupOverlay(null)
+      matchupStatus.value = '该对位样本不足，显示通用构筑'
     }
   } catch (error: any) {
-    if (seq === matchupSeq) {
-      matchup.value = null
-      matchupError.value = `获取失败：${error?.message ?? error}`
-    }
-  } finally {
-    if (seq === matchupSeq) {
-      matchupLoading.value = false
-    }
+    if (seq !== matchupSeq) return
+    setMatchupOverlay(null)
+    matchupStatus.value = `对位数据获取失败：${error?.message ?? error}`
   }
 }
 
-function refreshMatchup() {
+function scheduleMatchupOverlay() {
   if (matchupTimer) clearTimeout(matchupTimer)
-  matchupTimer = setTimeout(() => void fetchMatchup(), 500)
+  matchupTimer = setTimeout(() => void refreshMatchupOverlay(), 500)
 }
 
 watch(
-  [() => myChampionId.value, resolvedTargetId, effectiveLane, () => region.value, () => tier.value],
-  () => refreshMatchup()
+  [
+    () => myChampionId.value,
+    resolvedTargetId,
+    effectiveLane,
+    () => region.value,
+    () => tier.value,
+    matchupOn
+  ],
+  () => scheduleMatchupOverlay()
 )
 
-// ===== [lolps] 对位构筑 · 一键应用 =====
-const UNIFIED_TO_OPGG_POS: Record<string, string> = {
-  top: 'top',
-  jungle: 'jungle',
-  middle: 'mid',
-  bottom: 'adc',
-  utility: 'support'
-}
-const applying = ref('')
-
-function opggPosOf(): string {
-  return UNIFIED_TO_OPGG_POS[effectiveLane.value] ?? 'mid'
-}
-
-async function applyMatchupRunes(page: MatchupRunePage, index: number) {
-  const me = myChampionId.value
-  const st = page.structured
-  if (!me || !st || applying.value) return
-  applying.value = `runes${index}`
-  try {
-    await setRunes(
-      {
-        primary_page_id: st.primaryStyleId,
-        secondary_page_id: st.secondaryStyleId,
-        primary_rune_ids: st.primaryRuneIds,
-        secondary_rune_ids: st.secondaryRuneIds,
-        stat_mod_ids: st.statShardIds
-      },
-      { championId: me, position: opggPosOf() }
-    )
-  } finally {
-    applying.value = ''
-  }
-}
-
-async function applyMatchupSpells(e: MatchupBuildEntry, index: number) {
-  if (e.itemIds.length !== 2 || applying.value) return
-  applying.value = `spells${index}`
-  try {
-    await setSummonerSpells([e.itemIds[0], e.itemIds[1]], flashPosition.value)
-  } finally {
-    applying.value = ''
-  }
-}
-
-const hasMatchupItems = computed(() => {
-  const secs = matchup.value?.sections ?? []
-  return secs.some(
-    (s) => s.key !== 'spells' && s.entries.some((e) => e.itemIds.length > 0)
-  )
+onBeforeUnmount(() => {
+  matchupSeq++
+  setMatchupOverlay(null)
 })
-
-async function applyMatchupItems() {
-  const me = myChampionId.value
-  const m = matchup.value
-  if (!me || !m || !hasMatchupItems.value || applying.value) return
-  const byKey = (k: MatchupBuildSection['key']) =>
-    (m.sections.find((s) => s.key === k)?.entries ?? []).filter((e) => e.itemIds.length > 0)
-  const toFrac = (v: number | null) => (v === null ? 0 : v <= 1 ? v : v / 100)
-  const fake = {
-    meta: { version: 'matchup' },
-    data: {
-      summary: { id: me },
-      starter_items: byKey('starter')
-        .slice(0, 3)
-        .map((e) => ({ ids: e.itemIds, pick_rate: toFrac(e.pickRate) })),
-      boots: byKey('boots')
-        .slice(0, 3)
-        .map((e) => ({ ids: e.itemIds })),
-      core_items: byKey('core')
-        .slice(0, 4)
-        .map((e) => ({ ids: e.itemIds, pick_rate: toFrac(e.pickRate) })),
-      last_items: [...byKey('item4'), ...byKey('item5')]
-        .slice(0, 8)
-        .map((e) => ({ ids: e.itemIds }))
-    }
-  } as any
-  applying.value = 'items'
-  try {
-    await writeItemSets(fake, {
-      position: opggPosOf(),
-      mode: 'ranked',
-      region: region.value,
-      tier: String(tier.value ?? '')
-    })
-  } finally {
-    applying.value = ''
-  }
-}
 
 const intel = ref<CounterIntelResult | null>(null)
 const isLoading = ref(false)
