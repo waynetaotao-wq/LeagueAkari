@@ -1,5 +1,5 @@
 <template>
-  <NPopover v-if="visible" trigger="hover" placement="bottom" style="max-width: 320px">
+  <NPopover v-if="bzRow" trigger="hover" placement="bottom" style="max-width: 320px">
     <template #trigger>
       <div
         class="absolute top-1.5 right-8 z-10 flex h-4.5 cursor-default items-center rounded-full bg-[#8b2252]/90 px-1.5 text-[9px] font-bold text-white/95 select-none dark:bg-[#c2418f]/80"
@@ -110,7 +110,6 @@ watch(
 const zhText = computed(() => (bzRow.value ? getBzSummaryZh(bzRow.value.champion) : null))
 const extras = computed(() => (bzRow.value ? getBzExtras(bzRow.value.champion) : null))
 const displayText = computed(() => zhText.value ?? bzRow.value?.summary ?? '')
-const visible = computed(() => !!bzRow.value)
 </script>
 
 <style scoped></style>

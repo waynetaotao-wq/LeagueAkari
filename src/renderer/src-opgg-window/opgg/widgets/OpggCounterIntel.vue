@@ -455,6 +455,8 @@ const bzRow = ref<{
   difficulty: string
   coreBuild: string
   summary: string
+  coreItemIds?: number[]
+  keystonePerkId?: number | null
 } | null>(null)
 let bzSeq = 0
 
