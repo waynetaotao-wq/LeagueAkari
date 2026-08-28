@@ -641,16 +641,25 @@ async function validateMatchupAgainstRealTeams() {
   if (!enemyIds.length) return
   lock.validated = true
 
-  if (enemyIds.includes(lock.opponentChampionId)) {
+  // 位置优先：加载数据带真实位置时，以"敌方谁站我这条分路"为唯一标准——
+  // 防止"推测英雄虽在敌方阵容、实际却在别的位置"（如推测的中单其实去了辅助）的误判
+  const laneLcu = LANE_TO_LCU[lock.lane] ?? ''
+  const posOf = (x: any) => String(x?.selectedPosition ?? x?.position ?? '').toUpperCase()
+  const byPos = enemyTeam.filter((x: any) => laneLcu && posOf(x) === laneLcu)
+  const posKnown =
+    byPos.length === 1 && typeof byPos[0].championId === 'number' && byPos[0].championId > 0
+
+  if (posKnown && byPos[0].championId === lock.opponentChampionId) {
+    matchupStatus.value = `已确认真实对位 vs ${championName(lock.opponentChampionId)}，对位构筑锁定至对局结束`
+    return
+  }
+  // 位置信息不可用时退化为阵容包含口径（可得信息下的最优判定）
+  if (!posKnown && enemyIds.includes(lock.opponentChampionId)) {
     matchupStatus.value = `已确认真实对位 vs ${championName(lock.opponentChampionId)}，对位构筑锁定至对局结束`
     return
   }
 
-  // 推测英雄不在真实敌方阵容：优先用真实位置字段精确重定
-  const laneLcu = LANE_TO_LCU[lock.lane] ?? ''
-  const posOf = (x: any) => String(x?.selectedPosition ?? x?.position ?? '').toUpperCase()
-  const byPos = enemyTeam.filter((x: any) => laneLcu && posOf(x) === laneLcu)
-  if (byPos.length === 1 && typeof byPos[0].championId === 'number' && byPos[0].championId > 0) {
+  if (posKnown) {
     const newOpp = byPos[0].championId
     const seq = ++matchupSeq
     try {
@@ -682,8 +691,9 @@ async function validateMatchupAgainstRealTeams() {
     } catch {}
   }
 
-  // 无法确定真实对位：诚实回退通用构筑
+  // 无法确定真实对位：诚实回退通用构筑（Bz 相关一并撤除）
   matchupLock.value = null
+  bzRow.value = null
   matchupSeq++
   setMatchupOverlay(null)
   matchupStatus.value = '对面真实阵容与选人期推测不符，已回通用构筑'
