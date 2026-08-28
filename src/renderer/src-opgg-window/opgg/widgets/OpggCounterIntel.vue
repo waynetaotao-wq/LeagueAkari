@@ -699,13 +699,47 @@ async function validateMatchupAgainstRealTeams() {
   matchupStatus.value = '对面真实阵容与选人期推测不符，已回通用构筑'
 }
 
+/**
+ * 校验轮询：相位刚跳进加载时客户端的真实阵容常未填充（英雄 id 暂为 0），
+ * 一次性尝试会永远错过——改为每 3 秒重试，直到校验完成 / 锁失效 / 超时约 2 分钟。
+ */
+let validateTimer: ReturnType<typeof setInterval> | null = null
+
+function stopValidateLoop() {
+  if (validateTimer) {
+    clearInterval(validateTimer)
+    validateTimer = null
+  }
+}
+
+function startValidateLoop() {
+  stopValidateLoop()
+  let tries = 0
+  validateTimer = setInterval(() => {
+    tries++
+    const lock = matchupLock.value
+    if (
+      !lock ||
+      lock.validated ||
+      tries > 40 ||
+      !IN_GAME_PHASES.has(String(lcs.gameflow.phase))
+    ) {
+      stopValidateLoop()
+      return
+    }
+    void validateMatchupAgainstRealTeams()
+  }, 3000)
+  void validateMatchupAgainstRealTeams()
+}
+
 watch(
   () => lcs.gameflow.phase,
   (p) => {
     const phase = String(p)
     if (IN_GAME_PHASES.has(phase)) {
-      void validateMatchupAgainstRealTeams()
+      startValidateLoop()
     } else if (GAME_OVER_PHASES.has(phase) && matchupLock.value) {
+      stopValidateLoop()
       matchupLock.value = null
       bzRow.value = null
       matchupSeq++
@@ -716,6 +750,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  stopValidateLoop()
   matchupSeq++
   setMatchupOverlay(null)
 })
