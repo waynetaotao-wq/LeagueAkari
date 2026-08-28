@@ -458,8 +458,6 @@ const bzRow = ref<{
   coreItemIds?: number[]
   keystonePerkId?: number | null
 } | null>(null)
-let bzSeq = 0
-
 const bzExtras = computed(() => (bzRow.value ? getBzExtras(bzRow.value.champion) : null))
 
 /** 流水线内查询：仅劫生效；失败返回 null（不影响 OP.GG 主链路） */
