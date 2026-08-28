@@ -1,3 +1,4 @@
+import { getBzZedMatchup } from './bz-guide'
 import type {
   CounterIntelParams,
   CounterIntelResult,
@@ -80,6 +81,19 @@ export class ChampionDataCounterIntel {
     ipc.onCall(namespace, 'counterIntel/rolePriors', (_event: any, region: string, tier: string | number) =>
       this.getRolePriors(region, tier)
     )
+    ipc.onCall(namespace, 'counterIntel/bzGuide', async (_event: any, params: any) => {
+      const opponentChampionId = Number(params?.opponentChampionId)
+      if (!Number.isFinite(opponentChampionId) || opponentChampionId <= 0) {
+        return { found: false, row: null }
+      }
+      const slug = await this.getChampionSlug(opponentChampionId)
+      if (!slug) {
+        return { found: false, row: null }
+      }
+      const row = await getBzZedMatchup(slug)
+      return { found: !!row, row }
+    })
+
     ipc.onCall(namespace, 'counterIntel/matchupBuild', (_event: any, params: MatchupBuildParams) =>
       this.getMatchupBuild(params)
     )
@@ -108,6 +122,16 @@ export class ChampionDataCounterIntel {
     const map = await fetchChampionSlugMap(this._deps.web, signal)
     this._slugCache = { expiresAt: now + SLUG_CACHE_TTL, value: map }
     return map
+  }
+
+  /** [lolps] 对外暴露：查某英雄的 OP.GG slug（英文名同源），Bz 攻略匹配用 */
+  async getChampionSlug(championId: number): Promise<string | null> {
+    try {
+      const map = await this._ensureSlugMap()
+      return map.get(championId)?.slug ?? null
+    } catch {
+      return null
+    }
   }
 
   async getRolePriors(region: string, tier: string | number): Promise<RolePriors> {

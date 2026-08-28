@@ -72,6 +72,63 @@
         </span>
       </div>
 
+      <!-- Bz（欧服第一劫）攻略卡：命中时优先展示，与下方 OP.GG 量化数据共存 -->
+      <div
+        v-if="bzRow"
+        class="mt-2 rounded border border-black/10 p-2 dark:border-[#37373c]"
+      >
+        <div class="mb-1 flex items-center justify-between text-[12px] font-bold">
+          <span>
+            Bz 推荐
+            <span class="font-normal text-[#666666] dark:text-[#bebebe]">（欧服第一劫）</span>
+            · vs {{ bzRow.champion }}
+          </span>
+          <span
+            v-if="bzRow.difficulty"
+            class="text-[11px]"
+            :class="
+              /ff|impossible|hard/i.test(bzRow.difficulty)
+                ? 'text-[#dc2626] dark:text-[#d75a5a]'
+                : 'text-[#2a947d] dark:text-[#5fd3a5]'
+            "
+          >
+            难度 {{ bzRow.difficulty }}
+          </span>
+        </div>
+        <div v-if="bzExtras" class="mb-1 flex items-center gap-2">
+          <span class="text-xs text-[#666666] dark:text-[#b2b2b2]">召唤师</span>
+          <SummonerSpellDisplay
+            v-for="(sid, i) of bzExtras.spellIds"
+            :key="i"
+            :spell-id="sid"
+            :size="20"
+          />
+          <span class="ml-1 text-xs text-[#666666] dark:text-[#b2b2b2]">出门</span>
+          <ItemDisplay :item-id="bzExtras.starterItemId" :size="20" />
+        </div>
+        <div v-if="bzRow.rune" class="text-xs whitespace-pre-line">
+          <span class="text-[#666666] dark:text-[#b2b2b2]">符文：</span>{{ bzRow.rune }}
+        </div>
+        <div v-if="bzRow.coreBuild" class="mt-0.5 text-xs whitespace-pre-line">
+          <span class="text-[#666666] dark:text-[#b2b2b2]">核心装：</span>{{ bzRow.coreBuild }}
+        </div>
+        <div
+          v-if="bzRow.summary"
+          class="mt-1 border-t border-black/5 pt-1 text-xs leading-relaxed whitespace-pre-line text-black/80 dark:border-white/8 dark:text-white/80"
+        >
+          {{ bzRow.summary }}
+        </div>
+        <div class="mt-1 text-[10px] text-[#666666]/80 dark:text-[#b2b2b2]/70">
+          <template v-if="bzRow.coreItemIds && bzRow.coreItemIds.length">
+            核心装已按 Bz 推荐**置顶**至下方"核心装备"区（首行、无胜率数据）；
+          </template>
+          <template v-if="bzRow.keystonePerkId">
+            符文区已按 Bz 基石**筛选流派**（保留 OP.GG 完整页数据）；
+          </template>
+          数据来自 Bz 的对线表（云端实时同步，其更新最迟 10 分钟内生效）；未收录的对线自动回落 OP.GG
+        </div>
+      </div>
+
       <div v-if="errorText" class="mt-1 text-xs text-[#dc2626] dark:text-[#d75a5a]">
         {{ errorText }}
       </div>
@@ -193,7 +250,10 @@
 </template>
 
 <script setup lang="ts">
+import { getBzExtras } from '@renderer-shared/components/ongoing-game-panel/widgets/player-info-card/bz-summary-zh'
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
+import ItemDisplay from '@renderer-shared/components/widgets/ItemDisplay.vue'
+import SummonerSpellDisplay from '@renderer-shared/components/widgets/SummonerSpellDisplay.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
 import { useInstance } from '@renderer-shared/shards'
 import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
@@ -387,6 +447,56 @@ const matchupLock = ref<{
   validated: boolean
 } | null>(null)
 
+/** [lolps] Bz（欧服第一劫）攻略：我方为劫且对位命中其表时展示（自动跟随其表更新） */
+const ZED_ID = 238
+const bzRow = ref<{
+  champion: string
+  rune: string
+  difficulty: string
+  coreBuild: string
+  summary: string
+} | null>(null)
+let bzSeq = 0
+
+const bzExtras = computed(() => (bzRow.value ? getBzExtras(bzRow.value.champion) : null))
+
+/** 流水线内查询：仅劫生效；失败返回 null（不影响 OP.GG 主链路） */
+async function fetchBzRow(me: number, opp: number): Promise<any | null> {
+  if (me !== ZED_ID || !opp) return null
+  try {
+    const res = await ipc.call<{ found: boolean; row: any }>(
+      CHAMPION_DATA_MAIN_NAMESPACE,
+      'counterIntel/bzGuide',
+      { opponentChampionId: opp }
+    )
+    return res?.found ? res.row : null
+  } catch {
+    return null
+  }
+}
+
+/** Bz 命中时：把其核心装序列置顶进 overlay（最高优先级；符文因表内无完整页不覆盖） */
+function mergeBzIntoOverlay(overlay: Record<string, unknown> | null, bz: any): Record<string, unknown> | null {
+  const hasCore = bz?.coreItemIds && bz.coreItemIds.length >= 2
+  const keystone = typeof bz?.keystonePerkId === 'number' ? bz.keystonePerkId : null
+  if (!hasCore && keystone === null) return overlay
+  const base: Record<string, unknown> = overlay ? { ...overlay } : {}
+  if (hasCore) {
+    const existing = Array.isArray(base.core_items) ? (base.core_items as any[]) : []
+    base.core_items = [{ ids: bz.coreItemIds, play: 0, win: 0, pick_rate: 0 }, ...existing]
+  }
+  // Bz 基石筛选：OP.GG 对位符文页里仅保留基石一致的流派；全灭则保留原样（防空白）
+  if (keystone !== null && Array.isArray(base.runes)) {
+    const filtered = (base.runes as any[]).filter(
+      (pg) => pg?.primary_rune_ids?.[0] === keystone
+    )
+    if (filtered.length > 0 && filtered.length < (base.runes as any[]).length) {
+      base.runes = filtered
+    }
+  }
+  return base
+}
+
 /** 视为"对局进行中"的阶段（含加载与断线重连），期间任何依赖抖动都不触碰 overlay */
 const IN_GAME_PHASES = new Set(['GameStart', 'InProgress', 'Reconnect'])
 /** 对局周期结束（含结算与回到大厅/秒退）——此时才还原通用构筑 */
@@ -401,6 +511,9 @@ const LANE_TO_LCU: Record<string, string> = {
 }
 
 const summaryText = computed(() => {
+  if (bzRow.value) {
+    return `Bz 推荐已就绪 vs ${bzRow.value.champion}${matchupStatus.value ? ` · ${matchupStatus.value}` : ''}`
+  }
   if (matchupStatus.value) return matchupStatus.value
   if (resolvedTargetId.value && statusText.value) return statusText.value
   return '等待对位确认'
@@ -432,6 +545,7 @@ async function refreshMatchupOverlay() {
   ) {
     matchupSeq++
     matchupLock.value = null
+    bzRow.value = null
     setMatchupOverlay(null)
     matchupStatus.value = !matchupOn.value
       ? '对位替换已关闭，显示通用构筑'
@@ -461,13 +575,27 @@ async function refreshMatchupOverlay() {
         result.meta && result.meta.play > 0
           ? `${result.meta.play} 场 · 胜率 ${((result.meta.win / result.meta.play) * 100).toFixed(1)}%`
           : ''
-      setMatchupOverlay(result.overlay, metaText)
+      const bz = await fetchBzRow(me, opp)
+      if (seq !== matchupSeq) return
+      bzRow.value = bz
+      setMatchupOverlay(mergeBzIntoOverlay(result.overlay, bz), metaText)
       matchupLock.value = { myChampionId: me, opponentChampionId: opp, lane, validated: false }
-      matchupStatus.value = `已切换对位构筑 vs ${championName(opp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
+      matchupStatus.value = bz?.coreItemIds?.length
+        ? `Bz 推荐核心装已置顶 · 对位构筑 vs ${championName(opp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
+        : `已切换对位构筑 vs ${championName(opp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
     } else {
-      matchupLock.value = null
-      setMatchupOverlay(null)
-      matchupStatus.value = '该对位样本不足，显示通用构筑'
+      const bz = await fetchBzRow(me, opp)
+      if (seq !== matchupSeq) return
+      bzRow.value = bz
+      if (bz?.coreItemIds?.length >= 2) {
+        setMatchupOverlay(mergeBzIntoOverlay(null, bz))
+        matchupLock.value = { myChampionId: me, opponentChampionId: opp, lane, validated: false }
+        matchupStatus.value = `Bz 推荐核心装已置顶 vs ${championName(opp)}（OP.GG 该对位样本不足）`
+      } else {
+        matchupLock.value = null
+        setMatchupOverlay(null)
+        matchupStatus.value = '该对位样本不足，显示通用构筑'
+      }
     }
   } catch (error: any) {
     if (seq !== matchupSeq) return
@@ -543,7 +671,10 @@ async function validateMatchupAgainstRealTeams() {
           result.meta && result.meta.play > 0
             ? `${result.meta.play} 场 · 胜率 ${((result.meta.win / result.meta.play) * 100).toFixed(1)}%`
             : ''
-        setMatchupOverlay(result.overlay, metaText)
+        const bz = await fetchBzRow(lock.myChampionId, newOpp)
+        if (seq !== matchupSeq) return
+        bzRow.value = bz
+        setMatchupOverlay(mergeBzIntoOverlay(result.overlay, bz), metaText)
         lock.opponentChampionId = newOpp
         matchupStatus.value = `已按真实阵容修正对位 vs ${championName(newOpp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
         return
@@ -566,6 +697,7 @@ watch(
       void validateMatchupAgainstRealTeams()
     } else if (GAME_OVER_PHASES.has(phase) && matchupLock.value) {
       matchupLock.value = null
+      bzRow.value = null
       matchupSeq++
       setMatchupOverlay(null)
       matchupStatus.value = ''
