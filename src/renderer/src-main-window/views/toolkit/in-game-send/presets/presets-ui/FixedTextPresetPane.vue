@@ -1,6 +1,6 @@
 <template>
-  <div class="fixed-text-preset-pane min-h-130">
-    <div v-if="items.length === 0" class="flex min-h-105 items-center justify-center">
+  <div class="fixed-text-preset-pane h-140">
+    <div v-if="items.length === 0" class="flex h-full items-center justify-center">
       <NEmpty :description="t('empty.description')">
         <template #icon>
           <NIcon><DocumentTextIcon /></NIcon>
@@ -18,7 +18,7 @@
 
     <div
       v-else
-      class="fixed-text-layout grid min-h-140 grid-cols-[208px_minmax(0,1fr)] gap-4 max-[760px]:grid-cols-1"
+      class="fixed-text-layout grid h-full grid-cols-[208px_minmax(0,1fr)] gap-4 max-[760px]:grid-cols-1"
     >
       <aside
         class="fixed-text-sidebar flex min-h-0 min-w-0 flex-col overflow-hidden max-[760px]:max-h-55"
@@ -48,125 +48,68 @@
           </NTooltip>
         </div>
 
-        <div
-          class="fixed-text-list flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto pt-1.5 pb-0.5"
-        >
+        <DragDropProvider :modifiers="dragModifiers" @drag-end="handleDragEnd">
           <div
-            v-for="item of items"
-            :key="item.id"
-            class="fixed-text-list-item group box-border flex min-h-8 w-full flex-none items-center justify-between gap-1.5 rounded-[5px] py-1 pr-0.5 pl-2 text-inherit transition-colors duration-150"
-            :class="
-              item.id === selectedId
-                ? 'active bg-black/15 hover:bg-black/15 dark:bg-white/10 dark:hover:bg-white/10'
-                : 'bg-transparent hover:bg-black/10 dark:hover:bg-white/10'
-            "
-            @mouseenter="handleItemMouseEnter(item.id)"
-            @mouseleave="handleItemMouseLeave(item.id)"
+            class="fixed-text-list flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto pt-1.5 pb-0.5"
           >
-            <button
-              type="button"
-              class="item-main flex min-h-5.5 min-w-0 flex-1 cursor-pointer items-center justify-start border-0 bg-transparent p-0 text-left text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600/50"
-              @click="handleSelect(item.id)"
-            >
-              <span
-                class="item-title overflow-hidden text-[13px] leading-5.5 font-normal text-ellipsis whitespace-nowrap"
-                :class="
-                  item.id === selectedId
-                    ? getTrimmedTitle(item.title)
-                      ? 'font-medium text-black dark:text-white'
-                      : 'font-medium text-black/52 dark:text-white/55'
-                    : getTrimmedTitle(item.title)
-                      ? 'text-black/82 dark:text-white/86'
-                      : 'text-black/38 dark:text-white/38'
-                "
-              >
-                {{ getDisplayTitle(item.title) }}
-              </span>
-            </button>
-
-            <div class="flex h-5.5 w-20.5 flex-none items-center justify-end gap-0.5">
-              <template v-if="shouldShowItemActions(item.id)">
-                <NTooltip :keep-alive-on-hover="false">
-                  <template #trigger>
-                    <NButton
-                      size="tiny"
-                      quaternary
-                      :disabled="!canMoveItem(item.id, 'up')"
-                      :aria-label="t('moveUp')"
-                      @click.stop="handleMove(item.id, 'up')"
-                    >
-                      <template #icon>
-                        <NIcon><ArrowUpIcon /></NIcon>
-                      </template>
-                    </NButton>
-                  </template>
-                  {{ t('moveUp') }}
-                </NTooltip>
-
-                <NTooltip :keep-alive-on-hover="false">
-                  <template #trigger>
-                    <NButton
-                      size="tiny"
-                      quaternary
-                      :disabled="!canMoveItem(item.id, 'down')"
-                      :aria-label="t('moveDown')"
-                      @click.stop="handleMove(item.id, 'down')"
-                    >
-                      <template #icon>
-                        <NIcon><ArrowDownIcon /></NIcon>
-                      </template>
-                    </NButton>
-                  </template>
-                  {{ t('moveDown') }}
-                </NTooltip>
-
-                <NPopconfirm
-                  :keep-alive-on-hover="false"
-                  :show-icon="false"
-                  :negative-button-props="{ size: 'tiny' }"
-                  :positive-button-props="{ size: 'tiny' }"
-                  @update:show="handleDeleteConfirmShowUpdate(item.id, $event)"
-                  @positive-click="handleDelete(item.id)"
-                >
-                  <template #trigger>
-                    <NButton
-                      size="tiny"
-                      quaternary
-                      class="text-inherit hover:text-red-500! dark:text-white/80 dark:hover:text-red-400!"
-                      :aria-label="t('delete')"
-                      @click.stop
-                    >
-                      <template #icon>
-                        <NIcon><DeleteIcon /></NIcon>
-                      </template>
-                    </NButton>
-                  </template>
-                  {{ t('deleteConfirm') }}
-                </NPopconfirm>
-              </template>
-            </div>
+            <SortablePresetListItem
+              v-for="(item, index) of items"
+              :id="item.id"
+              :key="item.id"
+              class="fixed-text-list-item"
+              :index="index"
+              group="in-game-send-fixed-text"
+              type="in-game-send-fixed-text-item"
+              :title="item.title"
+              :unnamed-label="t('unnamed')"
+              :drag-label="t('dragHandle', { title: getDisplayTitle(item.title) })"
+              :delete-label="t('delete')"
+              :delete-confirm="t('deleteConfirm')"
+              :active="item.id === selectedId"
+              :dirty="item.id === selectedId && isDirty"
+              :dirty-label="t('unsaved')"
+              @select="handleSelect(item.id)"
+              @delete="handleDelete(item.id)"
+            />
           </div>
-        </div>
+        </DragDropProvider>
       </aside>
 
       <section v-if="selectedItem" class="flex min-h-0 min-w-0 flex-col gap-1.5 p-0">
-        <div class="grid h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-          <NInput
-            v-if="isEditingTitle"
-            ref="titleInputRef"
-            v-model:value="draftTitle"
-            size="small"
-            :maxlength="titleMaxLength"
-            clearable
-            @blur="finishTitleEdit"
-            @keydown.enter="handleTitleInputEnter"
-          />
+        <div class="grid h-7 flex-none grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+          <div v-if="isEditingTitle" class="flex min-w-0 items-center gap-1.5">
+            <span
+              v-if="isDirty"
+              class="size-1.5 flex-none rounded-full bg-orange-500 dark:bg-orange-400"
+              :title="t('unsaved')"
+            >
+              <span class="sr-only">{{ t('unsaved') }}</span>
+            </span>
+            <NInput
+              ref="titleInputRef"
+              :value="draftTitle"
+              class="min-w-0 flex-1"
+              size="small"
+              :maxlength="titleMaxLength"
+              clearable
+              @update:value="handleTitleUpdate"
+              @blur="finishTitleEdit"
+              @keydown.enter="handleTitleInputEnter"
+            />
+          </div>
           <button
             v-else
             type="button"
-            class="editor-title-display flex h-7 min-w-0 cursor-text items-center border-0 bg-transparent p-0 text-left font-[inherit] text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600/50"
+            class="editor-title-display flex h-7 min-w-0 cursor-text items-center gap-1.5 border-0 bg-transparent p-0 text-left font-[inherit] text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600/50"
             @click="startTitleEdit"
           >
+            <span
+              v-if="isDirty"
+              class="size-1.5 flex-none rounded-full bg-orange-500 dark:bg-orange-400"
+              :title="t('unsaved')"
+            >
+              <span class="sr-only">{{ t('unsaved') }}</span>
+            </span>
             <span
               class="min-w-0 overflow-hidden text-[15px] leading-7 text-ellipsis whitespace-nowrap"
               :class="
@@ -179,16 +122,40 @@
             </span>
           </button>
 
-          <NTooltip v-if="!isEditingTitle">
-            <template #trigger>
-              <NButton size="tiny" quaternary :aria-label="t('editTitle')" @click="startTitleEdit">
-                <template #icon>
-                  <NIcon><EditIcon /></NIcon>
-                </template>
-              </NButton>
-            </template>
-            {{ t('editTitle') }}
-          </NTooltip>
+          <div class="flex items-center gap-0.5">
+            <NTooltip v-if="!isEditingTitle">
+              <template #trigger>
+                <NButton
+                  size="tiny"
+                  quaternary
+                  :aria-label="t('editTitle')"
+                  @click="startTitleEdit"
+                >
+                  <template #icon>
+                    <NIcon><EditIcon /></NIcon>
+                  </template>
+                </NButton>
+              </template>
+              {{ t('editTitle') }}
+            </NTooltip>
+
+            <NTooltip>
+              <template #trigger>
+                <NButton
+                  size="tiny"
+                  quaternary
+                  :disabled="!isEditorReady"
+                  :aria-label="t('expand')"
+                  @click="isExpanded = true"
+                >
+                  <template #icon>
+                    <NIcon><ExpandIcon /></NIcon>
+                  </template>
+                </NButton>
+              </template>
+              {{ t('expand') }}
+            </NTooltip>
+          </div>
         </div>
 
         <SettingsRow
@@ -196,6 +163,7 @@
           :label-description="t('shortcutDescription')"
           :label-width="96"
           :gap="16"
+          class="flex-none"
           no-x-padding
         >
           <ShortcutSelector
@@ -205,29 +173,47 @@
           />
         </SettingsRow>
 
-        <Codemirror
-          v-model="draftContent"
-          class="fixed-text-codemirror min-h-60 flex-1 overflow-hidden rounded-[5px] border border-black/10 dark:border-white/10"
-          :style="{ height: '100%' }"
-          :indent-with-tab="false"
-          :tab-size="2"
-          :extensions="editorExtensions"
-          @blur="handleAutoSave"
+        <PresetMonacoEditor
+          ref="editorRef"
+          v-model:expanded="isExpanded"
+          class="flex-1"
+          :model-key="selectedItem.id"
+          :initial-value="draftContent"
+          :model-uri="`inmemory://league-akari/in-game-send-fixed-text/${selectedItem.id}.txt`"
+          variant="plain-text"
+          :max-length="contentMaxLength"
+          :expanded-title="t('expandedTitle', { title: getDisplayTitle(draftTitle) })"
+          :dirty="isDirty"
+          :saving="isSaving"
+          :revert-label="t('revert')"
+          :save-label="t('save')"
+          :format-load-error="formatEditorLoadError"
+          @change="handleContentChange"
+          @ready="isEditorReady = $event"
+          @revert="handleRevert"
+          @save="handleSaveClick"
         />
 
-        <div class="flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex flex-none flex-wrap items-center justify-between gap-2.5">
           <span
             class="text-xs [font-variant-numeric:tabular-nums]"
             :class="
-              draftContent.length >= contentMaxLength
+              draftContentLength >= contentMaxLength
                 ? 'text-orange-700/85 dark:text-orange-400/90'
                 : 'text-black/45 dark:text-white/45'
             "
           >
-            {{ draftContent.length }} / {{ contentMaxLength }}
+            {{ draftContentLength }} / {{ contentMaxLength }}
           </span>
 
           <div class="flex items-center gap-1.5">
+            <NButton size="small" :disabled="!isDirty" @click="handleRevert">
+              <template #icon>
+                <NIcon><UndoIcon /></NIcon>
+              </template>
+              {{ t('revert') }}
+            </NButton>
+
             <NTooltip :disabled="!sendDisabledReason">
               <template #trigger>
                 <span class="inline-flex">
@@ -268,40 +254,38 @@
 </template>
 
 <script setup lang="ts">
-import { EditorView } from '@codemirror/view'
 import ShortcutSelector from '@main-window/components/ShortcutSelector.vue'
 import SettingsRow from '@renderer-shared/components/SettingsRow.vue'
 import { useComponentName } from '@renderer-shared/composables/useComponentName'
 import { useInstance } from '@renderer-shared/shards'
-import { useAppCommonStore } from '@renderer-shared/shards/app-common/store'
 import { LoggerRenderer } from '@renderer-shared/shards/logger'
 import {
   IN_GAME_SEND_FIXED_TEXT_PRESET_CONTENT_MAX_LENGTH,
   IN_GAME_SEND_FIXED_TEXT_PRESET_MAX_ITEMS,
-  IN_GAME_SEND_FIXED_TEXT_PRESET_TITLE_MAX_LENGTH,
-  type InGameSendFixedTextPresetItemMoveDirection
+  IN_GAME_SEND_FIXED_TEXT_PRESET_TITLE_MAX_LENGTH
 } from '@shared/shards/in-game-send'
-import { vscodeDark, vscodeLight } from '@uiw/codemirror-theme-vscode'
+import { RestrictToVerticalAxis } from '@dnd-kit/abstract/modifiers'
+import { DragDropProvider, type DragEndEvent } from '@dnd-kit/vue'
+import { isSortable } from '@dnd-kit/vue/sortable'
 import {
   Add24Regular as AddIcon,
-  ArrowDown24Regular as ArrowDownIcon,
-  ArrowUp24Regular as ArrowUpIcon,
-  Delete24Regular as DeleteIcon,
+  ArrowExpand24Regular as ExpandIcon,
   DocumentText24Regular as DocumentTextIcon,
   Edit24Regular as EditIcon,
   Save24Regular as SaveIcon,
-  Send24Filled as SendIcon
+  Send24Filled as SendIcon,
+  ArrowUndo24Regular as UndoIcon
 } from '@vicons/fluent'
 import { useTranslation } from 'i18next-vue'
-import { NButton, NEmpty, NIcon, NInput, NPopconfirm, NTooltip, useMessage } from 'naive-ui'
+import { NButton, NEmpty, NIcon, NInput, NTooltip, useMessage } from 'naive-ui'
 import { computed, nextTick, ref, watch } from 'vue'
-import { Codemirror } from 'vue-codemirror'
 
 import { useNativeInputStatus } from '../composables/useNativeInputStatus'
 import { useFixedTextPreset } from '../data/fixed-text'
+import { PresetMonacoEditor } from '../monaco'
+import SortablePresetListItem from '../widgets/SortablePresetListItem.vue'
 
 const fixedTextPreset = useFixedTextPreset()
-const appCommonStore = useAppCommonStore()
 const componentName = useComponentName()
 const logger = useInstance(LoggerRenderer)
 const message = useMessage()
@@ -311,39 +295,27 @@ const { unavailableReason: nativeInputUnavailableMessage } = useNativeInputStatu
 const maxItems = IN_GAME_SEND_FIXED_TEXT_PRESET_MAX_ITEMS
 const titleMaxLength = IN_GAME_SEND_FIXED_TEXT_PRESET_TITLE_MAX_LENGTH
 const contentMaxLength = IN_GAME_SEND_FIXED_TEXT_PRESET_CONTENT_MAX_LENGTH
+const dragModifiers = [RestrictToVerticalAxis]
 
 const titleInputRef = ref<InstanceType<typeof NInput> | null>(null)
 const selectedId = ref<string | null>(null)
 const draftTitle = ref('')
 const draftContent = ref('')
+const draftContentLength = ref(0)
+const isDirty = ref(false)
 const isSaving = ref(false)
 const isCreating = ref(false)
 const isEditingTitle = ref(false)
+const isExpanded = ref(false)
+const isEditorReady = ref(false)
 const pendingTitleEditItemId = ref<string | null>(null)
-const hoveredItemId = ref<string | null>(null)
-const deleteConfirmItemId = ref<string | null>(null)
+const editorRef = ref<InstanceType<typeof PresetMonacoEditor> | null>(null)
 
 const items = computed(() => fixedTextPreset.items.value)
 const selectedItem = computed(
   () => items.value.find((item) => item.id === selectedId.value) ?? null
 )
 const canCreate = computed(() => items.value.length < maxItems)
-
-const editorExtensions = computed(() => [
-  appCommonStore.colorTheme === 'dark' ? vscodeDark : vscodeLight,
-  EditorView.lineWrapping
-])
-
-const isDirty = computed(() => {
-  if (!selectedItem.value) {
-    return false
-  }
-
-  return (
-    draftTitle.value !== selectedItem.value.title ||
-    draftContent.value !== selectedItem.value.content
-  )
-})
 
 const sendButtonText = computed(() => {
   if (fixedTextPreset.gamePhase.value === 'in-game') {
@@ -402,33 +374,29 @@ watch(
 watch(
   () => selectedItem.value?.id,
   async (id) => {
-    draftTitle.value = selectedItem.value?.title ?? ''
-    draftContent.value = selectedItem.value?.content ?? ''
+    const item = selectedItem.value
+    isExpanded.value = false
+    isEditorReady.value = false
+    isDirty.value = false
+    draftTitle.value = item?.title ?? ''
+    draftContent.value = item?.content ?? ''
+    draftContentLength.value = draftContent.value.length
 
     if (id && pendingTitleEditItemId.value === id) {
       pendingTitleEditItemId.value = null
       isEditingTitle.value = true
       await nextTick()
       titleInputRef.value?.focus()
-      return
+    } else {
+      isEditingTitle.value = false
     }
 
-    isEditingTitle.value = false
+    if (!id || !item) {
+      return
+    }
   },
   { immediate: true }
 )
-
-watch(draftTitle, (value) => {
-  if (value.length > titleMaxLength) {
-    draftTitle.value = value.slice(0, titleMaxLength)
-  }
-})
-
-watch(draftContent, (value) => {
-  if (value.length > contentMaxLength) {
-    draftContent.value = value.slice(0, contentMaxLength)
-  }
-})
 
 const getTrimmedTitle = (title: string) => {
   return title.trim()
@@ -438,35 +406,21 @@ const getDisplayTitle = (title: string) => {
   return getTrimmedTitle(title) || t('unnamed')
 }
 
-const canMoveItem = (id: string, direction: InGameSendFixedTextPresetItemMoveDirection) => {
-  const itemIndex = items.value.findIndex((item) => item.id === id)
-
-  if (itemIndex === -1) {
-    return false
-  }
-
-  return direction === 'up' ? itemIndex > 0 : itemIndex < items.value.length - 1
+const formatEditorLoadError = (reason: string) => {
+  return t('editorLoadFailed', { reason })
 }
 
-const shouldShowItemActions = (id: string) => {
-  return hoveredItemId.value === id || deleteConfirmItemId.value === id
+const handleContentChange = (length: number) => {
+  draftContentLength.value = length
+  isDirty.value = true
 }
 
-const handleItemMouseEnter = (id: string) => {
-  hoveredItemId.value = id
+const handleTitleUpdate = (value: string) => {
+  draftTitle.value = value.slice(0, titleMaxLength)
+  isDirty.value = true
 }
 
-const handleItemMouseLeave = (id: string) => {
-  if (hoveredItemId.value === id) {
-    hoveredItemId.value = null
-  }
-}
-
-const handleDeleteConfirmShowUpdate = (id: string, show: boolean) => {
-  deleteConfirmItemId.value = show ? id : null
-}
-
-const saveCurrent = async (options: { silent?: boolean } = {}) => {
+const saveCurrent = async () => {
   if (!selectedItem.value || !isDirty.value) {
     return true
   }
@@ -477,14 +431,16 @@ const saveCurrent = async (options: { silent?: boolean } = {}) => {
 
   isSaving.value = true
   try {
+    const content = editorRef.value?.getValue() ?? draftContent.value
     await fixedTextPreset.updateItem(selectedItem.value.id, {
       title: draftTitle.value.slice(0, titleMaxLength),
-      content: draftContent.value.slice(0, contentMaxLength)
+      content: content.slice(0, contentMaxLength)
     })
 
-    if (!options.silent) {
-      message.success(t('saved'))
-    }
+    draftContent.value = content
+    draftContentLength.value = content.length
+    isDirty.value = false
+    message.success(t('saved'))
 
     return true
   } catch (error) {
@@ -494,10 +450,6 @@ const saveCurrent = async (options: { silent?: boolean } = {}) => {
   } finally {
     isSaving.value = false
   }
-}
-
-const handleAutoSave = async () => {
-  await saveCurrent()
 }
 
 const handleSaveClick = async () => {
@@ -513,10 +465,8 @@ const startTitleEdit = async () => {
   titleInputRef.value?.focus()
 }
 
-const finishTitleEdit = async () => {
-  if (await saveCurrent()) {
-    isEditingTitle.value = false
-  }
+const finishTitleEdit = () => {
+  isEditingTitle.value = false
 }
 
 const handleTitleInputEnter = (event: KeyboardEvent) => {
@@ -525,18 +475,34 @@ const handleTitleInputEnter = (event: KeyboardEvent) => {
   }
 
   event.preventDefault()
-  void finishTitleEdit()
+  finishTitleEdit()
 }
 
-const handleSelect = async (id: string) => {
+const revertCurrentDraft = () => {
+  if (!selectedItem.value) {
+    return
+  }
+
+  if (isDirty.value) {
+    draftTitle.value = selectedItem.value.title
+    draftContent.value = selectedItem.value.content
+    draftContentLength.value = selectedItem.value.content.length
+    editorRef.value?.replaceValue(selectedItem.value.content)
+  }
+  isDirty.value = false
+  isEditingTitle.value = false
+}
+
+const handleRevert = () => {
+  revertCurrentDraft()
+}
+
+const handleSelect = (id: string) => {
   if (id === selectedId.value) {
     return
   }
 
-  if (!(await saveCurrent())) {
-    return
-  }
-
+  revertCurrentDraft()
   selectedId.value = id
 }
 
@@ -545,16 +511,14 @@ const handleCreate = async () => {
     return
   }
 
-  if (!(await saveCurrent())) {
-    return
-  }
-
   isCreating.value = true
   try {
     const item = await fixedTextPreset.createItem()
+    revertCurrentDraft()
     selectedId.value = item.id
     draftTitle.value = ''
     draftContent.value = ''
+    draftContentLength.value = 0
     pendingTitleEditItemId.value = item.id
     isEditingTitle.value = true
     await nextTick()
@@ -591,30 +555,28 @@ const handleDelete = async (id: string) => {
   } catch (error) {
     logger.warn(componentName, 'Failed to delete fixed text preset', error)
     message.error(t('deleteFailed'))
-  } finally {
-    if (hoveredItemId.value === id) {
-      hoveredItemId.value = null
-    }
-
-    if (deleteConfirmItemId.value === id) {
-      deleteConfirmItemId.value = null
-    }
   }
 }
 
-const handleMove = async (id: string, direction: InGameSendFixedTextPresetItemMoveDirection) => {
-  if (!canMoveItem(id, direction)) {
+const handleDragEnd = async (event: DragEndEvent) => {
+  const { source } = event.operation
+
+  if (event.canceled || !isSortable(source)) {
     return
   }
 
-  if (!(await saveCurrent())) {
+  const id = String(source.id)
+  const currentIndex = items.value.findIndex((item) => item.id === id)
+  const targetIndex = Math.min(Math.max(source.index, 0), items.value.length - 1)
+
+  if (currentIndex === -1 || currentIndex === targetIndex) {
     return
   }
 
   try {
-    await fixedTextPreset.moveItem(id, direction)
+    await fixedTextPreset.reorderItem(id, targetIndex)
   } catch (error) {
-    logger.warn(componentName, 'Failed to move fixed text preset', error)
+    logger.warn(componentName, 'Failed to reorder fixed text preset', error)
   }
 }
 
@@ -645,15 +607,3 @@ const handleSend = async () => {
   }
 }
 </script>
-
-<style scoped>
-@reference '@renderer-shared/assets/css/tailwind.css';
-
-.fixed-text-codemirror :deep(.cm-editor) {
-  @apply h-full text-[13px];
-}
-
-.fixed-text-codemirror :deep(.cm-scroller) {
-  @apply font-mono;
-}
-</style>
