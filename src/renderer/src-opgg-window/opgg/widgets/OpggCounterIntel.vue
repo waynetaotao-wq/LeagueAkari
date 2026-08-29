@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="session"
+    v-if="session || inGameMatchup"
     class="mb-1 rounded border border-black/10 p-2 last:mb-0 dark:border-[#37373c]"
   >
     <!-- 标题行（官方区块同款）：标题 + 摘要 + 展开开关 -->
@@ -72,6 +72,28 @@
         </span>
       </div>
 
+      <!-- 已替换区块诊断行：任一区块解析失败会显示为"未替换"，静默降级从此可见 -->
+      <div v-if="matchupSections.length" class="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
+        <span class="text-[#666666] dark:text-[#b2b2b2]">已替换</span>
+        <span
+          v-for="k of matchupSections"
+          :key="k"
+          class="rounded bg-[#2a947d]/12 px-1 text-[#2a947d] dark:bg-[#5fd3a5]/12 dark:text-[#5fd3a5]"
+        >
+          {{ SECTION_LABELS[k] ?? k }}
+        </span>
+        <template v-if="missingSections.length">
+          <span class="ml-1 text-[#666666] dark:text-[#b2b2b2]">未替换</span>
+          <span
+            v-for="k of missingSections"
+            :key="k"
+            class="rounded bg-black/5 px-1 text-[#666666] dark:bg-white/8 dark:text-[#b2b2b2]"
+          >
+            {{ SECTION_LABELS[k] ?? k }}
+          </span>
+        </template>
+      </div>
+
       <!-- Bz（欧服第一劫）攻略卡：命中时优先展示，与下方 OP.GG 量化数据共存 -->
       <div
         v-if="bzRow"
@@ -121,6 +143,9 @@
         <div class="mt-1 text-[10px] text-[#666666]/80 dark:text-[#b2b2b2]/70">
           <template v-if="bzRow.coreItemIds && bzRow.coreItemIds.length">
             核心装已按 Bz 推荐**置顶**至下方"核心装备"区（首行、无胜率数据）；
+          </template>
+          <template v-if="bzExtras">
+            召唤师技能与出门装同样已置顶至各自区块首行；
           </template>
           <template v-if="bzRow.keystonePerkId">
             符文区已按 Bz 基石**筛选流派**（保留 OP.GG 完整页数据）；
@@ -436,6 +461,22 @@ const expanded = ref(false)
 
 const matchupOn = ref(true)
 const matchupStatus = ref('')
+
+/** 区块键 → 中文标签（诊断行用） */
+const SECTION_LABELS: Record<string, string> = {
+  runes: '符文',
+  summoner_spells: '召唤师',
+  starter_items: '出门装',
+  boots: '鞋',
+  core_items: '核心装',
+  last_items: '装备'
+}
+const ALL_SECTIONS = ['runes', 'summoner_spells', 'starter_items', 'boots', 'core_items']
+/** 本次对位实际替换成功的区块（含 Bz 并入项） */
+const matchupSections = ref<string[]>([])
+const missingSections = computed(() =>
+  matchupSections.value.length ? ALL_SECTIONS.filter((k) => !matchupSections.value.includes(k)) : []
+)
 let matchupSeq = 0
 let matchupTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -479,11 +520,20 @@ async function fetchBzRow(me: number, opp: number): Promise<any | null> {
 function mergeBzIntoOverlay(overlay: Record<string, unknown> | null, bz: any): Record<string, unknown> | null {
   const hasCore = bz?.coreItemIds && bz.coreItemIds.length >= 2
   const keystone = typeof bz?.keystonePerkId === 'number' ? bz.keystonePerkId : null
-  if (!hasCore && keystone === null) return overlay
+  // 召唤师技能与出门装（人工识别写死）同样置顶进原生区块，与核心装同一语义
+  const extras = bz?.champion ? getBzExtras(bz.champion) : null
+  if (!hasCore && keystone === null && !extras) return overlay
   const base: Record<string, unknown> = overlay ? { ...overlay } : {}
+  const topOf = (key: string, ids: number[]) => {
+    const existing = Array.isArray(base[key]) ? (base[key] as any[]) : []
+    base[key] = [{ ids, play: 0, win: 0, pick_rate: 0 }, ...existing]
+  }
   if (hasCore) {
-    const existing = Array.isArray(base.core_items) ? (base.core_items as any[]) : []
-    base.core_items = [{ ids: bz.coreItemIds, play: 0, win: 0, pick_rate: 0 }, ...existing]
+    topOf('core_items', bz.coreItemIds)
+  }
+  if (extras) {
+    topOf('summoner_spells', [...extras.spellIds])
+    topOf('starter_items', [extras.starterItemId])
   }
   // Bz 基石筛选：OP.GG 对位符文页里仅保留基石一致的流派；全灭则保留原样（防空白）
   if (keystone !== null && Array.isArray(base.runes)) {
@@ -502,13 +552,51 @@ const IN_GAME_PHASES = new Set(['GameStart', 'InProgress', 'Reconnect'])
 /** 对局周期结束（含结算与回到大厅/秒退）——此时才还原通用构筑 */
 const GAME_OVER_PHASES = new Set(['WaitingForStats', 'PreEndOfGame', 'EndOfGame', 'None'])
 
+/** LaneName ↔ LCU 位置串（键必须与 LANES 一致：top/jungle/middle/bottom/utility） */
 const LANE_TO_LCU: Record<string, string> = {
   top: 'TOP',
   jungle: 'JUNGLE',
-  mid: 'MIDDLE',
-  adc: 'BOTTOM',
-  support: 'UTILITY'
+  middle: 'MIDDLE',
+  bottom: 'BOTTOM',
+  utility: 'UTILITY'
 }
+const LCU_TO_LANE: Record<string, LaneName> = {
+  TOP: 'top',
+  JUNGLE: 'jungle',
+  MIDDLE: 'middle',
+  BOTTOM: 'bottom',
+  UTILITY: 'utility'
+}
+
+/**
+ * [lolps] 对局内对位来源：选人结束后 champSelect.session 消失，
+ * 改从 gameflow 的真实双方阵容推导「我的英雄 / 我的分路 / 同路敌人」，
+ * 使得——即便选人期没开过 OP.GG 窗口——进游戏后打开也能拿到对位构筑。
+ */
+const inGameMatchup = computed<{ me: number; opp: number; lane: LaneName } | null>(() => {
+  const gd = (lcs.gameflow.session as any)?.gameData
+  const myPuuid = lcs.summoner.me?.puuid
+  if (!gd || !myPuuid) return null
+  const one: any[] = Array.isArray(gd.teamOne) ? gd.teamOne : []
+  const two: any[] = Array.isArray(gd.teamTwo) ? gd.teamTwo : []
+  const mine = one.some((x) => x?.puuid === myPuuid)
+    ? one
+    : two.some((x) => x?.puuid === myPuuid)
+      ? two
+      : null
+  if (!mine) return null
+  const enemy = mine === one ? two : one
+  const meEntry = mine.find((x) => x?.puuid === myPuuid)
+  const me = Number(meEntry?.championId ?? 0)
+  const lane = LCU_TO_LANE[String(meEntry?.selectedPosition ?? '').toUpperCase()]
+  if (!me || !lane) return null
+  const oppEntry = enemy.find(
+    (x) => String(x?.selectedPosition ?? '').toUpperCase() === LANE_TO_LCU[lane]
+  )
+  const opp = Number(oppEntry?.championId ?? 0)
+  if (!opp || opp === me) return null
+  return { me, opp, lane }
+})
 
 const summaryText = computed(() => {
   if (bzRow.value) {
@@ -524,9 +612,10 @@ async function refreshMatchupOverlay() {
   if (matchupLock.value && IN_GAME_PHASES.has(String(lcs.gameflow.phase))) {
     return
   }
-  const me = myChampionId.value
-  const opp = resolvedTargetId.value
-  const lane = effectiveLane.value
+  const fromGame = inGameMatchup.value
+  const me = myChampionId.value || fromGame?.me || 0
+  const opp = resolvedTargetId.value || fromGame?.opp || 0
+  const lane = effectiveLane.value || fromGame?.lane || ''
   // 守卫：仅排位模式有对位数据；OP.GG 源选了历史版本时网页只有最新版，暂停替换防口径漂移
   const latestVersion = opggVersions.value[0] ?? null
   const versionMismatch =
@@ -546,6 +635,7 @@ async function refreshMatchupOverlay() {
     matchupSeq++
     matchupLock.value = null
     bzRow.value = null
+    matchupSections.value = []
     setMatchupOverlay(null)
     matchupStatus.value = !matchupOn.value
       ? '对位替换已关闭，显示通用构筑'
@@ -578,21 +668,31 @@ async function refreshMatchupOverlay() {
       const bz = await fetchBzRow(me, opp)
       if (seq !== matchupSeq) return
       bzRow.value = bz
-      setMatchupOverlay(mergeBzIntoOverlay(result.overlay, bz), metaText)
-      matchupLock.value = { myChampionId: me, opponentChampionId: opp, lane, validated: false }
-      matchupStatus.value = bz?.coreItemIds?.length
-        ? `Bz 推荐核心装已置顶 · 对位构筑 vs ${championName(opp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
+      const merged = mergeBzIntoOverlay(result.overlay, bz)
+      matchupSections.value = merged ? Object.keys(merged) : (result.parsedSections ?? [])
+      setMatchupOverlay(merged, metaText)
+      matchupLock.value = {
+        myChampionId: me,
+        opponentChampionId: opp,
+        lane,
+        validated: !!fromGame && !myChampionId.value
+      }
+      matchupStatus.value = bz
+        ? `Bz 推荐已置顶（召唤师/出门装/核心装） · 对位构筑 vs ${championName(opp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
         : `已切换对位构筑 vs ${championName(opp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
     } else {
       const bz = await fetchBzRow(me, opp)
       if (seq !== matchupSeq) return
       bzRow.value = bz
-      if (bz?.coreItemIds?.length >= 2) {
-        setMatchupOverlay(mergeBzIntoOverlay(null, bz))
+      const bzOverlay = mergeBzIntoOverlay(null, bz)
+      if (bzOverlay) {
+        matchupSections.value = Object.keys(bzOverlay)
+        setMatchupOverlay(bzOverlay)
         matchupLock.value = { myChampionId: me, opponentChampionId: opp, lane, validated: false }
-        matchupStatus.value = `Bz 推荐核心装已置顶 vs ${championName(opp)}（OP.GG 该对位样本不足）`
+        matchupStatus.value = `Bz 推荐已置顶 vs ${championName(opp)}（OP.GG 该对位样本不足）`
       } else {
         matchupLock.value = null
+        matchupSections.value = []
         setMatchupOverlay(null)
         matchupStatus.value = '该对位样本不足，显示通用构筑'
       }
@@ -619,7 +719,8 @@ watch(
     () => tier.value,
     () => opggMode.value,
     () => opggVersion.value,
-    matchupOn
+    matchupOn,
+    inGameMatchup
   ],
   () => scheduleMatchupOverlay()
 )
@@ -683,7 +784,9 @@ async function validateMatchupAgainstRealTeams() {
         const bz = await fetchBzRow(lock.myChampionId, newOpp)
         if (seq !== matchupSeq) return
         bzRow.value = bz
-        setMatchupOverlay(mergeBzIntoOverlay(result.overlay, bz), metaText)
+        const merged2 = mergeBzIntoOverlay(result.overlay, bz)
+        matchupSections.value = merged2 ? Object.keys(merged2) : (result.parsedSections ?? [])
+        setMatchupOverlay(merged2, metaText)
         lock.opponentChampionId = newOpp
         matchupStatus.value = `已按真实阵容修正对位 vs ${championName(newOpp)}（OP.GG${metaText ? ` · ${metaText}` : ''}）`
         return
@@ -694,6 +797,7 @@ async function validateMatchupAgainstRealTeams() {
   // 无法确定真实对位：诚实回退通用构筑（Bz 相关一并撤除）
   matchupLock.value = null
   bzRow.value = null
+  matchupSections.value = []
   matchupSeq++
   setMatchupOverlay(null)
   matchupStatus.value = '对面真实阵容与选人期推测不符，已回通用构筑'
@@ -742,6 +846,7 @@ watch(
       stopValidateLoop()
       matchupLock.value = null
       bzRow.value = null
+      matchupSections.value = []
       matchupSeq++
       setMatchupOverlay(null)
       matchupStatus.value = ''

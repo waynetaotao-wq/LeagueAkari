@@ -75,6 +75,16 @@ const SECTION_ANCHORS: ReadonlyArray<{ key: ItemSectionKey | '_sentinel'; label:
     { key: 'last_items', label: 'Fifth Item' }
   ]
 
+/** SSR 表格标题 → 区块键（未登记标题视为边界，其行整段跳过） */
+const HTML_TITLE_TO_KEY: Readonly<Record<string, ItemSectionKey>> = {
+  'summoner spells': 'summoner_spells',
+  'starter items': 'starter_items',
+  boots: 'boots',
+  'core builds': 'core_items',
+  'fourth item': 'last_items',
+  'fifth item': 'last_items'
+}
+
 /** 段落终止锚点（吞到 Counter/协同区之前为止） */
 const TAIL_ANCHORS: readonly string[] = ['Weak against', 'Strong against', 'Counter', 'Synergies', 'mastery ranking']
 
@@ -183,7 +193,8 @@ function assembleEntries(seg: string, isSpells: boolean): OpggPickLike[] {
       if (pending && pending.play === undefined) pending = null
       let id: number | null = null
       if (isSpells) {
-        const sid = tk.spellName ? SPELL_NAME_TO_ID[tk.spellName] : Number.isFinite(tk.value) ? tk.value : null
+        // 仅接受 /spell/ 图标：装备图标混入会造出"两件装备当召唤师技能"的伪条目
+        const sid = tk.spellName ? SPELL_NAME_TO_ID[tk.spellName] : null
         if (typeof sid === 'number' && Number.isFinite(sid)) id = sid
       } else if (Number.isFinite(tk.value)) {
         id = tk.value
@@ -325,6 +336,93 @@ export function parseRunes(clean: string): OpggRuneLike[] {
 }
 
 /** 路线二：装备/召唤师（标题分段 + 文本状态机），产出官方形状各区块 */
+/**
+ * [lolps] 主解析面：服务端直出的 HTML 表格。
+ *
+ * OP.GG 页面同时含 (a) SSR HTML 表格（数值明文 `>56.41%<` / `>117 Games<`）与
+ * (b) React Flight 载荷（数值常被引用式压缩为 "$51:props:..."，正则易错位）。
+ * 实测 (a) 与网页显示逐项一致，故以 (a) 为主、(b) 仅作兜底。
+ */
+export function parseHtmlSections(rawInput: string): Partial<Pick<MatchupOverlayData, ItemSectionKey>> {
+  // React SSR 会在文本节点间插注释（"332<!-- --> <!-- -->Games"），
+  // 不剥离则装备段的"N Games"永远匹配不到（实测装备三段因此全部丢失）
+  const raw = rawInput.replace(/<!--[\s\S]*?-->/g, '')
+
+  // 区块标题：<th ... align="left" ...>Starter items</th>（列标题 Pick rate/Win rate 无 align，天然排除）；
+  // 未登记的标题（Support items / Prism items / Skill order…）自动成为边界，其行不会并入上一段
+  const heads: Array<{ at: number; title: string }> = []
+  const headRe = /<th[^>]*align="left"[^>]*>([^<]{2,40})<\/th>/g
+  let mh: RegExpExecArray | null
+  while ((mh = headRe.exec(raw))) {
+    heads.push({ at: mh.index, title: mh[1].trim().toLowerCase() })
+  }
+  if (heads.length === 0) return {}
+
+  const rowStarts: number[] = []
+  const trRe = /<tr\b/g
+  let mr: RegExpExecArray | null
+  while ((mr = trRe.exec(raw))) rowStarts.push(mr.index)
+
+  const acc: Partial<Record<ItemSectionKey, OpggPickLike[]>> = {}
+  const seenKeys: Record<string, Set<string>> = {}
+
+  for (let i = 0; i < rowStarts.length; i++) {
+    const start = rowStarts[i]
+    const end = i + 1 < rowStarts.length ? rowStarts[i + 1] : Math.min(start + 6000, raw.length)
+
+    let title: string | null = null
+    for (const h of heads) {
+      if (h.at < start) title = h.title
+      else break
+    }
+    const sect = title ? HTML_TITLE_TO_KEY[title] : undefined
+    if (!sect) continue
+
+    const seg = raw.slice(start, end)
+    const isSpells = sect === 'summoner_spells'
+    const ids: number[] = []
+    const imgRe = /\/item\/(\d+)\.png|\/spell\/([A-Za-z0-9_]+)\.png/g
+    let mi: RegExpExecArray | null
+    while ((mi = imgRe.exec(seg))) {
+      let id: number | null = null
+      if (isSpells) {
+        if (mi[2] && SPELL_NAME_TO_ID[mi[2]] !== undefined) id = SPELL_NAME_TO_ID[mi[2]]
+      } else if (mi[1]) {
+        id = Number(mi[1])
+      }
+      if (id !== null && !ids.includes(id) && ids.length < 6) ids.push(id)
+    }
+    const pcts = [...seg.matchAll(/>\s*(\d{1,3}(?:\.\d+)?)%\s*</g)].map((x) => Number(x[1]))
+    const games = seg.match(/>\s*([\d,]+)\s*Games?\s*</)
+    if (ids.length === 0 || pcts.length < 2 || !games) continue
+    if (isSpells && ids.length !== 2) continue
+    const play = Number(games[1].replace(/,/g, ''))
+    if (!Number.isFinite(play) || play <= 0) continue
+
+    // 页面同时渲染桌面/移动两套表格，同一条目会出现两次——按内容去重
+    const dedupeKey = `${ids.join('/')}|${pcts[0]}|${play}|${pcts[1]}`
+    let seen = seenKeys[sect]
+    if (!seen) {
+      seen = new Set<string>()
+      seenKeys[sect] = seen
+    }
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+
+    const list = acc[sect] ?? []
+    if (list.length < MAX_ENTRIES) {
+      list.push({
+        ids,
+        play,
+        win: Math.round((play * pcts[1]) / 100),
+        pick_rate: Math.round(pcts[0] * 100) / 10000
+      })
+      acc[sect] = list
+    }
+  }
+  return acc
+}
+
 export function parseItemSections(clean: string): Partial<Pick<MatchupOverlayData, ItemSectionKey>> {
   const positions: Array<{ key: ItemSectionKey | '_sentinel'; pos: number }> = []
   for (const { key, label } of SECTION_ANCHORS) {
@@ -384,15 +482,26 @@ export async function fetchMatchupOverlay(
     transformResponse: [(data) => data],
     signal
   })
-  const clean = stripEscapes(typeof res.data === 'string' ? res.data : String(res.data ?? ''))
+  const raw = typeof res.data === 'string' ? res.data : String(res.data ?? '')
+  const clean = stripEscapes(raw)
 
   const overlay: MatchupOverlayData = {}
   const runes = parseRunes(clean)
   if (runes.length > 0) overlay.runes = runes
-  const sections = parseItemSections(clean)
-  for (const [k, v] of Object.entries(sections)) {
+
+  // 主解析：SSR HTML（数值明文，实测与网页逐项一致）
+  const htmlSections = parseHtmlSections(raw)
+  for (const [k, v] of Object.entries(htmlSections)) {
     if (Array.isArray(v) && v.length > 0) {
       overlay[k as keyof MatchupOverlayData] = v as any
+    }
+  }
+  // 兜底：Flight 载荷解析，仅补 HTML 未覆盖的区块
+  const sections = parseItemSections(clean)
+  for (const [k, v] of Object.entries(sections)) {
+    const key = k as keyof MatchupOverlayData
+    if (!overlay[key] && Array.isArray(v) && v.length > 0) {
+      overlay[key] = v as any
     }
   }
   return { overlay, parsed: Object.keys(overlay) }
