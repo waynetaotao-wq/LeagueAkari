@@ -1,0 +1,49 @@
+# [lolps] 快速类型预检
+#
+# 目的：上传代码后 1-2 分钟内先给出"类型检查是否通过"的结论，
+# 不必等完整构建（装依赖 + 三平台编译 + 打包发布）跑完十几分钟。
+#
+# 与官方 ci-release.yml 完全同环境（Node 24 / Corepack / yarn --immutable），
+# 只跑官方自带的 typecheck 脚本（tsc 主进程 + vue-tsc 渲染进程），
+# 因此这里通过，完整构建的编译环节也会通过。
+#
+# 与 Build Releases 并行运行、互不影响：并发组独立、仅读权限、不产出任何发布物。
+
+name: Typecheck
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: typecheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: Typecheck (node + web)
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Typecheck
+        run: yarn typecheck
