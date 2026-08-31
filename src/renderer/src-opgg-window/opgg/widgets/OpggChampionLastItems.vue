@@ -4,8 +4,16 @@
     v-if="champion && champion.data.last_items && champion.data.last_items.length"
   >
     <div class="mb-2 flex items-center justify-between text-[13px] font-bold">
-      {{ t('opgg.champion.itemText')
-      }}<NCheckbox
+      <span>
+        {{ t('opgg.champion.itemText') }}
+        <span
+          v-if="isMatchupAggregate"
+          class="ml-1 text-xs font-normal text-[#666666] dark:text-[#bebebe]"
+        >
+          · 对位后续装备持有汇总（非第四/第五件分槽）
+        </span>
+      </span>
+      <NCheckbox
         v-if="champion.data.last_items.length > 8"
         size="small"
         v-model:checked="isLastItemsExpanded"
@@ -61,7 +69,7 @@ import ItemDisplay from '@renderer-shared/components/widgets/ItemDisplay.vue'
 import { ArrowForwardIosOutlined as ArrowForwardIosOutlinedIcon } from '@vicons/material'
 import { useTranslation } from 'i18next-vue'
 import { NCheckbox, NIcon } from 'naive-ui'
-import { ref, watchEffect } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 
 import { useOpgg } from '../context'
 
@@ -69,6 +77,11 @@ const { champion } = useOpgg()
 const { t } = useTranslation()
 
 const isLastItemsExpanded = ref(false)
+const isMatchupAggregate = computed(
+  () =>
+    (champion.value?.data.last_items?.[0] as { is_matchup_aggregate?: boolean } | undefined)
+      ?.is_matchup_aggregate === true
+)
 
 watchEffect(() => {
   if (!champion.value) {

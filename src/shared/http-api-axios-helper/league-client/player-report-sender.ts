@@ -7,7 +7,7 @@ export class PlayerReportSenderHttpApi {
 
   getReportedPlayersByGameId(gameId: number, options: HttpApiRequestOptions = {}) {
     return this._http.get<string[]>(
-      `/lol-player-report-sender/v1/reported-player/gameId/${gameId}`,
+      `/lol-player-report-sender/v1/reported-players/gameId/${gameId}`,
       { signal: options.signal }
     )
   }

@@ -18,6 +18,8 @@ import type { HttpApiRequestOptions } from '../request-options'
 interface OpggChampionOptions extends HttpApiRequestOptions {
   tier?: TierType
   version?: string
+  /** 指定对位英雄；OP.GG champion JSON 会据此返回该对位的构筑分区。 */
+  targetChampion?: number | string
 }
 
 export class OpggHttpApiAxiosHelper {
@@ -56,7 +58,11 @@ export class OpggHttpApiAxiosHelper {
     }
 
     return this._http.get<OpggChampionBuildResponse>(url, {
-      params: { tier: options.tier, version: options.version },
+      params: {
+        tier: options.tier,
+        version: options.version,
+        target_champion: options.targetChampion
+      },
       signal: options.signal
     })
   }

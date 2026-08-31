@@ -24,29 +24,39 @@
         <SummonerSpellDisplay :size="28" :spell-id="spell" v-for="spell of s.ids" />
       </div>
       <div class="desc flex flex-1 items-center justify-end">
-        <div class="pick flex min-w-19 flex-col items-center">
-          <span
-            class="pick-rate text-xs font-bold text-[#1a1a1a] dark:text-[#ebebeb]"
-            :title="t('opgg.champion.pickRate')"
-            >{{ (s.pick_rate * 100).toFixed(2) }}%</span
-          >
-          <span
-            class="pick-play text-center text-xs text-[#666666] dark:text-[#bebebe]"
-            :title="t('opgg.champion.plays')"
-          >
-            {{
-              t('opgg.champion.times', {
-                times: s.play.toLocaleString()
-              })
-            }}</span
-          >
+        <div v-if="isBzRecommendation(s)" class="pick flex min-w-38 flex-col items-center">
+          <span class="text-xs font-bold text-[#2a947d] dark:text-[#5fd3a5]">
+            {{ t('opgg.champion.bzRecommendation') }}
+          </span>
+          <span class="text-center text-xs text-[#666666] dark:text-[#bebebe]">
+            {{ t('opgg.champion.bzNoStats') }}
+          </span>
         </div>
-        <div
-          class="win-rate min-w-19 text-center text-xs font-bold text-[#2563eb] dark:text-[#a0c6f8]"
-          :title="t('opgg.champion.winRate')"
-        >
-          {{ ((s.win / (s.play || 1)) * 100).toFixed(2) }}%
-        </div>
+        <template v-else>
+          <div class="pick flex min-w-19 flex-col items-center">
+            <span
+              class="pick-rate text-xs font-bold text-[#1a1a1a] dark:text-[#ebebeb]"
+              :title="t('opgg.champion.pickRate')"
+              >{{ (s.pick_rate * 100).toFixed(2) }}%</span
+            >
+            <span
+              class="pick-play text-center text-xs text-[#666666] dark:text-[#bebebe]"
+              :title="t('opgg.champion.plays')"
+            >
+              {{
+                t('opgg.champion.times', {
+                  times: s.play.toLocaleString()
+                })
+              }}</span
+            >
+          </div>
+          <div
+            class="win-rate min-w-19 text-center text-xs font-bold text-[#2563eb] dark:text-[#a0c6f8]"
+            :title="t('opgg.champion.winRate')"
+          >
+            {{ ((s.win / (s.play || 1)) * 100).toFixed(2) }}%
+          </div>
+        </template>
         <div class="buttons flex min-w-19 justify-center">
           <NButton
             @click="setSummonerSpells(s.ids, flashPosition)"
@@ -70,6 +80,7 @@ import { useTranslation } from 'i18next-vue'
 import { NButton, NCheckbox } from 'naive-ui'
 import { ref, watchEffect } from 'vue'
 
+import { isBzRecommendation } from '../bz-overlay'
 import { useOpgg } from '../context'
 import { useLoadout } from '../utils/loadout'
 

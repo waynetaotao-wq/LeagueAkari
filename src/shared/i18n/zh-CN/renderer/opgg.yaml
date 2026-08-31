@@ -198,4 +198,8 @@ opgg:
     itemsDesc: 装备 (按出场率排序)
     coreItem: '核心装备 #{{index}} | 出场率 {{pickRate}}%'
     starterItem: '初始装备 #{{index}} | 出场率 {{pickRate}}%'
+    bzCoreItem: 'Bz 核心推荐 #{{index}} | 无统计数据'
+    bzStarterItem: 'Bz 初始推荐 #{{index}} | 无统计数据'
+    bzRecommendation: Bz 推荐
+    bzNoStats: 无统计数据
     cancel: 取消

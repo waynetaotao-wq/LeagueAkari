@@ -1,29 +1,19 @@
+import type {
+  AutoHonorStrategy,
+  AutoMatchmakingStrategy,
+  AutoReportCategory,
+  AutoReportScope
+} from '@shared/shards/auto-gameflow'
 import { makeAutoObservable, observableStruct } from 'mobx'
 
 import { LeagueClientData } from '../league-client/lc-state'
 
-export type AutoHonorStrategy =
-  | 'prefer-lobby-member' // 随机优先组队时房间内成员
-  | 'only-lobby-member' // 随机仅限组队时房间内成员
-  | 'all-member' // 随机所有可点赞玩家
-  | 'opt-out' // 直接跳过
-  | 'all-member-including-opponent' // 随机所有可点赞玩家，包括对手
-
-export type AutoReportScope =
-  | 'opponents-only' // 仅举报敌方
-  | 'all' // 敌我全部（仍会排除开黑队友与好友）
-
-/** 举报理由（LCU end-of-game-reports 的 categories） */
-export type AutoReportCategory =
-  | 'NEGATIVE_ATTITUDE'
-  | 'VERBAL_ABUSE'
-  | 'LEAVING_AFK'
-  | 'ASSISTING_ENEMY_TEAM'
-  | 'HATE_SPEECH'
-  | 'THIRD_PARTY_TOOLS'
-  | 'INAPPROPRIATE_NAME'
-
-export type AutoMatchmakingStrategy = 'never' | 'fixed-duration' | 'estimated-duration'
+export type {
+  AutoHonorStrategy,
+  AutoMatchmakingStrategy,
+  AutoReportCategory,
+  AutoReportScope
+} from '@shared/shards/auto-gameflow'
 
 export class AutoGameflowSettings {
   autoHonorEnabled: boolean = false
@@ -53,7 +43,7 @@ export class AutoGameflowSettings {
 
   autoReportEnabled: boolean = false
   autoReportScope: AutoReportScope = 'opponents-only'
-  autoReportCategories: AutoReportCategory[] = ['NEGATIVE_ATTITUDE']
+  autoReportCategories: AutoReportCategory[] = ['ASSISTING_ENEMY_TEAM']
 
   autoSendARAMTeamSideEnabled: boolean = false
   autoSendARAMTeamSideVisibleToTeam: boolean = false
@@ -176,6 +166,9 @@ export class AutoGameflowState {
   /** [lolps] 上一局自动举报的执行结果（显示在设置页） */
   lastAutoReportSummary: string = ''
 
+  /** [lolps] 用于让“自动再来一局”等待当前举报安全收尾，不同步到渲染进程。 */
+  isAutoReporting: boolean = false
+
   get activityStartStatus() {
     if (!this._leagueClientData.lobby.lobby) {
       return 'unavailable'
@@ -260,6 +253,10 @@ export class AutoGameflowState {
 
   setLastAutoReportSummary(summary: string) {
     this.lastAutoReportSummary = summary
+  }
+
+  setAutoReporting(reporting: boolean) {
+    this.isAutoReporting = reporting
   }
 
   constructor(

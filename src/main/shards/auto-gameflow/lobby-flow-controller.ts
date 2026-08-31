@@ -8,6 +8,7 @@ import {
   AUTO_GAMEFLOW_PLAY_AGAIN_WAIT_FOR_STATS_TIMEOUT,
   type AutoGameflowMainContext
 } from './context'
+import { shouldDelayPlayAgainForReport } from './report-logic'
 
 export class AutoGameflowLobbyFlowController {
   constructor(
@@ -70,16 +71,28 @@ export class AutoGameflowLobbyFlowController {
   }
 
   private _watchAutoPlayAgain() {
-    const { leagueClient, logger, mobxUtils, settings } = this._context
+    const { leagueClient, logger, mobxUtils, settings, state } = this._context
 
     mobxUtils.reaction(
-      () => [leagueClient.data.gameflow.phase, settings.playAgainEnabled] as const,
-      async ([phase, enabled]) => {
+      () =>
+        [
+          leagueClient.data.gameflow.phase,
+          settings.playAgainEnabled,
+          settings.autoReportEnabled,
+          state.isAutoReporting
+        ] as const,
+      async ([phase, enabled, autoReportEnabled, isAutoReporting]) => {
         if (
           !enabled ||
           (phase !== 'WaitingForStats' && phase !== 'PreEndOfGame' && phase !== 'EndOfGame')
         ) {
           this._actionController.cancelPlayAgain()
+          return
+        }
+
+        if (shouldDelayPlayAgainForReport(phase, autoReportEnabled, isAutoReporting)) {
+          this._actionController.cancelPlayAgain()
+          logger.info('Auto-report is running; delaying return to lobby until it finishes')
           return
         }
 

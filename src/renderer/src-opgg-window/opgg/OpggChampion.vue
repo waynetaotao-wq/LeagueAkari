@@ -46,49 +46,73 @@
 
           <!-- stats -->
           <div class="flex w-43 flex-wrap justify-end gap-2 self-end" v-if="stats">
-            <!-- cherry 平均排名 -->
-            <div class="w-12.5" v-if="stats.total_place && stats.play">
-              <div class="text-[11px] text-black/70 dark:text-white/70">
-                {{ t('opgg.champion.avgPlace') }}
-              </div>
-              <div class="text-[13px] font-bold">
-                {{ (stats.total_place / (stats.play || 1)).toFixed(2) }}
-              </div>
-            </div>
+            <!-- 对位版只展示有同一筛选口径的胜率与场次；不把通用选取/禁用率混进来。 -->
+            <template v-if="hasActiveMatchupOverlay">
+              <template v-if="activeMatchupMeta">
+                <div class="w-12.5">
+                  <div class="text-[11px] text-black/70 dark:text-white/70">
+                    {{ t('opgg.champion.winRate') }}
+                  </div>
+                  <div class="text-[13px] font-bold">
+                    {{ ((activeMatchupMeta.win / activeMatchupMeta.play) * 100).toFixed(2) }}%
+                  </div>
+                </div>
+                <div class="w-12.5">
+                  <div class="text-[11px] text-black/70 dark:text-white/70">
+                    {{ t('opgg.champion.plays') }}
+                  </div>
+                  <div class="text-[13px] font-bold">
+                    {{ activeMatchupMeta.play.toLocaleString() }}
+                  </div>
+                </div>
+              </template>
+            </template>
 
-            <!-- cherry 吃鸡率 -->
-            <div class="w-12.5" v-if="stats.first_place && stats.play">
-              <div class="text-[11px] text-black/70 dark:text-white/70">
-                {{ t('opgg.champion.1st') }}
+            <template v-else>
+              <!-- cherry 平均排名 -->
+              <div class="w-12.5" v-if="stats.total_place && stats.play">
+                <div class="text-[11px] text-black/70 dark:text-white/70">
+                  {{ t('opgg.champion.avgPlace') }}
+                </div>
+                <div class="text-[13px] font-bold">
+                  {{ (stats.total_place / (stats.play || 1)).toFixed(2) }}
+                </div>
               </div>
-              <div class="text-[13px] font-bold">
-                {{ ((stats.first_place / (stats.play || 1)) * 100).toFixed(2) }}%
-              </div>
-            </div>
 
-            <!-- 胜率 1 -->
-            <div class="w-12.5" v-if="stats.win_rate">
-              <div class="text-[11px] text-black/70 dark:text-white/70">
-                {{ t('opgg.champion.winRate') }}
+              <!-- cherry 吃鸡率 -->
+              <div class="w-12.5" v-if="stats.first_place && stats.play">
+                <div class="text-[11px] text-black/70 dark:text-white/70">
+                  {{ t('opgg.champion.1st') }}
+                </div>
+                <div class="text-[13px] font-bold">
+                  {{ ((stats.first_place / (stats.play || 1)) * 100).toFixed(2) }}%
+                </div>
               </div>
-              <div class="text-[13px] font-bold">{{ (stats.win_rate * 100).toFixed(2) }}%</div>
-            </div>
 
-            <!-- 选取率 -->
-            <div class="w-12.5" v-if="stats.pick_rate">
-              <div class="text-[11px] text-black/70 dark:text-white/70">
-                {{ t('opgg.champion.pickRate') }}
+              <!-- 胜率 1 -->
+              <div class="w-12.5" v-if="stats.win_rate">
+                <div class="text-[11px] text-black/70 dark:text-white/70">
+                  {{ t('opgg.champion.winRate') }}
+                </div>
+                <div class="text-[13px] font-bold">{{ (stats.win_rate * 100).toFixed(2) }}%</div>
               </div>
-              <div class="text-[13px] font-bold">{{ (stats.pick_rate * 100).toFixed(2) }}%</div>
-            </div>
 
-            <!-- 禁用率 -->
-            <div class="w-12.5" v-if="stats.ban_rate">
-              <div class="text-[11px] text-black/70 dark:text-white/70">
-                {{ t('opgg.champion.banRate') }}
+              <!-- 选取率 -->
+              <div class="w-12.5" v-if="stats.pick_rate">
+                <div class="text-[11px] text-black/70 dark:text-white/70">
+                  {{ t('opgg.champion.pickRate') }}
+                </div>
+                <div class="text-[13px] font-bold">{{ (stats.pick_rate * 100).toFixed(2) }}%</div>
               </div>
-              <div class="text-[13px] font-bold">{{ (stats.ban_rate * 100).toFixed(2) }}%</div>
-            </div>
+
+              <!-- 禁用率 -->
+              <div class="w-12.5" v-if="stats.ban_rate">
+                <div class="text-[11px] text-black/70 dark:text-white/70">
+                  {{ t('opgg.champion.banRate') }}
+                </div>
+                <div class="text-[13px] font-bold">{{ (stats.ban_rate * 100).toFixed(2) }}%</div>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -124,11 +148,18 @@
 <script setup lang="ts">
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
+import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import { useTranslation } from 'i18next-vue'
 import { NButton, NScrollbar, NSpin } from 'naive-ui'
 import { computed } from 'vue'
 
 import { useOpgg } from './context'
+import { resolveMatchupSessionIdentity } from './matchup-lifecycle'
+import {
+  matchesMatchupOverlayIdentity,
+  opggPositionToMatchupLane,
+  useMatchupOverlay
+} from './matchup-overlay'
 import { getTierRingColorClass, getTierTextColorClass } from './utils/theme'
 import OpggChampionAugments from './widgets/OpggChampionAugments.vue'
 import OpggChampionBalance from './widgets/OpggChampionBalance.vue'
@@ -144,11 +175,33 @@ import OpggChampionSpells from './widgets/OpggChampionSpells.vue'
 import OpggChampionStarterItems from './widgets/OpggChampionStarterItems.vue'
 import OpggChampionSynergies from './widgets/OpggChampionSynergies.vue'
 
-const { champion, position, kiwiAugments, cancel, isLoading } = useOpgg()
+const {
+  champion,
+  position,
+  region,
+  tier,
+  version,
+  mode,
+  effectiveSource,
+  kiwiAugments,
+  cancel,
+  isLoading
+} = useOpgg()
+const { matchupOverlay, matchupOverlayIdentity, matchupOverlayMeta } = useMatchupOverlay()
 
 const { t } = useTranslation()
 
 const resources = useAkariResourceProvider()
+const lcs = useLeagueClientStore()
+
+const activeMatchupGameId = computed(
+  () =>
+    resolveMatchupSessionIdentity({
+      phase: lcs.gameflow.phase,
+      champSelectSession: lcs.champSelect.session,
+      gameflowSession: lcs.gameflow.session
+    })?.gameId ?? null
+)
 
 const summary = computed(() => {
   if (!champion.value) {
@@ -172,6 +225,23 @@ const stats = computed(() => {
   }
 
   return positionStats
+})
+
+const hasActiveMatchupOverlay = computed(() => {
+  if (!summary.value || !matchupOverlay.value) return false
+  return matchesMatchupOverlayIdentity(summary.value.id, matchupOverlayIdentity.value, {
+    gameId: activeMatchupGameId.value,
+    lane: opggPositionToMatchupLane(position.value),
+    region: region.value,
+    tier: tier.value,
+    version: version.value,
+    mode: mode.value,
+    source: effectiveSource.value ?? 'unknown'
+  })
+})
+
+const activeMatchupMeta = computed(() => {
+  return hasActiveMatchupOverlay.value ? matchupOverlayMeta.value : null
 })
 
 const tierText = computed(() => {

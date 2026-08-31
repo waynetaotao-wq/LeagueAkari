@@ -1,508 +1,404 @@
-import type { AxiosInstance } from 'axios'
-
-import type { LaneName } from '@shared/utils/lane-assignment'
-
-import {
-  OPGG_WEB_BASE,
-  POSITION_TO_WEB_SEGMENT,
-  WEB_REQUEST_HEADERS,
-  toWebRegion,
-  toWebTier
-} from './counter-intel-web'
+import type {
+  OpggBuildPickItem,
+  OpggRuneBuild,
+  OpggSkillKey,
+  OpggSkillMastery
+} from '@shared/types/opgg'
 
 /**
- * [lolps] 对位构筑 v2 —— OP.GG 网页 vs 通道 → 官方数据形状
+ * [lolps] OP.GG 对位构筑：官方 target_champion JSON → 原版 UI 数据形状。
  *
- * OP.GG 网页 build 页支持 `?target_champion={对手slug}`（顶部 "vs." 筛选器），
- * 返回「我的英雄 × 对位英雄」的专属构筑。官方 JSON 接口不含该维度（逐参数核实），
- * 因此抓网页。本模块把网页数据解析成与官方接口完全一致的形状
- * （{ids, play, win, pick_rate} 条目 / 官方 runes 元素），供渲染层整窗替换：
- * UI、每区块的"应用"按钮、自动应用全部走官方原生管道，零风格差异。
- *
- * 解析三防线（改版排障看本文件可调区）：
- *   1. 符文：流内 "rune_pages" 干净 JSON 平衡提取，isActive 标记点名选中颗
- *   2. 装备/召唤师：标题锚点分段 + 「图标序列 → 选取率% → N Games → 胜率%」文本状态机
- *   3. 任一路失败仅缺该区块，渲染层自动回落通用版数据
+ * OP.GG 的 champion JSON 现已支持 target_champion。与旧网页 HTML 解析相比，
+ * 该通道会一次返回召唤师、符文页、技能加点、前期构筑与后续装备持有汇总，
+ * 并保留重复消耗品数量。
+ * 本模块只做两件纯逻辑工作：把页面口径的聚合数据转成原版组件需要的形状，
+ * 以及在提交 overlay 前检查样本是否仍像“指定对手”而非误回的通用大样本。
  */
 
-// ==================================================================
-// ======================== 可调区（集中配置） ========================
-// ==================================================================
+export const MATCHUP_SECTION_KEYS = [
+  'summoner_spells',
+  'runes',
+  'skill_masteries',
+  'starter_items',
+  'boots',
+  'core_items',
+  'last_items'
+] as const
 
-/** 官方形状条目（与 OpggChampionBuildResponse 内 build pick item 对齐） */
-export interface OpggPickLike {
-  ids: number[]
-  play: number
-  win: number
-  pick_rate: number
-}
+export type MatchupSectionKey = (typeof MATCHUP_SECTION_KEYS)[number]
 
-/** 官方形状符文元素（与 loadout.setRunes / UI 渲染字段对齐） */
-export interface OpggRuneLike {
-  id: number
-  primary_page_id: number
-  primary_rune_ids: number[]
-  secondary_page_id: number
-  secondary_rune_ids: number[]
-  stat_mod_ids: number[]
-  play: number
-  win: number
-  pick_rate: number
-}
-
-/** 整窗覆盖载荷：键名与官方 data 完全一致，仅包含解析成功的区块 */
 export interface MatchupOverlayData {
-  summoner_spells?: OpggPickLike[]
-  runes?: OpggRuneLike[]
-  starter_items?: OpggPickLike[]
-  boots?: OpggPickLike[]
-  core_items?: OpggPickLike[]
-  last_items?: OpggPickLike[]
+  summoner_spells: OpggBuildPickItem[]
+  runes: OpggRuneBuild[]
+  skill_masteries: OpggSkillMastery[]
+  starter_items: OpggBuildPickItem[]
+  boots: OpggBuildPickItem[]
+  core_items: OpggBuildPickItem[]
+  last_items: Array<OpggBuildPickItem & { is_matchup_aggregate: true }>
+  /** 排位对位不应继承斗魂棱彩装备；防御性显式清空，但不计入七个统计区块。 */
+  prism_items: OpggBuildPickItem[]
 }
 
-/** 装备/召唤师区块键（不含 runes——符文走独立 JSON 通道） */
-type ItemSectionKey = Exclude<keyof MatchupOverlayData, 'runes'>
-
-/** 各区块标题锚点（请求固定英文），按页面出现顺序；哨兵段不产出仅作边界 */
-const SECTION_ANCHORS: ReadonlyArray<{ key: ItemSectionKey | '_sentinel'; label: string }> =
-  [
-    { key: 'summoner_spells', label: 'Summoner spells' },
-    { key: '_sentinel', label: 'Skill order' },
-    { key: 'starter_items', label: 'Starter items' },
-    { key: 'boots', label: 'Boots' },
-    { key: 'core_items', label: 'Core builds' },
-    { key: 'last_items', label: 'Fourth Item' },
-    { key: 'last_items', label: 'Fifth Item' }
-  ]
-
-/** SSR 表格标题 → 区块键（未登记标题视为边界，其行整段跳过） */
-const HTML_TITLE_TO_KEY: Readonly<Record<string, ItemSectionKey>> = {
-  'summoner spells': 'summoner_spells',
-  'starter items': 'starter_items',
-  boots: 'boots',
-  'core builds': 'core_items',
-  'fourth item': 'last_items',
-  'fifth item': 'last_items'
+export interface MatchupOverlayBuildResult {
+  overlay: MatchupOverlayData
+  parsedSections: MatchupSectionKey[]
 }
 
-/** 段落终止锚点（吞到 Counter/协同区之前为止） */
-const TAIL_ANCHORS: readonly string[] = ['Weak against', 'Strong against', 'Counter', 'Synergies', 'mastery ranking']
+type UnknownRecord = Record<string, unknown>
 
-/** 召唤师技能图标名 → LCU 技能 id（多年稳定映射） */
-export const SPELL_NAME_TO_ID: Readonly<Record<string, number>> = {
-  SummonerFlash: 4,
-  SummonerDot: 14,
-  SummonerHaste: 6,
-  SummonerHeal: 7,
-  SummonerTeleport: 12,
-  SummonerExhaust: 3,
-  SummonerBarrier: 21,
-  SummonerBoost: 1,
-  SummonerSmite: 11,
-  SummonerMana: 13,
-  SummonerSnowball: 32
+type ValidStats = UnknownRecord & {
+  play: number
+  win: number
+  pick_rate: number
 }
 
-/** 每段最多条目数（防解析跑飞） */
-const MAX_ENTRIES = 8
-
-// token 正则（清洗后的流；文本节点带双引号）
-const IMG_RE = /\/(item)\/(\d+)\.png|\/spell\/([A-Za-z0-9_]+)\.png/g
-const PCT_RE = /"(\d{1,3}(?:\.\d+)?)%"/g
-const GAMES_RE = /"([\d,]+) Games?"/g
-
-// 符文细分
-const RUNE_STYLE_ID_RE = /\/perkStyle\/(\d+)\.png/g
-const RUNE_PERK_ID_RE = /\/perk\/(\d+)\.png/g
-const RUNE_SHARD_ID_RE = /\/(?:perkShard|statMods?|statmods?)\/(\d+)\.png/g
-
-// ==================================================================
-// ============================ 工具函数 =============================
-// ==================================================================
-
-export function stripEscapes(text: string): string {
-  return text.replace(/\\+"/g, '"')
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** 从 pos（指向 '[' 或 '{'）提取配平 JSON 片段 */
-export function extractBalanced(text: string, pos: number): string | null {
-  const open = text[pos]
-  if (open !== '[' && open !== '{') return null
-  let depth = 0
-  let inStr = false
-  for (let i = pos; i < text.length && i - pos < 400_000; i++) {
-    const ch = text[i]
-    if (inStr) {
-      if (ch === '\\') i++
-      else if (ch === '"') inStr = false
-      continue
-    }
-    if (ch === '"') inStr = true
-    else if (ch === '[' || ch === '{') depth++
-    else if (ch === ']' || ch === '}') {
-      depth--
-      if (depth === 0) return text.slice(pos, i + 1)
-    }
+function readField(value: unknown, key: string): unknown {
+  return isRecord(value) ? value[key] : undefined
+}
+
+function readArrayField(value: unknown, key: string): unknown[] {
+  const field = readField(value, key)
+  return Array.isArray(field) ? field : []
+}
+
+function hasValidStats(row: unknown): row is ValidStats {
+  if (!isRecord(row)) return false
+  return (
+    typeof row.play === 'number' &&
+    Number.isFinite(row.play) &&
+    row.play > 0 &&
+    typeof row.win === 'number' &&
+    Number.isFinite(row.win) &&
+    row.win >= 0 &&
+    row.win <= row.play &&
+    typeof row.pick_rate === 'number' &&
+    Number.isFinite(row.pick_rate) &&
+    row.pick_rate >= 0 &&
+    row.pick_rate <= 1
+  )
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
+
+function copyPositiveIds(
+  value: unknown,
+  { expectedLength, allowEmpty = false }: { expectedLength?: number; allowEmpty?: boolean } = {}
+): number[] | null {
+  if (!Array.isArray(value)) return null
+  if (expectedLength !== undefined && value.length !== expectedLength) return null
+  if (!allowEmpty && value.length === 0) return null
+  const ids: number[] = []
+  for (const id of value) {
+    if (!isPositiveInteger(id)) return null
+    ids.push(id)
   }
-  return null
+  return ids
 }
 
-interface Tok {
-  index: number
-  kind: 'img' | 'pct' | 'games'
-  value: number
-  spellName?: string
+function copySkillKeys(value: unknown, allowEmpty = false): OpggSkillKey[] | null {
+  if (!Array.isArray(value) || (!allowEmpty && value.length === 0)) return null
+  const skills: OpggSkillKey[] = []
+  for (const skill of value) {
+    if (typeof skill !== 'string' || !/^(?:[QWER]|R-[QWER])$/.test(skill)) return null
+    skills.push(skill as OpggSkillKey)
+  }
+  return skills
 }
 
-function scanTokens(seg: string): Tok[] {
-  const toks: Tok[] = []
-  let m: RegExpExecArray | null
-  IMG_RE.lastIndex = 0
-  while ((m = IMG_RE.exec(seg))) {
-    if (m[2]) toks.push({ index: m.index, kind: 'img', value: Number(m[2]) })
-    else if (m[3]) toks.push({ index: m.index, kind: 'img', value: NaN, spellName: m[3] })
-    if (toks.length > 600) break
-  }
-  PCT_RE.lastIndex = 0
-  while ((m = PCT_RE.exec(seg))) {
-    toks.push({ index: m.index, kind: 'pct', value: Number(m[1]) })
-    if (toks.length > 900) break
-  }
-  GAMES_RE.lastIndex = 0
-  while ((m = GAMES_RE.exec(seg))) {
-    toks.push({ index: m.index, kind: 'games', value: Number(m[1].replace(/,/g, '')) })
-    if (toks.length > 1200) break
-  }
-  toks.sort((a, b) => a.index - b.index)
-  return toks
+function copyOptionalStat(row: UnknownRecord, key: 'total_place' | 'first_place') {
+  const value = row[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-/**
- * 段内条目状态机：图标序列 → 选取率% → N Games → 胜率%。
- * spells 段图标走名字映射；模式断裂即丢弃半成品，绝不拼错误条目。
- */
-function assembleEntries(seg: string, isSpells: boolean): OpggPickLike[] {
-  const toks = scanTokens(seg)
-  const out: OpggPickLike[] = []
-  let ids: number[] = []
-  let pending: { ids: number[]; pick: number; play?: number } | null = null
+function copyPickRows(rows: unknown, allowEmptyIds = false): OpggBuildPickItem[] {
+  if (!Array.isArray(rows)) return []
+  return rows.flatMap((row) => {
+    if (!hasValidStats(row)) return []
+    // OP.GG 的真实 skill_masteries[].builds[] 没有 ids 字段；仅该调用场景允许缺省并补 []。
+    const ids =
+      allowEmptyIds && row.ids === undefined
+        ? []
+        : copyPositiveIds(row.ids, { allowEmpty: allowEmptyIds })
+    if (!ids) return []
 
-  for (const tk of toks) {
-    if (out.length >= MAX_ENTRIES) break
-    if (tk.kind === 'img') {
-      if (pending && pending.play === undefined) pending = null
-      let id: number | null = null
-      if (isSpells) {
-        // 仅接受 /spell/ 图标：装备图标混入会造出"两件装备当召唤师技能"的伪条目
-        const sid = tk.spellName ? SPELL_NAME_TO_ID[tk.spellName] : null
-        if (typeof sid === 'number' && Number.isFinite(sid)) id = sid
-      } else if (Number.isFinite(tk.value)) {
-        id = tk.value
-      }
-      if (id !== null && ids.length < 6 && !ids.includes(id)) ids.push(id)
-    } else if (tk.kind === 'pct') {
-      if (pending && pending.play !== undefined) {
-        // 第二个百分比 = 胜率，条目完成
-        const winRate = tk.value / 100
-        const entry: OpggPickLike = {
-          ids: pending.ids,
-          play: pending.play,
-          win: Math.round(pending.play * winRate),
-          pick_rate: Math.round(pending.pick * 100) / 10000
-        }
-        if (entry.ids.length > 0 && (!isSpells || entry.ids.length === 2)) out.push(entry)
-        pending = null
-      } else if (ids.length > 0) {
-        pending = { ids: [...ids], pick: tk.value }
-        ids = []
-      }
-      // 无图标前缀的散排百分比：忽略
-    } else if (tk.kind === 'games') {
-      if (pending && pending.play === undefined) pending.play = tk.value
-      else pending = null
-    }
-  }
-  return out
-}
-
-// ==================================================================
-// ============================ 主解析 ==============================
-// ==================================================================
-
-/** 路线一：符文（干净 JSON + isActive 点名选中颗） */
-export function parseRunes(clean: string): OpggRuneLike[] {
-  const anchor = '"rune_pages":'
-  let from = 0
-  while (true) {
-    const i = clean.indexOf(anchor, from)
-    if (i < 0) return []
-    const arrStart = clean.indexOf('[', i + anchor.length)
-    if (arrStart < 0 || !clean.slice(i, arrStart + 2).includes('[{')) {
-      from = i + anchor.length
-      continue
-    }
-    const raw = extractBalanced(clean, arrStart)
-    if (!raw) {
-      from = i + anchor.length
-      continue
-    }
-    try {
-      const pages: any[] = JSON.parse(raw)
-      if (!Array.isArray(pages) || pages.length === 0 || typeof pages[0]?.play !== 'number') {
-        from = i + anchor.length
-        continue
-      }
-      const out: OpggRuneLike[] = []
-      pages.slice(0, 3).forEach((page, index) => {
-        const b = (Array.isArray(page?.builds) ? page.builds[0] : null) ?? page
-
-        const pickActive = (v: unknown): number[] => {
-          const flat: any[] = Array.isArray(v) ? (v as any[]).flat(2) : []
-          return flat
-            .filter((u) => u && typeof u === 'object' && u.isActive === true && typeof u.id === 'number')
-            .map((u) => u.id as number)
-        }
-        const idsFromUrls = (re: RegExp): number[] => {
-          const rawJson = JSON.stringify(b)
-          const list: number[] = []
-          let m: RegExpExecArray | null
-          re.lastIndex = 0
-          while ((m = re.exec(rawJson))) {
-            const n = Number(m[1])
-            if (Number.isFinite(n) && !list.includes(n)) list.push(n)
-          }
-          return list
-        }
-
-        let primaryRuneIds = pickActive(b?.main_runes)
-        let secondaryRuneIds = pickActive(b?.sub_runes)
-        let statShardIds = pickActive(b?.shards)
-        if (primaryRuneIds.length !== 4 || secondaryRuneIds.length !== 2) {
-          const perks = idsFromUrls(RUNE_PERK_ID_RE)
-          if (perks.length >= 6) {
-            primaryRuneIds = perks.slice(0, 4)
-            secondaryRuneIds = perks.slice(4, 6)
-          }
-        }
-        if (statShardIds.length !== 3) {
-          const shards = idsFromUrls(RUNE_SHARD_ID_RE)
-          if (shards.length >= 3) statShardIds = shards.slice(0, 3)
-        }
-
-        const styleUrls = idsFromUrls(RUNE_STYLE_ID_RE)
-        const primaryStyleId: number | null =
-          (typeof b?.primary_perk_style?.id === 'number' ? b.primary_perk_style.id : null) ??
-          styleUrls[0] ??
-          null
-        const secondaryStyleId: number | null =
-          (typeof b?.perk_sub_style?.id === 'number' ? b.perk_sub_style.id : null) ??
-          (typeof b?.secondary_perk_style?.id === 'number' ? b.secondary_perk_style.id : null) ??
-          styleUrls[1] ??
-          null
-
-        if (
-          primaryStyleId === null ||
-          secondaryStyleId === null ||
-          primaryRuneIds.length !== 4 ||
-          secondaryRuneIds.length !== 2 ||
-          statShardIds.length !== 3
-        ) {
-          return
-        }
-
-        const play = typeof page.play === 'number' ? page.play : 0
-        let winRate = typeof page.win_rate === 'number' ? page.win_rate : 0
-        if (winRate > 1) winRate = winRate / 100
-        let pickRate = typeof page.pick_rate === 'number' ? page.pick_rate : 0
-        if (pickRate > 1) pickRate = pickRate / 100
-
-        out.push({
-          id: index,
-          primary_page_id: primaryStyleId,
-          primary_rune_ids: primaryRuneIds,
-          secondary_page_id: secondaryStyleId,
-          secondary_rune_ids: secondaryRuneIds,
-          stat_mod_ids: statShardIds,
-          play,
-          win: Math.round(play * winRate),
-          pick_rate: pickRate
-        })
-      })
-      return out
-    } catch {
-      from = i + anchor.length
-    }
-  }
-}
-
-/** 路线二：装备/召唤师（标题分段 + 文本状态机），产出官方形状各区块 */
-/**
- * [lolps] 主解析面：服务端直出的 HTML 表格。
- *
- * OP.GG 页面同时含 (a) SSR HTML 表格（数值明文 `>56.41%<` / `>117 Games<`）与
- * (b) React Flight 载荷（数值常被引用式压缩为 "$51:props:..."，正则易错位）。
- * 实测 (a) 与网页显示逐项一致，故以 (a) 为主、(b) 仅作兜底。
- */
-export function parseHtmlSections(rawInput: string): Partial<Pick<MatchupOverlayData, ItemSectionKey>> {
-  // React SSR 会在文本节点间插注释（"332<!-- --> <!-- -->Games"），
-  // 不剥离则装备段的"N Games"永远匹配不到（实测装备三段因此全部丢失）
-  const raw = rawInput.replace(/<!--[\s\S]*?-->/g, '')
-
-  // 区块标题：<th ... align="left" ...>Starter items</th>（列标题 Pick rate/Win rate 无 align，天然排除）；
-  // 未登记的标题（Support items / Prism items / Skill order…）自动成为边界，其行不会并入上一段
-  const heads: Array<{ at: number; title: string }> = []
-  const headRe = /<th[^>]*align="left"[^>]*>([^<]{2,40})<\/th>/g
-  let mh: RegExpExecArray | null
-  while ((mh = headRe.exec(raw))) {
-    heads.push({ at: mh.index, title: mh[1].trim().toLowerCase() })
-  }
-  if (heads.length === 0) return {}
-
-  const rowStarts: number[] = []
-  const trRe = /<tr\b/g
-  let mr: RegExpExecArray | null
-  while ((mr = trRe.exec(raw))) rowStarts.push(mr.index)
-
-  const acc: Partial<Record<ItemSectionKey, OpggPickLike[]>> = {}
-  const seenKeys: Record<string, Set<string>> = {}
-
-  for (let i = 0; i < rowStarts.length; i++) {
-    const start = rowStarts[i]
-    const end = i + 1 < rowStarts.length ? rowStarts[i + 1] : Math.min(start + 6000, raw.length)
-
-    let title: string | null = null
-    for (const h of heads) {
-      if (h.at < start) title = h.title
-      else break
-    }
-    const sect = title ? HTML_TITLE_TO_KEY[title] : undefined
-    if (!sect) continue
-
-    const seg = raw.slice(start, end)
-    const isSpells = sect === 'summoner_spells'
-    const ids: number[] = []
-    const imgRe = /\/item\/(\d+)\.png|\/spell\/([A-Za-z0-9_]+)\.png/g
-    let mi: RegExpExecArray | null
-    while ((mi = imgRe.exec(seg))) {
-      let id: number | null = null
-      if (isSpells) {
-        if (mi[2] && SPELL_NAME_TO_ID[mi[2]] !== undefined) id = SPELL_NAME_TO_ID[mi[2]]
-      } else if (mi[1]) {
-        id = Number(mi[1])
-      }
-      if (id !== null && !ids.includes(id) && ids.length < 6) ids.push(id)
-    }
-    const pcts = [...seg.matchAll(/>\s*(\d{1,3}(?:\.\d+)?)%\s*</g)].map((x) => Number(x[1]))
-    const games = seg.match(/>\s*([\d,]+)\s*Games?\s*</)
-    if (ids.length === 0 || pcts.length < 2 || !games) continue
-    if (isSpells && ids.length !== 2) continue
-    const play = Number(games[1].replace(/,/g, ''))
-    if (!Number.isFinite(play) || play <= 0) continue
-
-    // 页面同时渲染桌面/移动两套表格，同一条目会出现两次——按内容去重
-    const dedupeKey = `${ids.join('/')}|${pcts[0]}|${play}|${pcts[1]}`
-    let seen = seenKeys[sect]
-    if (!seen) {
-      seen = new Set<string>()
-      seenKeys[sect] = seen
-    }
-    if (seen.has(dedupeKey)) continue
-    seen.add(dedupeKey)
-
-    const list = acc[sect] ?? []
-    if (list.length < MAX_ENTRIES) {
-      list.push({
+    const order = copySkillKeys(row.order, true)
+    const totalPlace = copyOptionalStat(row, 'total_place')
+    const firstPlace = copyOptionalStat(row, 'first_place')
+    return [
+      {
         ids,
-        play,
-        win: Math.round((play * pcts[1]) / 100),
-        pick_rate: Math.round(pcts[0] * 100) / 10000
-      })
-      acc[sect] = list
-    }
-  }
-  return acc
-}
-
-export function parseItemSections(clean: string): Partial<Pick<MatchupOverlayData, ItemSectionKey>> {
-  const positions: Array<{ key: ItemSectionKey | '_sentinel'; pos: number }> = []
-  for (const { key, label } of SECTION_ANCHORS) {
-    const p = clean.lastIndexOf(`"${label}"`)
-    if (p >= 0) positions.push({ key, pos: p })
-  }
-  positions.sort((a, b) => a.pos - b.pos)
-  if (positions.length === 0) return {}
-
-  let tail = clean.length
-  for (const t of TAIL_ANCHORS) {
-    const p = clean.indexOf(`"${t}"`, positions[positions.length - 1].pos + 1)
-    if (p > 0 && p < tail) tail = p
-  }
-
-  const acc: Partial<Record<ItemSectionKey, OpggPickLike[]>> = {}
-  for (let s = 0; s < positions.length; s++) {
-    const { key, pos } = positions[s]
-    if (key === '_sentinel') continue
-    const end = s + 1 < positions.length ? positions[s + 1].pos : tail
-    const entries = assembleEntries(clean.slice(pos, end), key === 'summoner_spells')
-    if (entries.length > 0) {
-      acc[key] = [...(acc[key] ?? []), ...entries]
-    }
-  }
-  return acc
-}
-
-// ==================================================================
-// ============================ 对外主函数 ============================
-// ==================================================================
-
-export function buildMatchupPageUrl(params: {
-  mySlug: string
-  opponentSlug: string
-  position: LaneName
-  region: string
-  tier: string | number
-}): string {
-  const seg = POSITION_TO_WEB_SEGMENT[params.position]
-  const q = new URLSearchParams()
-  // 与克制助手 counters 页同款（真机验证过的口径转换），region/tier 始终显式携带
-  q.set('region', toWebRegion(params.region))
-  q.set('tier', toWebTier(params.tier))
-  q.set('target_champion', params.opponentSlug)
-  return `${OPGG_WEB_BASE}/lol/champions/${params.mySlug}/build/${seg}?${q.toString()}`
-}
-
-export async function fetchMatchupOverlay(
-  web: AxiosInstance,
-  url: string,
-  signal?: AbortSignal
-): Promise<{ overlay: MatchupOverlayData; parsed: string[] }> {
-  const res = await web.get<string>(url, {
-    headers: { ...WEB_REQUEST_HEADERS },
-    responseType: 'text',
-    transformResponse: [(data) => data],
-    signal
+        play: row.play,
+        win: row.win,
+        pick_rate: row.pick_rate,
+        ...(order && order.length > 0 ? { order } : {}),
+        ...(totalPlace !== undefined ? { total_place: totalPlace } : {}),
+        ...(firstPlace !== undefined ? { first_place: firstPlace } : {})
+      }
+    ]
   })
-  const raw = typeof res.data === 'string' ? res.data : String(res.data ?? '')
-  const clean = stripEscapes(raw)
+}
 
-  const overlay: MatchupOverlayData = {}
-  const runes = parseRunes(clean)
-  if (runes.length > 0) overlay.runes = runes
+/**
+ * 网页“符文”卡按 rune_pages 展示：外层是整套系的场次/胜率/选取率，
+ * builds[0] 才是要应用的完整六颗符文与三颗碎片。直接使用 data.runes 会把
+ * 同一符文页拆成多行细分，数字便无法与网页主卡对应。
+ */
+function copyRuneBuild(row: unknown): OpggRuneBuild | null {
+  if (!hasValidStats(row)) return null
+  const id = row.id
+  const primaryPageId = row.primary_page_id
+  const secondaryPageId = row.secondary_page_id
+  const primaryRuneIds = copyPositiveIds(row.primary_rune_ids, { expectedLength: 4 })
+  const secondaryRuneIds = copyPositiveIds(row.secondary_rune_ids, { expectedLength: 2 })
+  const statModIds = copyPositiveIds(row.stat_mod_ids, { expectedLength: 3 })
+  if (
+    !isPositiveInteger(id) ||
+    !isPositiveInteger(primaryPageId) ||
+    !isPositiveInteger(secondaryPageId) ||
+    !primaryRuneIds ||
+    !secondaryRuneIds ||
+    !statModIds
+  ) {
+    return null
+  }
 
-  // 主解析：SSR HTML（数值明文，实测与网页逐项一致）
-  const htmlSections = parseHtmlSections(raw)
-  for (const [k, v] of Object.entries(htmlSections)) {
-    if (Array.isArray(v) && v.length > 0) {
-      overlay[k as keyof MatchupOverlayData] = v as any
+  return {
+    id,
+    primary_page_id: primaryPageId,
+    primary_rune_ids: primaryRuneIds,
+    secondary_page_id: secondaryPageId,
+    secondary_rune_ids: secondaryRuneIds,
+    stat_mod_ids: statModIds,
+    play: row.play,
+    win: row.win,
+    pick_rate: row.pick_rate
+  }
+}
+
+function buildRuneRows(data: unknown): OpggRuneBuild[] {
+  const pages = readArrayField(data, 'rune_pages')
+  const fromPages = pages.flatMap((page) => {
+    if (!hasValidStats(page)) return []
+    const build = readArrayField(page, 'builds')
+      .map(copyRuneBuild)
+      .find((candidate): candidate is OpggRuneBuild => candidate !== null)
+    if (!build) return []
+    const pageId = isPositiveInteger(page.id) ? page.id : build.id
+    return [
+      {
+        id: pageId,
+        primary_page_id: build.primary_page_id,
+        primary_rune_ids: [...build.primary_rune_ids],
+        secondary_page_id: build.secondary_page_id,
+        secondary_rune_ids: [...build.secondary_rune_ids],
+        stat_mod_ids: [...build.stat_mod_ids],
+        play: page.play,
+        win: page.win,
+        pick_rate: page.pick_rate
+      }
+    ]
+  })
+  if (fromPages.length > 0) return fromPages
+
+  return readArrayField(data, 'runes').flatMap((rune) => {
+    const copied = copyRuneBuild(rune)
+    return copied ? [copied] : []
+  })
+}
+
+/**
+ * 原版技能组件显示 mastery.ids + mastery.builds[0].order，并把 mastery 自身统计
+ * 放在右侧。OP.GG 网页右侧数字属于首条具体加点顺序，因此同步到外层，避免显示
+ * “Q>E>W 全部方案”的汇总数字却配“第一条顺序”的图形。
+ */
+function buildSkillRows(data: unknown): OpggSkillMastery[] {
+  return readArrayField(data, 'skill_masteries').flatMap((mastery) => {
+    if (!isRecord(mastery)) return []
+    const ids = copySkillKeys(mastery.ids)
+    if (!ids) return []
+    const builds = copyPickRows(mastery.builds, true).filter(
+      (build) => Array.isArray(build.order) && build.order.length > 0
+    )
+    const first = builds[0]
+    if (!first) return []
+    return [
+      {
+        ids,
+        play: first.play,
+        win: first.win,
+        pick_rate: first.pick_rate,
+        builds
+      }
+    ]
+  })
+}
+
+/** 所有七个键都显式写入；缺项用 [] 清空，绝不保留通用构筑冒充对位数据。 */
+export function buildMatchupOverlay(data: unknown): MatchupOverlayBuildResult {
+  const overlay: MatchupOverlayData = {
+    summoner_spells: copyPickRows(readField(data, 'summoner_spells')).filter(
+      (row) => row.ids.length === 2 && row.ids[0] !== row.ids[1]
+    ),
+    runes: buildRuneRows(data),
+    skill_masteries: buildSkillRows(data),
+    starter_items: copyPickRows(readField(data, 'starter_items')),
+    boots: copyPickRows(readField(data, 'boots')),
+    core_items: copyPickRows(readField(data, 'core_items')),
+    // JSON 的 last_items 是“后续装备持有汇总”，并非网页 Fourth/Fifth Item 分槽。
+    last_items: copyPickRows(readField(data, 'last_items')).map((row) => ({
+      ...row,
+      is_matchup_aggregate: true as const
+    })),
+    prism_items: []
+  }
+
+  const parsedSections = MATCHUP_SECTION_KEYS.filter((key) => overlay[key].length > 0)
+  return { overlay, parsedSections }
+}
+
+/**
+ * target_champion 没有响应回显字段，因此必须与同口径、未带 target 的基线响应做实证对照。
+ * 目标区块的估算 cohort 必须贴近对位场次并显著小于通用基线；这样两份缓存仅相差
+ * 1–2 场时不会被误当成 target 参数生效。
+ */
+export function isTargetSpecificMatchupBuild(
+  targetData: unknown,
+  genericData: unknown,
+  matchupGames: number
+): boolean {
+  return (
+    buildVerifiedMatchupOverlay(targetData, genericData, matchupGames).parsedSections.length >= 2
+  )
+}
+
+/**
+ * 逐区与无 target 基线对照：相同或无法比较的区块显式清空，绝不因另外两区通过就把
+ * 其余通用数据一起下发。整体调用方仍应要求至少两个 verified sections。
+ */
+export function buildVerifiedMatchupOverlay(
+  targetData: unknown,
+  genericData: unknown,
+  matchupGames: number
+): MatchupOverlayBuildResult {
+  const target = buildMatchupOverlay(targetData)
+  const generic = buildMatchupOverlay(genericData)
+  const overlay: MatchupOverlayData = {
+    ...target.overlay,
+    summoner_spells: [],
+    runes: [],
+    skill_masteries: [],
+    starter_items: [],
+    boots: [],
+    core_items: [],
+    last_items: [],
+    prism_items: []
+  }
+  const parsedSections: MatchupSectionKey[] = []
+  for (const key of MATCHUP_SECTION_KEYS) {
+    const targetCohort = estimateSectionCohort(targetData, target.overlay, key)
+    const genericCohort = estimateSectionCohort(genericData, generic.overlay, key)
+    if (
+      target.overlay[key].length > 0 &&
+      generic.overlay[key].length > 0 &&
+      targetCohort !== null &&
+      genericCohort !== null &&
+      isCohortAlignedWithMatchup(targetCohort, matchupGames) &&
+      hasMeaningfulCohortReduction(targetCohort, genericCohort, matchupGames)
+    ) {
+      overlay[key] = target.overlay[key] as never
+      parsedSections.push(key)
     }
   }
-  // 兜底：Flight 载荷解析，仅补 HTML 未覆盖的区块
-  const sections = parseItemSections(clean)
-  for (const [k, v] of Object.entries(sections)) {
-    const key = k as keyof MatchupOverlayData
-    if (!overlay[key] && Array.isArray(v) && v.length > 0) {
-      overlay[key] = v as any
-    }
+  return { overlay, parsedSections }
+}
+
+function estimateCohort(rows: unknown): number | null {
+  if (!Array.isArray(rows)) return null
+  let plays = 0
+  let pickRate = 0
+  for (const row of rows) {
+    if (!hasValidStats(row) || row.pick_rate <= 0) continue
+    plays += row.play
+    pickRate += row.pick_rate
   }
-  return { overlay, parsed: Object.keys(overlay) }
+  return plays > 0 && pickRate > 0 ? plays / pickRate : null
+}
+
+function estimateSectionCohort(
+  data: unknown,
+  overlay: MatchupOverlayData,
+  key: MatchupSectionKey
+): number | null {
+  if (key !== 'skill_masteries') return estimateCohort(overlay[key])
+
+  // 技能 UI 显示首条具体加点 build 的统计，但不同 mastery 的 build.pick_rate 分母不同；
+  // target 证明必须回到最终可解析 mastery 的外层统计，才能正确估算共同样本母体。
+  const parseableMasteries = readArrayField(data, 'skill_masteries').filter(
+    (mastery) => buildSkillRows({ skill_masteries: [mastery] }).length > 0
+  )
+  return estimateCohort(parseableMasteries)
+}
+
+/** 允许各卡片统计条件不同，但估算样本母体不能远离同一对位的 counters 场次。 */
+function isCohortAlignedWithMatchup(cohort: number, matchupGames: number): boolean {
+  if (!Number.isFinite(cohort) || !Number.isFinite(matchupGames) || matchupGames <= 0) return false
+  return cohort >= Math.max(1, matchupGames * 0.25) && cohort <= matchupGames * 2.5 + 10
+}
+
+/**
+ * target cohort 至少比通用 cohort 缩小一半，且绝对差不只是缓存轮转的几场漂移。
+ * 这是 fail-closed 规则：极端高占比对位宁可回退，也不把通用构筑冒充对位。
+ */
+function hasMeaningfulCohortReduction(
+  targetCohort: number,
+  genericCohort: number,
+  matchupGames: number
+): boolean {
+  return (
+    targetCohort <= genericCohort * 0.5 &&
+    genericCohort - targetCohort >= Math.max(10, matchupGames * 0.5)
+  )
+}
+
+/** 两个并行响应的 counters 锚点必须仍属同一统计快照；漂移过大时整次 fail closed。 */
+export function resolveComparableMatchupGames(
+  targetGames: number,
+  genericGames: number
+): number | null {
+  if (
+    !Number.isFinite(targetGames) ||
+    !Number.isFinite(genericGames) ||
+    targetGames <= 0 ||
+    genericGames <= 0
+  ) {
+    return null
+  }
+  const maximum = Math.max(targetGames, genericGames)
+  if (Math.abs(targetGames - genericGames) > Math.max(5, maximum * 0.1)) return null
+  return (targetGames + genericGames) / 2
+}
+
+/**
+ * target_champion 不是公开稳定契约；若服务端以后忽略它，HTTP 仍可能 200，但构筑
+ * 会退成数千场通用数据。对位 counters 的 play 是独立且可信的同场样本锚点：
+ * 各构筑区首行允许因统计条件不同而有宽松差异，却不应大出几十/几百倍。
+ */
+export function isPlausibleMatchupBuild(data: unknown, matchupGames: number): boolean {
+  if (!Number.isFinite(matchupGames) || matchupGames <= 0) return false
+
+  const built = buildMatchupOverlay(data)
+  const observed = MATCHUP_SECTION_KEYS.map((key) =>
+    estimateSectionCohort(data, built.overlay, key)
+  ).filter((games): games is number => games !== null)
+
+  // 单一区块不足以证明服务端确实应用了 target_champion，宁可诚实回退。
+  if (observed.length < 2) return false
+
+  return observed.filter((games) => isCohortAlignedWithMatchup(games, matchupGames)).length >= 2
 }

@@ -58,7 +58,7 @@
           <SettingsRow
             setting-id="automation.gameflow.auto-report.enabled"
             label="启用"
-            label-description="进入结算数据页后自动举报本局玩家（含挂机等无法被点赞的人）。始终排除：自己、同房间开黑的队友、以及好友列表中的人。每局执行后会在下方显示结果。"
+            label-description="仅用于普通、非自定义 LOL 对局；进入结算数据页后，把所选理由用于范围内每位非排除玩家。本功能无法判断玩家是否真的违规；始终排除自己、同房间开黑队友和好友。赛后流程中修改范围或理由，不会改变已经启动的执行轮次。"
             :label-width="260"
           >
             <NSwitch
@@ -95,7 +95,7 @@
           <SettingsRow
             setting-id="automation.gameflow.auto-report.categories"
             label="举报理由"
-            label-description="可多选。未勾选任何理由时不会执行举报"
+            label-description="与当前普通 LOL 举报窗口一致：最多选择 3 项；未勾选时不会执行举报"
             :label-width="260"
             align="start"
           >
@@ -106,6 +106,7 @@
                 size="small"
                 class="text-[13px]"
                 :checked="isReportCategoryChecked(c.value)"
+                :disabled="isReportCategoryDisabled(c.value)"
                 @update:checked="(val) => toggleReportCategory(c.value, val)"
               >
                 {{ c.label }}
@@ -432,6 +433,11 @@ import aramTeamSideMessageImage from '@renderer-shared/assets/automation/aram-te
 import { useInstance } from '@renderer-shared/shards'
 import { AutoGameflowRenderer } from '@renderer-shared/shards/auto-gameflow'
 import { useAutoGameflowStore } from '@renderer-shared/shards/auto-gameflow/store'
+import {
+  AUTO_REPORT_MAX_CATEGORIES,
+  normalizeAutoReportCategories,
+  type AutoReportCategory
+} from '@shared/shards/auto-gameflow'
 import { TranslationComponent, useTranslation } from 'i18next-vue'
 import {
   NButton,
@@ -449,25 +455,29 @@ import { computed } from 'vue'
 const store = useAutoGameflowStore()
 const shard = useInstance(AutoGameflowRenderer)
 
-const REPORT_CATEGORIES: { value: string; label: string }[] = [
-  { value: 'NEGATIVE_ATTITUDE', label: '消极态度' },
-  { value: 'VERBAL_ABUSE', label: '言语辱骂' },
-  { value: 'LEAVING_AFK', label: '挂机/逃跑' },
-  { value: 'ASSISTING_ENEMY_TEAM', label: '协助敌方（演员）' },
-  { value: 'HATE_SPEECH', label: '仇恨言论' },
-  { value: 'THIRD_PARTY_TOOLS', label: '第三方软件' },
-  { value: 'INAPPROPRIATE_NAME', label: '不当命名' }
+const REPORT_CATEGORIES: { value: AutoReportCategory; label: string }[] = [
+  { value: 'LEAVING_AFK', label: '中途退出/挂机' },
+  { value: 'ASSISTING_ENEMY_TEAM', label: '消极态度' },
+  { value: 'THIRD_PARTY_TOOLS', label: '作弊' },
+  { value: 'RANK_MANIPULATION', label: '排位操控' },
+  { value: 'BOTTING', label: '自动脚本刷级' },
+  { value: 'VERBAL_ABUSE', label: '滥用聊天工具' },
+  { value: 'INAPPROPRIATE_NAME', label: '有攻击性的名称' }
 ]
 
-const isReportCategoryChecked = (category: string) =>
-  (store.settings.autoReportCategories as string[]).includes(category)
+const isReportCategoryChecked = (category: AutoReportCategory) =>
+  store.settings.autoReportCategories.includes(category)
 
-const toggleReportCategory = (category: string, checked: boolean) => {
-  const current = store.settings.autoReportCategories as string[]
+const isReportCategoryDisabled = (category: AutoReportCategory) =>
+  !isReportCategoryChecked(category) &&
+  store.settings.autoReportCategories.length >= AUTO_REPORT_MAX_CATEGORIES
+
+const toggleReportCategory = (category: AutoReportCategory, checked: boolean) => {
+  const current = store.settings.autoReportCategories
   const next = checked
     ? [...new Set([...current, category])]
     : current.filter((c) => c !== category)
-  shard.setAutoReportCategories(next)
+  shard.setAutoReportCategories(normalizeAutoReportCategories(next))
 }
 
 const invitationStrategiesPopselectArray = computed(() => {

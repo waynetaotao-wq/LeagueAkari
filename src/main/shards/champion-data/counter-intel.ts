@@ -1,5 +1,7 @@
-import { getBzZedMatchup } from './bz-guide'
+import type { OpggHttpApiAxiosHelper } from '@shared/http-api-axios-helper/opgg'
 import type {
+  BzGuideParams,
+  BzGuideResult,
   CounterIntelParams,
   CounterIntelResult,
   CounterIntelRow,
@@ -7,20 +9,24 @@ import type {
   MatchupBuildResult,
   RolePriors
 } from '@shared/types/counter-intel'
-import type { OpggHttpApiAxiosHelper } from '@shared/http-api-axios-helper/opgg'
 import type { PositionType, RegionType, TierType } from '@shared/types/opgg'
 import type { LaneName } from '@shared/utils/lane-assignment'
 import type { AxiosInstance } from 'axios'
 
 import type { AkariIpcMain } from '../ipc'
 import type { AkariLogger } from '../logger-factory'
+import { getBzZedMatchup } from './bz-guide'
 import {
   type ChampionSlugInfo,
   LANE_KILL_TARGET_COUNT,
   fetchChampionSlugMap,
   fetchLaneKillRates
 } from './counter-intel-web'
-import { buildMatchupPageUrl, fetchMatchupOverlay } from './matchup-build'
+import {
+  buildVerifiedMatchupOverlay,
+  isPlausibleMatchupBuild,
+  resolveComparableMatchupGames
+} from './matchup-build'
 
 /**
  * 对位克制助手（Counter Intel）
@@ -78,20 +84,51 @@ export class ChampionDataCounterIntel {
     ipc.onCall(namespace, 'counterIntel/get', (event: any, params: CounterIntelParams) =>
       this.get(event?.sender?.id ?? 0, params)
     )
-    ipc.onCall(namespace, 'counterIntel/rolePriors', (_event: any, region: string, tier: string | number) =>
-      this.getRolePriors(region, tier)
+    ipc.onCall(
+      namespace,
+      'counterIntel/rolePriors',
+      (_event: any, region: string, tier: string | number, version: string | null) =>
+        this.getRolePriors(region, tier, version)
     )
-    ipc.onCall(namespace, 'counterIntel/bzGuide', async (_event: any, params: any) => {
+    ipc.onCall(namespace, 'counterIntel/bzGuide', async (_event: any, params: BzGuideParams) => {
       const opponentChampionId = Number(params?.opponentChampionId)
       if (!Number.isFinite(opponentChampionId) || opponentChampionId <= 0) {
-        return { found: false, row: null }
+        return {
+          found: false,
+          row: null,
+          reason: 'invalid-opponent'
+        } satisfies BzGuideResult
       }
       const slug = await this.getChampionSlug(opponentChampionId)
       if (!slug) {
-        return { found: false, row: null }
+        this._deps.logger.warn(`[BzGuide] 未找到英雄 ${opponentChampionId} 的 slug`)
+        return {
+          found: false,
+          row: null,
+          reason: 'slug-unavailable'
+        } satisfies BzGuideResult
       }
-      const row = await getBzZedMatchup(slug)
-      return { found: !!row, row }
+      try {
+        const row = await getBzZedMatchup(slug, {
+          httpClient: this._deps.web,
+          includeCoreItems: params?.includeCoreItems !== false,
+          onWarn: (message) => this._deps.logger.warn(`[BzGuide] ${message}`)
+        })
+        return {
+          found: !!row,
+          row,
+          reason: row ? undefined : 'not-found'
+        } satisfies BzGuideResult
+      } catch (error: any) {
+        this._deps.logger.warn(
+          `[BzGuide] 获取 ${slug} 攻略失败: ${error?.message ?? String(error)}`
+        )
+        return {
+          found: false,
+          row: null,
+          reason: 'source-unavailable'
+        } satisfies BzGuideResult
+      }
     })
 
     ipc.onCall(namespace, 'counterIntel/matchupBuild', (_event: any, params: MatchupBuildParams) =>
@@ -114,6 +151,18 @@ export class ChampionDataCounterIntel {
     return typeof tier === 'string' && tier.length > 0 ? (tier as TierType) : undefined
   }
 
+  private _assertRequestedVersion(
+    requestedVersion: string | null,
+    sourceVersion: string | null | undefined,
+    context: string
+  ) {
+    if (requestedVersion && sourceVersion !== requestedVersion) {
+      throw new Error(
+        `OP.GG ${context}补丁不匹配 (expected=${requestedVersion}, actual=${sourceVersion ?? '?'})`
+      )
+    }
+  }
+
   private async _ensureSlugMap(signal?: AbortSignal): Promise<Map<number, ChampionSlugInfo>> {
     const now = Date.now()
     if (this._slugCache && this._slugCache.expiresAt > now) {
@@ -134,16 +183,23 @@ export class ChampionDataCounterIntel {
     }
   }
 
-  async getRolePriors(region: string, tier: string | number): Promise<RolePriors> {
-    const key = `${region}|${tier}`
+  async getRolePriors(
+    region: string,
+    tier: string | number,
+    version: string | null = null
+  ): Promise<RolePriors> {
+    const requestedVersion = version?.trim() || null
+    const key = `${region}|${tier}|${requestedVersion ?? 'latest'}`
     const now = Date.now()
     const cached = this._priorsCache.get(key)
     if (cached && cached.expiresAt > now) {
       return cached.value
     }
     const response = await this._deps.opggApi.getChampions(this._toApiRegion(region), 'ranked', {
-      tier: this._toApiTier(tier)
+      tier: this._toApiTier(tier),
+      version: requestedVersion ?? undefined
     })
+    this._assertRequestedVersion(requestedVersion, response.data.meta?.version, '分路先验')
     const priors: RolePriors = {}
     for (const item of response.data.data) {
       const plays: Partial<Record<LaneName, number>> = {}
@@ -167,10 +223,11 @@ export class ChampionDataCounterIntel {
   }
 
   async get(senderId: number, params: CounterIntelParams): Promise<CounterIntelResult> {
-    const key = `${params.championId}|${params.position}|${params.region}|${params.tier}`
+    const requestedVersion = params.version?.trim() || null
+    const key = `${params.championId}|${params.position}|${params.region}|${params.tier}|${requestedVersion ?? 'latest'}`
     const now = Date.now()
     const cached = this._intelCache.get(key)
-    if (cached && cached.expiresAt > now) {
+    if (!params.force && cached && cached.expiresAt > now) {
       return cached.value
     }
 
@@ -186,8 +243,13 @@ export class ChampionDataCounterIntel {
         'ranked',
         params.championId,
         apiPosition,
-        { tier: this._toApiTier(params.tier), signal }
+        {
+          tier: this._toApiTier(params.tier),
+          version: requestedVersion ?? undefined,
+          signal
+        }
       )
+      this._assertRequestedVersion(requestedVersion, response.data.meta?.version, '克制表')
       const counters = response.data.data.counters ?? []
       const rowsBase = counters
         .filter((item) => item.play > 0)
@@ -221,6 +283,7 @@ export class ChampionDataCounterIntel {
           position: params.position,
           region: params.region,
           tier: params.tier,
+          patch: requestedVersion,
           targets,
           signal,
           onWarn: (message) => this._deps.logger.warn(`[CounterIntel] ${message}`)
@@ -256,6 +319,7 @@ export class ChampionDataCounterIntel {
         position: params.position,
         region: params.region,
         tier: params.tier,
+        version: requestedVersion,
         updatedAt: new Date().toISOString(),
         laneKillAvailable,
         rows
@@ -270,66 +334,99 @@ export class ChampionDataCounterIntel {
   }
 
   /**
-   * [lolps] 对位构筑 v2：抓「我的英雄 × 对位英雄」网页 vs 数据，产出官方形状 data 子集，
-   * 渲染层整窗替换（UI/应用按钮/自动应用全走官方原生管道）。
+   * [lolps] 对位构筑 v3：OP.GG target_champion JSON 一次返回完整对位数据。
+   * 请求、缓存和结果同时绑定地区/段位/位置/补丁；未经样本校验绝不下发 overlay。
    */
   async getMatchupBuild(params: MatchupBuildParams): Promise<MatchupBuildResult> {
-    const key = `${params.myChampionId}|${params.opponentChampionId}|${params.position}|${params.region}|${params.tier}`
+    const requestedVersion = params.version?.trim() || null
+    const key = `${params.myChampionId}|${params.opponentChampionId}|${params.position}|${params.region}|${params.tier}|${requestedVersion ?? 'latest'}`
     const now = Date.now()
     const cached = this._matchupCache.get(key)
-    if (cached && cached.expiresAt > now) {
+    if (!params.force && cached && cached.expiresAt > now) {
       return cached.value
     }
 
-    const slugMap = await this._ensureSlugMap()
-    const mySlug = slugMap.get(params.myChampionId)?.slug
-    const opponentSlug = slugMap.get(params.opponentChampionId)?.slug
-    if (!mySlug || !opponentSlug) {
-      throw new Error(
-        `未找到英雄 slug (my=${params.myChampionId}:${mySlug ?? '?'}, opp=${params.opponentChampionId}:${opponentSlug ?? '?'})`
-      )
+    const apiPosition = UNIFIED_TO_OPGG_POSITION[params.position]
+    const commonOptions = {
+      tier: this._toApiTier(params.tier),
+      version: requestedVersion ?? undefined
     }
-
-    // 元信息：官方接口 counters 字段（play=对局数, win 为对位英雄胜场 → 我方胜场取补）
-    let meta: MatchupBuildResult['meta'] = null
-    try {
-      const apiPosition = UNIFIED_TO_OPGG_POSITION[params.position]
-      const response = await this._deps.opggApi.getChampion(
+    // target 响应本身不回显目标 id；同口径取一份无 target 基线，防止服务端忽略参数却仍 200。
+    const [response, genericResponse] = await Promise.all([
+      this._deps.opggApi.getChampion(
         this._toApiRegion(params.region),
         'ranked',
         params.myChampionId,
         apiPosition,
-        { tier: this._toApiTier(params.tier) }
+        { ...commonOptions, targetChampion: params.opponentChampionId }
+      ),
+      this._deps.opggApi.getChampion(
+        this._toApiRegion(params.region),
+        'ranked',
+        params.myChampionId,
+        apiPosition,
+        commonOptions
       )
-      const counters = response.data.data.counters ?? []
-      const hit = counters.find((item) => item.champion_id === params.opponentChampionId)
-      if (hit && hit.play > 0) {
-        meta = { play: hit.play, win: hit.play - hit.win }
-      }
-    } catch (error: any) {
-      this._deps.logger.info(`[MatchupBuild] 元信息获取失败(不致命): ${error?.message ?? error}`)
+    ])
+    const data = response.data.data
+    const genericData = genericResponse.data.data
+    const sourceVersion = response.data.meta?.version || null
+    if (data.summary.id !== params.myChampionId) {
+      throw new Error(
+        `OP.GG 返回英雄不匹配 (expected=${params.myChampionId}, actual=${data.summary.id})`
+      )
+    }
+    this._assertRequestedVersion(requestedVersion, sourceVersion, '对位构筑')
+    if (genericData.summary.id !== params.myChampionId) {
+      throw new Error(
+        `OP.GG 基线英雄不匹配 (expected=${params.myChampionId}, actual=${genericData.summary.id})`
+      )
+    }
+    this._assertRequestedVersion(
+      requestedVersion,
+      genericResponse.data.meta?.version,
+      '对位构筑基线'
+    )
+    const genericSourceVersion = genericResponse.data.meta?.version || null
+    if (!sourceVersion || !genericSourceVersion || sourceVersion !== genericSourceVersion) {
+      throw new Error(
+        `OP.GG 对位与基线补丁不一致 (target=${sourceVersion ?? '?'}, baseline=${genericSourceVersion ?? '?'})`
+      )
     }
 
-    // 网页通道：官方形状 overlay
+    // counters[].win 始终是“被请求的基准英雄”胜场；这里基准就是我方英雄，不能取补。
+    const readMatchupMeta = (source: typeof data): MatchupBuildResult['meta'] => {
+      const positionCounters = source.summary.positions?.find(
+        (position) => position.name.toLowerCase() === apiPosition.toLowerCase()
+      )?.counters
+      const counters = source.counters?.length ? source.counters : (positionCounters ?? [])
+      const hit = counters.find((item) => item.champion_id === params.opponentChampionId)
+      return hit && hit.play > 0 && hit.win >= 0 && hit.win <= hit.play
+        ? { play: hit.play, win: hit.win }
+        : null
+    }
+    const meta = readMatchupMeta(data)
+    const genericMeta = readMatchupMeta(genericData)
+    const matchupGames =
+      meta && genericMeta ? resolveComparableMatchupGames(meta.play, genericMeta.play) : null
+
     let overlay: MatchupBuildResult['overlay'] = null
     let parsedSections: string[] = []
-    const url = buildMatchupPageUrl({
-      mySlug,
-      opponentSlug,
-      position: params.position,
-      region: params.region,
-      tier: params.tier
-    })
-    try {
-      const page = await fetchMatchupOverlay(this._deps.web, url)
-      parsedSections = page.parsed
-      overlay = parsedSections.length > 0 ? (page.overlay as Record<string, unknown>) : null
+    let targetVerified = false
+    if (meta && matchupGames && isPlausibleMatchupBuild(data, matchupGames)) {
+      const built = buildVerifiedMatchupOverlay(data, genericData, matchupGames)
+      parsedSections = built.parsedSections
+      targetVerified = parsedSections.length >= 2
+      overlay = targetVerified ? (built.overlay as unknown as Record<string, unknown>) : null
+    }
+
+    if (targetVerified) {
       this._deps.logger.info(
-        `[MatchupBuild] ${mySlug} vs ${opponentSlug}@${params.position} tier=${params.tier}: sections=[${parsedSections.join(', ')}]`
+        `[MatchupBuild] ${params.myChampionId} vs ${params.opponentChampionId}@${params.position} region=${params.region} tier=${params.tier} version=${sourceVersion ?? 'latest'}: sections=[${parsedSections.join(', ')}]`
       )
-    } catch (error: any) {
+    } else {
       this._deps.logger.warn(
-        `[MatchupBuild] 网页解析失败(已降级): ${error?.message ?? error} | url: ${url}`
+        `[MatchupBuild] 拒绝未验证对位数据（counters 锚点不可比，或至少两区未与通用 cohort 显著分离）: my=${params.myChampionId} opp=${params.opponentChampionId} games=${meta?.play ?? 0} baselineGames=${genericMeta?.play ?? 0}`
       )
     }
 
@@ -339,17 +436,22 @@ export class ChampionDataCounterIntel {
       position: params.position,
       region: params.region,
       tier: params.tier,
+      version: requestedVersion,
+      sourceVersion,
       meta,
       overlay,
       parsedSections,
-      pageParsed: parsedSections.length > 0,
+      targetVerified,
       updatedAt: new Date().toISOString()
     }
-    this._matchupCache.set(key, { expiresAt: Date.now() + MATCHUP_CACHE_TTL, value: result })
-    if (this._matchupCache.size > 40) {
-      const oldest = this._matchupCache.keys().next().value
-      if (oldest !== undefined) {
-        this._matchupCache.delete(oldest)
+    // 拒绝/空样本不缓存，避免第三方短暂异常把诚实回退固定十分钟。
+    if (targetVerified) {
+      this._matchupCache.set(key, { expiresAt: Date.now() + MATCHUP_CACHE_TTL, value: result })
+      if (this._matchupCache.size > 40) {
+        const oldest = this._matchupCache.keys().next().value
+        if (oldest !== undefined) {
+          this._matchupCache.delete(oldest)
+        }
       }
     }
     return result

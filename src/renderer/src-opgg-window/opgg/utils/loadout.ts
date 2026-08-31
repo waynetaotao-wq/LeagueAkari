@@ -8,6 +8,13 @@ import { OpggChampionBuildResponse } from '@shared/types/opgg'
 import { useTranslation } from 'i18next-vue'
 import { useMessage } from 'naive-ui'
 
+import { isBzRecommendation } from '../bz-overlay'
+import {
+  type MatchupLoadoutIdentity,
+  formatMatchupLoadoutSuffix,
+  getMatchupLoadoutIdentity,
+  matchupLoadoutSourceSlug
+} from '../matchup-overlay'
 import { restoreRecipe } from './recipe-restore'
 
 export function useLoadout() {
@@ -78,14 +85,24 @@ export function useLoadout() {
   }
 
   // 获取符文页名称，如果位置为 none，则只显示英雄名称
-  const getRunePageName = (championId: number, position: string) => {
+  const matchupNameSuffix = (matchup?: MatchupLoadoutIdentity | null) => {
+    if (!matchup) return ''
+    const opponentName = lcs.gameData.championName(matchup.opponentChampionId)
+    return formatMatchupLoadoutSuffix(opponentName, matchup.source)
+  }
+
+  const getRunePageName = (
+    championId: number,
+    position: string,
+    matchup?: MatchupLoadoutIdentity | null
+  ) => {
     if (position === 'none') {
-      return `${recommendationLabel} ${lcs.gameData.championName(championId)}`
+      return `${recommendationLabel} ${lcs.gameData.championName(championId)}${matchupNameSuffix(matchup)}`
     }
 
     return `${recommendationLabel} ${lcs.gameData.championName(championId)} - ${t(
       `opgg.filters.positions.${position}`
-    )}`
+    )}${matchupNameSuffix(matchup)}`
   }
 
   const setRunes = async (
@@ -99,9 +116,10 @@ export function useLoadout() {
     meta: {
       championId: number
       position: string
+      matchup?: MatchupLoadoutIdentity | null
     }
   ) => {
-    const { championId, position } = meta
+    const { championId, position, matchup } = meta
 
     try {
       const inventory = (await lc.api.perks.getPerkInventory()).data
@@ -109,7 +127,7 @@ export function useLoadout() {
 
       if (inventory.canAddCustomPage) {
         const { data: added } = await lc.api.perks.postPerkPage({
-          name: getRunePageName(championId, position),
+          name: getRunePageName(championId, position, matchup),
           isEditable: true,
           primaryStyleId: runes.primary_page_id.toString()
         })
@@ -117,7 +135,7 @@ export function useLoadout() {
           id: added.id,
           isRecommendationOverride: false,
           isTemporary: false,
-          name: getRunePageName(championId, position),
+          name: getRunePageName(championId, position, matchup),
           primaryStyleId: runes.primary_page_id,
           selectedPerkIds: [
             ...runes.primary_rune_ids,
@@ -140,7 +158,7 @@ export function useLoadout() {
           id: page1.id,
           isRecommendationOverride: false,
           isTemporary: false,
-          name: getRunePageName(championId, position),
+          name: getRunePageName(championId, position, matchup),
           primaryStyleId: runes.primary_page_id,
           selectedPerkIds: [
             ...runes.primary_rune_ids,
@@ -160,7 +178,7 @@ export function useLoadout() {
           .chatSend(
             lcs.chat.conversations.championSelect.id,
             t('opgg.view.runesSet', {
-              name: getRunePageName(championId, position),
+              name: getRunePageName(championId, position, matchup),
               action: newRunePageAdded ? t('opgg.view.create') : t('opgg.view.replace')
             }),
             'celebration'
@@ -182,12 +200,21 @@ export function useLoadout() {
     tier?: string
     position?: string
     version?: string
+    matchup?: MatchupLoadoutIdentity | null
   }) => {
-    return `akari1-${traits.championId}-${traits.mode || '_'}-${traits.region || '_'}-${traits.tier || '_'}-${traits.position || '_'}-${traits.version || '_'}`
+    const base = `akari1-${traits.championId}-${traits.mode || '_'}-${traits.region || '_'}-${traits.tier || '_'}-${traits.position || '_'}-${traits.version || '_'}`
+    return traits.matchup
+      ? `${base}-vs${traits.matchup.opponentChampionId}-${matchupLoadoutSourceSlug(traits.matchup.source)}`
+      : base
   }
 
-  const getItemSetsTitle = (options: { championId: number; mode: string; position: string }) => {
-    const { championId, mode, position } = options
+  const getItemSetsTitle = (options: {
+    championId: number
+    mode: string
+    position: string
+    matchup?: MatchupLoadoutIdentity | null
+  }) => {
+    const { championId, mode, position, matchup } = options
 
     const championName = lcs.gameData.championName(championId)
     let title = `${recommendationLabel} ${championName}`
@@ -203,11 +230,15 @@ export function useLoadout() {
       title += ` - ${positionName || position}`
     }
 
-    return title
+    return `${title}${matchupNameSuffix(matchup)}`
   }
 
-  const getItemSetsChatName = (options: { championId: number; position: string }) => {
-    const { championId, position } = options
+  const getItemSetsChatName = (options: {
+    championId: number
+    position: string
+    matchup?: MatchupLoadoutIdentity | null
+  }) => {
+    const { championId, position, matchup } = options
 
     const championName = lcs.gameData.championName(championId)
     let name = `${recommendationLabel} ${championName}`
@@ -218,7 +249,7 @@ export function useLoadout() {
       name += ` - ${positionName || position}`
     }
 
-    return name
+    return `${name}${matchupNameSuffix(matchup)}`
   }
 
   const writeItemSets = async (
@@ -233,6 +264,7 @@ export function useLoadout() {
     try {
       const itemGroups: Array<{ title: string; items: number[] }> = []
       const championId = champion.data.summary.id
+      const matchup = getMatchupLoadoutIdentity(champion.data)
 
       const newUid = toItemSetsUid({
         championId,
@@ -240,16 +272,19 @@ export function useLoadout() {
         region: meta.region,
         tier: meta.tier,
         position: meta.position,
-        version: champion.meta.version
+        version: champion.meta.version,
+        matchup
       })
 
       if (champion.data.starter_items && champion.data.starter_items.length) {
         champion.data.starter_items.slice(0, 3).forEach((s: any, i: number) => {
           itemGroups.push({
-            title: t('opgg.champion.starterItem', {
-              index: i + 1,
-              pickRate: (s.pick_rate * 100).toFixed(2)
-            }),
+            title: isBzRecommendation(s)
+              ? t('opgg.champion.bzStarterItem', { index: i + 1 })
+              : t('opgg.champion.starterItem', {
+                  index: i + 1,
+                  pickRate: (s.pick_rate * 100).toFixed(2)
+                }),
             items: s.ids
           })
         })
@@ -279,10 +314,12 @@ export function useLoadout() {
       if (champion.data.core_items && champion.data.core_items.length) {
         champion.data.core_items.slice(0, 4).forEach((s: any, i: number) => {
           itemGroups.push({
-            title: t('opgg.champion.coreItem', {
-              index: i + 1,
-              pickRate: (s.pick_rate * 100).toFixed(2)
-            }),
+            title: isBzRecommendation(s)
+              ? t('opgg.champion.bzCoreItem', { index: i + 1 })
+              : t('opgg.champion.coreItem', {
+                  index: i + 1,
+                  pickRate: (s.pick_rate * 100).toFixed(2)
+                }),
             items: s.ids
           })
         })
@@ -304,7 +341,8 @@ export function useLoadout() {
           title: getItemSetsTitle({
             championId,
             mode: meta.mode,
-            position: meta.position
+            position: meta.position,
+            matchup
           }),
           sortrank: 0,
           type: 'global',
@@ -332,7 +370,8 @@ export function useLoadout() {
             t('opgg.champion.writeToDisk', {
               name: getItemSetsChatName({
                 championId,
-                position: meta.position
+                position: meta.position,
+                matchup
               })
             }),
             'celebration'

@@ -5,7 +5,10 @@
  * 作者更新表格后本端点内容随之变化——配合短 TTL 缓存即实现"自动跟更"）。
  * 结构：每行一个对线英雄（英文名），列含符文 / 难度 / 核心装 / 打法要点。
  */
-import axios from 'axios'
+import type { BzMatchupRow } from '@shared/types/counter-intel'
+import axios, { type AxiosInstance } from 'axios'
+
+export type { BzMatchupRow }
 
 // ============================ 可调区 ============================
 
@@ -21,17 +24,75 @@ export const BZ_CSV_URL = `https://docs.google.com/spreadsheets/d/${BZ_SHEET_ID}
 
 // ============================ 类型 ==============================
 
-export interface BzMatchupRow {
-  /** 表内英雄英文名（原文） */
-  champion: string
-  rune: string
-  difficulty: string
-  coreBuild: string
-  summary: string
-  /** 核心装解析为官方 itemId 序列（≥2 件成功才给；用于置顶覆盖原生核心装区） */
-  coreItemIds?: number[]
-  /** Bz 推荐基石 perkId（用于筛选 OP.GG 对位符文页；无法识别为 null） */
-  keystonePerkId: number | null
+export interface GetBzZedMatchupOptions {
+  /** 可注入主进程已有的 Axios 客户端，便于统一代理、重试和测试。 */
+  httpClient?: AxiosInstance
+  /** 徽章等只消费文字的调用方可关闭，避免额外拉取 Data Dragon。 */
+  includeCoreItems?: boolean
+  /** 装备库失败不会丢弃已获取的文字攻略；通过此回调交给上层 logger 留痕。 */
+  onWarn?: (message: string) => void
+}
+
+export class BzGuideDataValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'BzGuideDataValidationError'
+  }
+}
+
+interface CachedResource<T> {
+  expiresAt: number
+  value?: T
+  inFlight?: Promise<T>
+}
+
+const STALE_RETRY_TTL = 60 * 1000
+
+/**
+ * 同一客户端同一资源只允许一个刷新请求。刷新失败时旧值仍可用；首次加载失败则把错误
+ * 原样抛给上层，由拥有 logger / IPC 语义的调用方诊断。
+ */
+function readThroughCache<T>(
+  cache: CachedResource<T>,
+  ttl: number,
+  loader: () => Promise<T>
+): Promise<T> {
+  if (cache.value !== undefined && cache.expiresAt > Date.now()) {
+    return Promise.resolve(cache.value)
+  }
+  if (cache.inFlight) return cache.inFlight
+
+  const staleValue = cache.value
+  const refresh = loader().then(
+    (value) => {
+      cache.value = value
+      cache.expiresAt = Date.now() + ttl
+      cache.inFlight = undefined
+      return value
+    },
+    (error: unknown) => {
+      cache.inFlight = undefined
+      if (staleValue !== undefined) {
+        // 源持续故障时避免每张徽标/每次查询都立刻重打外网；一分钟后再尝试刷新。
+        cache.expiresAt = Date.now() + Math.min(ttl, STALE_RETRY_TTL)
+        return staleValue
+      }
+      throw error
+    }
+  )
+  cache.inFlight = refresh
+  return refresh
+}
+
+function getClientCache<T>(
+  caches: WeakMap<AxiosInstance, CachedResource<T>>,
+  httpClient: AxiosInstance
+): CachedResource<T> {
+  const cached = caches.get(httpClient)
+  if (cached) return cached
+  const created: CachedResource<T> = { expiresAt: 0 }
+  caches.set(httpClient, created)
+  return created
 }
 
 // ==================== 装备名 → itemId（Data Dragon 英文库） ====================
@@ -46,34 +107,69 @@ const ITEM_ALIASES: Record<string, string> = {
 
 /** 装备名映射缓存（Data Dragon 更新慢，长 TTL） */
 const ITEM_MAP_TTL = 6 * 60 * 60 * 1000
-let _itemMapCache: { expiresAt: number; byName: Map<string, number> } | null = null
+const _itemMapCaches = new WeakMap<AxiosInstance, CachedResource<Map<string, number>>>()
 
-async function ensureItemNameMap(): Promise<Map<string, number>> {
-  const now = Date.now()
-  if (_itemMapCache && _itemMapCache.expiresAt > now) {
-    return _itemMapCache.byName
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Data Dragon 同名装备可能同时包含峡谷、竞技场等版本。这里只收录召唤师峡谷中确实
+ * 可购买且未被商店隐藏的版本；同名兜底选择更小 id，绝不以“最大 id”猜当前版本。
+ */
+export function buildItemNameMap(payload: unknown): Map<string, number> {
+  if (!isRecord(payload) || !isRecord(payload.data)) {
+    throw new BzGuideDataValidationError('invalid Data Dragon item catalog')
   }
-  const versions = await axios.get<string[]>('https://ddragon.leagueoflegends.com/api/versions.json', {
-    timeout: 12000
-  })
-  const ver = Array.isArray(versions.data) && versions.data[0] ? versions.data[0] : null
-  if (!ver) throw new Error('no ddragon version')
-  const items = await axios.get<any>(
+
+  const byName = new Map<string, number>()
+  for (const [idStr, rawInfo] of Object.entries(payload.data)) {
+    if (!isRecord(rawInfo)) continue
+    const id = Number(idStr)
+    const maps = isRecord(rawInfo.maps) ? rawInfo.maps : null
+    const gold = isRecord(rawInfo.gold) ? rawInfo.gold : null
+    if (
+      !Number.isSafeInteger(id) ||
+      id <= 0 ||
+      maps?.['11'] !== true ||
+      gold?.purchasable !== true ||
+      rawInfo.inStore === false
+    ) {
+      continue
+    }
+    const nm = normalizeName(typeof rawInfo.name === 'string' ? rawInfo.name : '')
+    if (!nm) continue
+    const prev = byName.get(nm)
+    if (prev === undefined || id < prev) byName.set(nm, id)
+  }
+
+  if (byName.size === 0) {
+    throw new BzGuideDataValidationError('Data Dragon item catalog has no purchasable SR items')
+  }
+  return byName
+}
+
+async function loadItemNameMap(httpClient: AxiosInstance): Promise<Map<string, number>> {
+  const versions = await httpClient.get<unknown>(
+    'https://ddragon.leagueoflegends.com/api/versions.json',
+    { timeout: 12000 }
+  )
+  const ver =
+    Array.isArray(versions.data) && typeof versions.data[0] === 'string' && versions.data[0].trim()
+      ? versions.data[0]
+      : null
+  if (!ver) throw new BzGuideDataValidationError('Data Dragon returned no current version')
+
+  const items = await httpClient.get<unknown>(
     `https://ddragon.leagueoflegends.com/cdn/${ver}/data/en_US/item.json`,
     { timeout: 15000 }
   )
-  const byName = new Map<string, number>()
-  const data = items.data?.data ?? {}
-  for (const [idStr, info] of Object.entries<any>(data)) {
-    const id = Number(idStr)
-    const nm = normalizeName(info?.name ?? '')
-    if (!nm || !Number.isFinite(id)) continue
-    // 同名以更大 id（通常为当前版本变体）为准
-    const prev = byName.get(nm)
-    if (prev === undefined || id > prev) byName.set(nm, id)
-  }
-  _itemMapCache = { expiresAt: now + ITEM_MAP_TTL, byName }
-  return byName
+  return buildItemNameMap(items.data)
+}
+
+function ensureItemNameMap(httpClient: AxiosInstance): Promise<Map<string, number>> {
+  const cache = getClientCache(_itemMapCaches, httpClient)
+  return readThroughCache(cache, ITEM_MAP_TTL, () => loadItemNameMap(httpClient))
 }
 
 /** 单个装备名 → id：精确 → 别名 → 前缀（≥4 字符且唯一） */
@@ -91,14 +187,39 @@ export function resolveItemName(raw: string, byName: Map<string, number>): numbe
   return hits.length === 1 ? hits[0] : null
 }
 
-/** 核心装文字链（"Voltaic→ Bastion→ LDR"）→ itemId 序列（跳过无法解析的段） */
-export function resolveBuildItems(coreBuild: string, byName: Map<string, number>): number[] {
-  const out: number[] = []
-  for (const seg of (coreBuild || '').split(/→|->|>/)) {
-    const id = resolveItemName(seg.trim(), byName)
-    if (id !== null && !out.includes(id)) out.push(id)
+/**
+ * 核心装文字链 → 所有合法方案。斜杠表示同一位置的并列选择，例如
+ * `Voltaic/Profane → LDR` 会展开为两条序列；无法识别的位置沿用旧行为并跳过。
+ */
+export function resolveBuildItemSequences(
+  coreBuild: string,
+  byName: Map<string, number>
+): number[][] {
+  let builds: number[][] = [[]]
+  for (const segment of (coreBuild || '').split(/→|->|>/)) {
+    const choices = Array.from(
+      new Set(
+        segment
+          .split('/')
+          .map((choice) => resolveItemName(choice.trim(), byName))
+          .filter((id): id is number => id !== null)
+      )
+    )
+    if (choices.length === 0) continue
+
+    builds = builds.flatMap((build) =>
+      choices.map((id) => (build.includes(id) ? [...build] : [...build, id]))
+    )
   }
-  return out
+
+  const unique = new Map<string, number[]>()
+  for (const build of builds) unique.set(build.join(','), build)
+  return [...unique.values()].filter((build) => build.length > 0)
+}
+
+/** 兼容旧调用方：返回斜杠展开后的第一条方案。 */
+export function resolveBuildItems(coreBuild: string, byName: Map<string, number>): number[] {
+  return resolveBuildItemSequences(coreBuild, byName)[0] ?? []
 }
 
 // ============================ CSV 解析 ==========================
@@ -109,6 +230,19 @@ export function parseCsv(text: string): string[][] {
   let row: string[] = []
   let field = ''
   let inQuotes = false
+  let closedQuotedField = false
+
+  const finishField = () => {
+    row.push(field)
+    field = ''
+    closedQuotedField = false
+  }
+  const finishRow = () => {
+    finishField()
+    rows.push(row)
+    row = []
+  }
+
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
     if (inQuotes) {
@@ -118,30 +252,51 @@ export function parseCsv(text: string): string[][] {
           i++
         } else {
           inQuotes = false
+          closedQuotedField = true
         }
+      } else if (ch === '\r') {
+        if (text[i + 1] === '\n') i++
+        field += '\n'
       } else {
         field += ch
       }
       continue
     }
+
+    if (closedQuotedField) {
+      if (ch === ',') {
+        finishField()
+      } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++
+        finishRow()
+      } else {
+        throw new BzGuideDataValidationError(
+          `invalid CSV character after closing quote at offset ${i}`
+        )
+      }
+      continue
+    }
+
     if (ch === '"') {
+      if (field.length > 0) {
+        throw new BzGuideDataValidationError(`invalid CSV quote at offset ${i}`)
+      }
       inQuotes = true
     } else if (ch === ',') {
-      row.push(field)
-      field = ''
-    } else if (ch === '\n') {
-      row.push(field)
-      field = ''
-      rows.push(row)
-      row = []
-    } else if (ch === '\r') {
-      // 忽略（\r\n 序列由 \n 收行）
+      finishField()
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++
+      finishRow()
     } else {
       field += ch
     }
   }
-  if (field.length > 0 || row.length > 0) {
-    row.push(field)
+
+  if (inQuotes) {
+    throw new BzGuideDataValidationError('unterminated quoted CSV field')
+  }
+  if (field.length > 0 || row.length > 0 || closedQuotedField) {
+    finishField()
     rows.push(row)
   }
   return rows
@@ -203,75 +358,127 @@ export function canonicalName(name: string): string {
 /** 从整表行中解析出对线攻略行（自动定位表头行，对列名不敏感于大小写与空白） */
 export function extractBzRows(rows: string[][]): BzMatchupRow[] {
   const headerIdx = rows.findIndex((r) => {
-    const low = r.map((c) => (c || '').trim().toLowerCase())
-    return low.includes('champion') && low.includes('difficulty')
+    const normalized = r.map((cell) => normalizeName(cell))
+    return (
+      normalized.some((cell) => cell.includes('champion')) &&
+      normalized.some((cell) => cell.includes('difficulty'))
+    )
   })
-  if (headerIdx < 0) return []
-  const header = rows[headerIdx].map((c) => (c || '').trim().toLowerCase())
-  const col = (name: string) => header.findIndex((h) => h.includes(name))
+  if (headerIdx < 0) {
+    throw new BzGuideDataValidationError('BZ CSV header row was not found')
+  }
+
+  const header = rows[headerIdx].map((cell) => normalizeName(cell))
+  const col = (name: string) => header.findIndex((value) => value.includes(normalizeName(name)))
   const cChampion = col('champion')
   const cRune = col('rune')
   const cDifficulty = col('difficulty')
   const cCore = col('core build')
   const cSummary = col('summary')
-  if (cChampion < 0) return []
+  const requiredColumns: Array<[string, number]> = [
+    ['champion', cChampion],
+    ['rune', cRune],
+    ['difficulty', cDifficulty],
+    ['core build', cCore],
+    ['summary', cSummary]
+  ]
+  const missingColumns = requiredColumns.filter(([, index]) => index < 0).map(([name]) => name)
+  if (missingColumns.length > 0) {
+    throw new BzGuideDataValidationError(
+      `BZ CSV is missing required columns: ${missingColumns.join(', ')}`
+    )
+  }
 
   const out: BzMatchupRow[] = []
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const r = rows[i]
+    if (!r.some((cell) => cell.trim().length > 0)) continue
     const champion = (r[cChampion] ?? '').trim()
     if (!champion || normalizeName(champion).length === 0) continue
-    const rune = cRune >= 0 ? (r[cRune] ?? '').trim() : ''
+    const rune = (r[cRune] ?? '').trim()
+    const difficulty = (r[cDifficulty] ?? '').trim()
+    const coreBuild = (r[cCore] ?? '').trim()
+    const summary = (r[cSummary] ?? '').trim()
+    // 五列是当前表的完整契约；任一内容列缺失都视为编辑中的半行。
+    if (![rune, difficulty, coreBuild, summary].every(Boolean)) continue
     out.push({
       champion,
       rune,
-      difficulty: cDifficulty >= 0 ? (r[cDifficulty] ?? '').trim() : '',
-      coreBuild: cCore >= 0 ? (r[cCore] ?? '').trim() : '',
-      summary: cSummary >= 0 ? (r[cSummary] ?? '').trim() : '',
+      difficulty,
+      coreBuild,
+      summary,
       keystonePerkId: parseKeystone(rune)
     })
+  }
+  if (out.length === 0) {
+    throw new BzGuideDataValidationError('BZ CSV contains no valid matchup rows')
   }
   return out
 }
 
 // ============================ 拉取与查询 ========================
 
-let _cache: { expiresAt: number; byName: Map<string, BzMatchupRow> } | null = null
+const _tableCaches = new WeakMap<AxiosInstance, CachedResource<Map<string, BzMatchupRow>>>()
 
-async function ensureTable(): Promise<Map<string, BzMatchupRow>> {
-  const now = Date.now()
-  if (_cache && _cache.expiresAt > now) {
-    return _cache.byName
-  }
-  const { data } = await axios.get<string>(BZ_CSV_URL, {
+async function loadTable(httpClient: AxiosInstance): Promise<Map<string, BzMatchupRow>> {
+  const { data } = await httpClient.get<unknown>(BZ_CSV_URL, {
     timeout: 12000,
     responseType: 'text'
   })
-  const byName = new Map<string, BzMatchupRow>()
-  for (const row of extractBzRows(parseCsv(String(data)))) {
-    byName.set(canonicalName(row.champion), row)
+  if (typeof data !== 'string' || data.trim().length === 0) {
+    throw new BzGuideDataValidationError('BZ CSV response is empty or not text')
   }
-  if (byName.size > 0) {
-    _cache = { expiresAt: now + BZ_CACHE_TTL, byName }
+
+  const byName = new Map<string, BzMatchupRow>()
+  for (const row of extractBzRows(parseCsv(data))) {
+    const key = canonicalName(row.champion)
+    if (byName.has(key)) {
+      throw new BzGuideDataValidationError(`BZ CSV contains duplicate champion key: ${key}`)
+    }
+    byName.set(key, row)
+  }
+  if (byName.size === 0) {
+    throw new BzGuideDataValidationError('BZ CSV contains no uniquely addressable matchup rows')
   }
   return byName
 }
 
+function ensureTable(httpClient: AxiosInstance): Promise<Map<string, BzMatchupRow>> {
+  const cache = getClientCache(_tableCaches, httpClient)
+  return readThroughCache(cache, BZ_CACHE_TTL, () => loadTable(httpClient))
+}
+
 /**
  * 按对位英雄的 OP.GG slug（英文名同源）查 Bz 攻略行。
- * 拉取失败或未命中返回 null；缓存过期自动重拉（自动跟随表更新）。
+ * 未命中返回 null；源请求或数据校验失败会抛出，由调用方记录并决定降级方式。
+ * 缓存过期自动重拉，若刷新失败但存在旧缓存则回退旧值。
  */
-export async function getBzZedMatchup(opponentSlug: string): Promise<BzMatchupRow | null> {
+export async function getBzZedMatchup(
+  opponentSlug: string,
+  options: GetBzZedMatchupOptions = {}
+): Promise<BzMatchupRow | null> {
   if (!opponentSlug) return null
-  try {
-    const table = await ensureTable()
-    const key = canonicalName(opponentSlug)
-    const found = table.get(key) ?? prefixLookup(table, key)
-    if (!found) return null
-    return await withCoreItems(found)
-  } catch {
-    return null
-  }
+  const httpClient = options.httpClient ?? axios
+  const resources = await Promise.all([
+    ensureTable(httpClient),
+    options.includeCoreItems === false
+      ? Promise.resolve<Map<string, number> | null>(null)
+      : ensureItemNameMap(httpClient).catch((error: unknown) => {
+          options.onWarn?.(
+            `Data Dragon 装备库获取失败，已保留 BZ 文字攻略: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          )
+          return null
+        })
+  ])
+  const [table, byName] = resources
+  const key = canonicalName(opponentSlug)
+  const found = table.get(key) ?? prefixLookup(table, key)
+  if (!found) return null
+  if (!byName || !found.coreBuild) return found
+
+  return withCoreItems(found, byName)
 }
 
 /** 前缀兜底：表内常见缩写名（Cassio / Trynd / Twisted…），≥4 字符且唯一命中才认 */
@@ -283,15 +490,12 @@ function prefixLookup(table: Map<string, BzMatchupRow>, key: string): BzMatchupR
   return hits.length === 1 ? hits[0] : null
 }
 
-/** 附加核心装 id 解析（≥2 件成功才提供；装备库拉取失败仅回落文字展示） */
-async function withCoreItems(row: BzMatchupRow): Promise<BzMatchupRow> {
+/** 附加所有核心装方案（≥2 件才提供）；coreItemIds 固定兼容为第一条完整方案。 */
+export function withCoreItems(row: BzMatchupRow, byName: Map<string, number>): BzMatchupRow {
   if (!row.coreBuild) return row
-  try {
-    const byName = await ensureItemNameMap()
-    const ids = resolveBuildItems(row.coreBuild, byName)
-    if (ids.length >= 2) {
-      return { ...row, coreItemIds: ids }
-    }
-  } catch {}
-  return row
+  const builds = resolveBuildItemSequences(row.coreBuild, byName).filter(
+    (build) => build.length >= 2
+  )
+  if (builds.length === 0) return row
+  return { ...row, coreItemIds: builds[0], coreItemBuilds: builds }
 }

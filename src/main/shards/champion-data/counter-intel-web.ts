@@ -1,6 +1,5 @@
-import type { AxiosInstance } from 'axios'
-
 import type { LaneName } from '@shared/utils/lane-assignment'
+import type { AxiosInstance } from 'axios'
 
 /**
  * 对位克制助手 —— OP.GG 网页数据通道（纯逻辑模块）
@@ -93,12 +92,16 @@ export function buildCounterPageUrl(args: {
   position: LaneName
   region: string
   tier: string | number
+  patch?: string | null
   targetSlug?: string
 }): string {
   const segment = POSITION_TO_WEB_SEGMENT[args.position]
   const params = new URLSearchParams()
   params.set('region', toWebRegion(args.region))
   params.set('tier', toWebTier(args.tier))
+  if (args.patch?.trim()) {
+    params.set('patch', args.patch.trim())
+  }
   if (args.targetSlug) {
     params.set('target_champion', args.targetSlug)
   }
@@ -270,6 +273,8 @@ export interface LaneKillFetchArgs {
   position: LaneName
   region: string
   tier: string | number
+  /** 与胜率 JSON 相同的补丁；null 表示网页最新补丁。 */
+  patch?: string | null
   targets: LaneKillTarget[]
   signal?: AbortSignal
   onWarn?: (message: string) => void
@@ -296,6 +301,7 @@ export async function fetchLaneKillRates(
         position: args.position,
         region: args.region,
         tier: args.tier,
+        patch: args.patch,
         targetSlug: target.slug
       })
       try {

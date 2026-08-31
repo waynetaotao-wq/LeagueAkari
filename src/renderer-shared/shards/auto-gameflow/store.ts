@@ -30,7 +30,7 @@ export const useAutoGameflowStore = defineStore('shard:auto-gameflow-renderer', 
     autoSendARAMTeamSideVisibleToTeam: true,
     autoReportEnabled: false,
     autoReportScope: 'opponents-only' as AutoReportScope,
-    autoReportCategories: ['NEGATIVE_ATTITUDE'] as AutoReportCategory[]
+    autoReportCategories: ['ASSISTING_ENEMY_TEAM'] as AutoReportCategory[]
   })
 
   const willAcceptAt = ref(-1)

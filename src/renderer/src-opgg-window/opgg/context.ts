@@ -44,11 +44,22 @@ import {
   watch
 } from 'vue'
 
+import { createLatestWinsAsyncQueue } from './auto-loadout-queue'
 import {
   toOpggChampionDetailsViewModel,
   toOpggChampionOverviewViewModel,
   toOpggMayhemAugmentsViewModel
 } from './champion-data-view-model'
+import {
+  applyMatchupOverlay,
+  getMatchupLoadoutIdentity,
+  hasCompleteMatchupLoadout,
+  matchesMatchupOverlayIdentity,
+  matchupOverlay,
+  matchupOverlayIdentity,
+  opggPositionToMatchupLane,
+  requestMatchupRefresh
+} from './matchup-overlay'
 import { hasItemsSets, useLoadout } from './utils/loadout'
 
 // 对齐 auto champ config (暂定)
@@ -150,6 +161,11 @@ export type OpggContext = {
 
   refresh: () => Promise<void>
 
+  /** 按当前有效的通用/对位构筑重新同步自动配置。 */
+  syncAutomaticLoadout: () => void
+  /** 对位请求进行中时暂缓通用构筑写入，避免随后重复通知和选人聊天。 */
+  setMatchupLoadoutPending: (pending: boolean) => void
+
   cancel: () => void
 }
 
@@ -228,6 +244,13 @@ export function provideOpgg() {
   const message = useMessage()
 
   const { setSummonerSpells, setRunes, writeItemSets } = useLoadout()
+  const autoLoadoutQueue = createLatestWinsAsyncQueue()
+  const matchupLoadoutPending = ref(false)
+
+  const setMatchupLoadoutPending = (pending: boolean) => {
+    matchupLoadoutPending.value = pending
+    if (pending) autoLoadoutQueue.invalidate()
+  }
 
   const { t } = useTranslation()
 
@@ -577,6 +600,7 @@ export function provideOpgg() {
   const cancel = () => {
     updateGeneration++
     queueKeeper.cancelAll()
+    autoLoadoutQueue.invalidate()
     isLoading.value = false
   }
 
@@ -605,7 +629,8 @@ export function provideOpgg() {
   }
 
   const refresh = async () => {
-    await update({ force: true })
+    const updated = await update({ force: true })
+    if (updated) requestMatchupRefresh()
   }
 
   onMounted(() => {
@@ -688,6 +713,8 @@ export function provideOpgg() {
     })
 
     return {
+      sessionId: lcs.champSelect.session.id,
+      gameId: lcs.champSelect.session.gameId,
       championId,
       assignedPosition: self.assignedPosition,
       gameMode: queue.gameMode,
@@ -696,12 +723,178 @@ export function provideOpgg() {
     }
   })
 
+  const assignedPositionToLane = (assignedPosition?: string | null) => {
+    const lane = assignedPosition?.toLowerCase()
+    return lane && ['top', 'jungle', 'middle', 'bottom', 'utility'].includes(lane) ? lane : null
+  }
+
+  const laneToPosition = (lane: string | null): PositionType => {
+    switch (lane) {
+      case 'top':
+        return 'top'
+      case 'jungle':
+        return 'jungle'
+      case 'middle':
+        return 'mid'
+      case 'bottom':
+        return 'adc'
+      case 'utility':
+        return 'support'
+      default:
+        return position.value
+    }
+  }
+
+  const enqueueAutomaticLoadout = (
+    build: OpggChampionBuildResponse | null,
+    position0: PositionType,
+    mode0: ModeType,
+    isMayhem: boolean,
+    expected: {
+      sessionId: string
+      gameId: number
+      championId: number
+      gameMode: string
+      assignedLane: string | null
+    }
+  ) => {
+    if (!build || build.data.summary.id !== expected.championId) {
+      autoLoadoutQueue.invalidate()
+      return
+    }
+
+    void autoLoadoutQueue.enqueue(async () => {
+      // 排队期间选人、英雄、模式或真实分路可能已变化；执行前必须用最新状态复验。
+      const active = activeSession.value
+      if (matchupLoadoutPending.value || !active || String(lcs.gameflow.phase) !== 'ChampSelect') {
+        return
+      }
+      if (
+        active.sessionId !== expected.sessionId ||
+        active.gameId !== expected.gameId ||
+        active.championId !== expected.championId ||
+        active.gameMode !== expected.gameMode ||
+        active.championId === -3 ||
+        lcs.champSelect.disabledChampionIds.has(active.championId)
+      ) {
+        return
+      }
+      const currentLane = assignedPositionToLane(active.assignedPosition)
+      if (currentLane !== expected.assignedLane) return
+
+      const writes: Promise<unknown>[] = []
+      const summonerSpells = build.data.summoner_spells
+      const runes = build.data.runes
+
+      if (
+        !isMayhem &&
+        !active.hasAutoSpellsConfig &&
+        summonerSpells?.[0] &&
+        ogs.frontendSettings.autoApplySpells
+      ) {
+        writes.push(setSummonerSpells(summonerSpells[0].ids, flashPosition.value))
+      }
+
+      if (
+        !isMayhem &&
+        !active.hasAutoRunesConfig &&
+        runes?.[0] &&
+        ogs.frontendSettings.autoApplyRunes
+      ) {
+        writes.push(
+          setRunes(runes[0], {
+            championId: active.championId,
+            position: position0,
+            matchup: getMatchupLoadoutIdentity(build.data)
+          })
+        )
+      }
+
+      if (hasItemsSets(build) && ogs.frontendSettings.autoApplyItems) {
+        writes.push(
+          writeItemSets(build, {
+            position: position0,
+            mode: mode0,
+            region: region.value,
+            tier: tier.value
+          })
+        )
+      }
+
+      await Promise.all(writes)
+    })
+  }
+
+  /**
+   * 对位请求与通用英雄请求并行：任何一方后到都按当前有效状态排入 latest-wins
+   * 队列。清空对位版时同一入口会恢复通用配置，避免 UI 与客户端残留不一致。
+   */
+  const syncAutomaticLoadout = () => {
+    const active = activeSession.value
+    if (
+      !active ||
+      String(lcs.gameflow.phase) !== 'ChampSelect' ||
+      active.gameMode !== 'CLASSIC' ||
+      mode.value !== 'ranked' ||
+      matchupLoadoutPending.value
+    ) {
+      autoLoadoutQueue.invalidate()
+      return
+    }
+
+    const identity = matchupOverlayIdentity.value
+    const patch = matchupOverlay.value
+    const assignedLane = assignedPositionToLane(active.assignedPosition)
+    const viewIdentity = {
+      gameId: active.gameId,
+      lane: assignedLane ?? opggPositionToMatchupLane(position.value),
+      region: region.value,
+      tier: tier.value,
+      version: version.value,
+      mode: mode.value,
+      source: effectiveSource.value ?? 'unknown'
+    }
+    const canUseMatchup =
+      !!identity &&
+      !!patch &&
+      hasCompleteMatchupLoadout(patch) &&
+      active.championId === identity.myChampionId &&
+      matchesMatchupOverlayIdentity(active.championId, identity, viewIdentity)
+    const requiredLane = canUseMatchup && identity ? identity.lane : assignedLane
+    if (requiredLane && position.value !== laneToPosition(requiredLane)) {
+      autoLoadoutQueue.invalidate()
+      return
+    }
+    const build = canUseMatchup
+      ? applyMatchupOverlay(champion.value, patch, identity, viewIdentity)
+      : champion.value
+    const effectiveLane = canUseMatchup && identity ? identity.lane : assignedLane
+    enqueueAutomaticLoadout(build, laneToPosition(effectiveLane), mode.value, false, {
+      sessionId: active.sessionId,
+      gameId: active.gameId,
+      championId: active.championId,
+      gameMode: active.gameMode,
+      assignedLane
+    })
+  }
+
+  // 在 500ms 的数据防抖之前同步淘汰旧选人快照，队列任务随后还会复验完整身份。
+  watch(activeSession, () => autoLoadoutQueue.invalidate(), { flush: 'sync' })
+
+  watch(
+    () => lcs.gameflow.phase,
+    (phase) => {
+      if (String(phase) !== 'ChampSelect') autoLoadoutQueue.invalidate()
+    }
+  )
+
   // handle to champion (if supported)
   // and auto
   watchDebounced(
     activeSession,
     async (active) => {
       if (!active) {
+        autoLoadoutQueue.invalidate()
         return
       }
 
@@ -779,38 +972,47 @@ export function provideOpgg() {
 
         if (!updated) return
 
-        // 处理自动化
-        const summonerSpells = champion.value?.data.summoner_spells
-        const runes = champion.value?.data.runes
-
-        if (
-          !isMayhem &&
-          !active.hasAutoSpellsConfig &&
-          summonerSpells &&
-          summonerSpells[0] &&
-          ogs.frontendSettings.autoApplySpells
-        ) {
-          setSummonerSpells(summonerSpells[0].ids, flashPosition.value)
+        // 处理自动化。若对位 overlay 已先返回，这里直接排入对位版；否则在
+        // overlay 后到时由 syncAutomaticLoadout 再排一次，latest-wins 保证最终一致。
+        const assignedLane = assignedPositionToLane(active.assignedPosition)
+        const identity = matchupOverlayIdentity.value
+        const viewIdentity = {
+          gameId: active.gameId,
+          lane: assignedLane ?? opggPositionToMatchupLane(position0),
+          region: region.value,
+          tier: tier.value,
+          version: version.value,
+          mode: mode.value,
+          source: effectiveSource.value ?? 'unknown'
         }
-
-        if (
-          !isMayhem &&
-          !active.hasAutoRunesConfig &&
-          runes &&
-          runes[0] &&
-          ogs.frontendSettings.autoApplyRunes
-        ) {
-          setRunes(runes[0], { championId: active.championId, position: position0 })
-        }
-
-        if (champion.value && hasItemsSets(champion.value) && ogs.frontendSettings.autoApplyItems) {
-          writeItemSets(champion.value, {
-            position: position0,
-            mode: mode0,
-            region: region.value,
-            tier: tier.value
-          })
-        }
+        const canUseMatchup =
+          active.gameMode === 'CLASSIC' &&
+          !!identity &&
+          !!matchupOverlay.value &&
+          hasCompleteMatchupLoadout(matchupOverlay.value) &&
+          active.championId === identity.myChampionId &&
+          position0 === laneToPosition(identity.lane) &&
+          matchesMatchupOverlayIdentity(active.championId, identity, viewIdentity)
+        const effectiveBuild = applyMatchupOverlay(
+          champion.value,
+          matchupOverlay.value,
+          canUseMatchup ? identity : null,
+          viewIdentity
+        )
+        const effectiveLane = canUseMatchup && identity ? identity.lane : assignedLane
+        enqueueAutomaticLoadout(
+          effectiveBuild,
+          canUseMatchup ? laneToPosition(effectiveLane) : position0,
+          mode0,
+          isMayhem,
+          {
+            sessionId: active.sessionId,
+            gameId: active.gameId,
+            championId: active.championId,
+            gameMode: active.gameMode,
+            assignedLane
+          }
+        )
       }
     },
     { immediate: true, debounce: 500 }
@@ -854,6 +1056,9 @@ export function provideOpgg() {
     changeVersion,
     changeChampion,
     refresh,
+
+    syncAutomaticLoadout,
+    setMatchupLoadoutPending,
 
     cancel
   })

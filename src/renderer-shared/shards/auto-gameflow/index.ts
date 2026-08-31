@@ -1,4 +1,5 @@
 import { Dep, IAkariShardInitDispose, Shard } from '@shared/akari-shard'
+import type { AutoReportCategory, AutoReportScope } from '@shared/shards/auto-gameflow'
 
 import { AkariIpcRenderer } from '../ipc'
 import { PiniaMobxUtilsRenderer } from '../pinia-mobx-utils'
@@ -134,11 +135,11 @@ export class AutoGameflowRenderer implements IAkariShardInitDispose {
     return this._settingUtils.set(MAIN_SHARD_NAMESPACE, 'autoReportEnabled', enabled)
   }
 
-  setAutoReportScope(scope: string) {
+  setAutoReportScope(scope: AutoReportScope) {
     return this._settingUtils.set(MAIN_SHARD_NAMESPACE, 'autoReportScope', scope)
   }
 
-  setAutoReportCategories(categories: string[]) {
+  setAutoReportCategories(categories: AutoReportCategory[]) {
     return this._settingUtils.set(MAIN_SHARD_NAMESPACE, 'autoReportCategories', categories)
   }
 

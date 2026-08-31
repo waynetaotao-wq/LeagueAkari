@@ -58,7 +58,13 @@
         </div>
         <div class="buttons flex min-w-19 justify-center">
           <NButton
-            @click="setRunes(r, { championId: champion.data.summary.id, position: position })"
+            @click="
+              setRunes(r, {
+                championId: champion.data.summary.id,
+                position,
+                matchup: getMatchupLoadoutIdentity(champion.data)
+              })
+            "
             size="tiny"
             type="primary"
             :disabled="!lcs.isConnected"
@@ -81,6 +87,7 @@ import { NButton, NCheckbox } from 'naive-ui'
 import { ref, watchEffect } from 'vue'
 
 import { useOpgg } from '../context'
+import { getMatchupLoadoutIdentity } from '../matchup-overlay'
 import { useLoadout } from '../utils/loadout'
 
 const { champion, position } = useOpgg()

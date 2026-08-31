@@ -30,7 +30,7 @@
         <ItemDisplay :item-id="extras.starterItemId" :size="18" />
       </div>
       <div v-if="!zhText" class="mt-1 text-[10px] text-[#666666] dark:text-[#b2b2b2]">
-        （表内新条目，暂未翻译，显示原文）
+        （当前内容暂未翻译，显示原文）
       </div>
     </div>
   </NPopover>
@@ -40,27 +40,26 @@
 import { useInstance } from '@renderer-shared/shards'
 import { CHAMPION_DATA_MAIN_NAMESPACE } from '@renderer-shared/shards/champion-data/context'
 import { AkariIpcRenderer } from '@renderer-shared/shards/ipc'
-import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
+import type { BzGuideParams, BzGuideResult, BzMatchupRow } from '@shared/types/counter-intel'
 import { NPopover } from 'naive-ui'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import ItemDisplay from '@renderer-shared/components/widgets/ItemDisplay.vue'
 import SummonerSpellDisplay from '@renderer-shared/components/widgets/SummonerSpellDisplay.vue'
 
 import { useOngoingGamePanel } from '../../context'
-import { getBzExtras, getBzSummaryZh } from './bz-summary-zh'
+import { getBzExtras, getBzSummaryZh, isBzLaneOpponent, resolveBzSelfPuuid } from './bz-summary-zh'
 
 const { puuid } = defineProps<{
   puuid: string
 }>()
 
-const ZED_ID = 238
-
 const { ongoingGame } = useOngoingGamePanel()
-const lcs = useLeagueClientStore()
 const ipc = useInstance(AkariIpcRenderer)
 
-const myPuuid = computed(() => lcs.summoner.me?.puuid ?? null)
+const myPuuid = computed(() =>
+  resolveBzSelfPuuid(ongoingGame.value.draft?.puuid, ongoingGame.value.selfPuuid)
+)
 const myChampionId = computed(() =>
   myPuuid.value ? (ongoingGame.value.championSelections?.[myPuuid.value] ?? null) : null
 )
@@ -70,44 +69,101 @@ const myPosition = computed(() =>
 const targetPosition = computed(() => ongoingGame.value.positionAssignments?.[puuid]?.position)
 const targetChampionId = computed(() => ongoingGame.value.championSelections?.[puuid] ?? null)
 
-/** 该玩家是否为"我的对位对手"：非我本人、与我同位置、我方英雄为劫 */
-const isMyLaneOpponent = computed(
-  () =>
-    myChampionId.value === ZED_ID &&
-    !!myPuuid.value &&
-    puuid !== myPuuid.value &&
-    !!myPosition.value &&
-    !!targetPosition.value &&
-    targetPosition.value === myPosition.value
-)
-
-const bzRow = ref<{ champion: string; difficulty: string; summary: string } | null>(null)
+const BZ_RETRY_DELAYS_MS = [750, 2000] as const
+const bzRow = ref<BzMatchupRow | null>(null)
 let seq = 0
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+function invalidateRequest() {
+  seq++
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer)
+    retryTimer = null
+  }
+}
+
+function isUsableRow(
+  response: BzGuideResult | null | undefined
+): response is BzGuideResult & { found: true; row: BzMatchupRow } {
+  return (
+    response?.found === true &&
+    typeof response.row?.champion === 'string' &&
+    typeof response.row.summary === 'string' &&
+    response.row.summary.trim().length > 0
+  )
+}
+
+async function loadBzRow(requestSeq: number, opponentChampionId: number, attempt: number) {
+  if (requestSeq !== seq) return
+
+  let response: BzGuideResult | null = null
+  try {
+    response = await ipc.call<BzGuideResult>(CHAMPION_DATA_MAIN_NAMESPACE, 'counterIntel/bzGuide', {
+      opponentChampionId,
+      includeCoreItems: false
+    } satisfies BzGuideParams)
+  } catch {}
+
+  if (requestSeq !== seq) return
+  if (isUsableRow(response)) {
+    bzRow.value = response.row
+    return
+  }
+
+  bzRow.value = null
+  const shouldRetry =
+    response === null ||
+    response.reason === undefined ||
+    response.reason === 'slug-unavailable' ||
+    response.reason === 'source-unavailable'
+  if (!shouldRetry) return
+
+  const retryDelay = BZ_RETRY_DELAYS_MS[attempt]
+  if (retryDelay === undefined) return
+
+  retryTimer = setTimeout(() => {
+    retryTimer = null
+    void loadBzRow(requestSeq, opponentChampionId, attempt + 1)
+  }, retryDelay)
+}
 
 watch(
-  [isMyLaneOpponent, targetChampionId],
-  async ([ok, champId]) => {
-    const mySeq = ++seq
-    if (!ok || !champId) {
-      bzRow.value = null
-      return
-    }
-    try {
-      const res = await ipc.call<{ found: boolean; row: any }>(
-        CHAMPION_DATA_MAIN_NAMESPACE,
-        'counterIntel/bzGuide',
-        { opponentChampionId: champId }
-      )
-      if (mySeq !== seq) return
-      bzRow.value = res?.found && res.row?.summary ? res.row : null
-    } catch {
-      if (mySeq === seq) bzRow.value = null
-    }
+  () =>
+    [
+      myPuuid.value,
+      myChampionId.value,
+      myPosition.value,
+      targetPosition.value,
+      targetChampionId.value,
+      ongoingGame.value.teams
+    ] as const,
+  ([selfPuuid, selfChampionId, selfPosition, opponentPosition, opponentChampionId, teams]) => {
+    invalidateRequest()
+    bzRow.value = null
+
+    const eligible = isBzLaneOpponent({
+      teams,
+      selfPuuid,
+      targetPuuid: puuid,
+      selfChampionId,
+      selfPosition,
+      targetPosition: opponentPosition
+    })
+    if (!eligible || !opponentChampionId) return
+
+    void loadBzRow(seq, opponentChampionId, 0)
   },
   { immediate: true }
 )
 
-const zhText = computed(() => (bzRow.value ? getBzSummaryZh(bzRow.value.champion) : null))
+onBeforeUnmount(() => {
+  invalidateRequest()
+  bzRow.value = null
+})
+
+const zhText = computed(() =>
+  bzRow.value ? getBzSummaryZh(bzRow.value.champion, bzRow.value.summary) : null
+)
 const extras = computed(() => (bzRow.value ? getBzExtras(bzRow.value.champion) : null))
 const displayText = computed(() => zhText.value ?? bzRow.value?.summary ?? '')
 </script>

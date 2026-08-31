@@ -1,4 +1,9 @@
 import { IAkariShardInitDispose, Shard } from '@shared/akari-shard'
+import {
+  AUTO_REPORT_CATEGORIES,
+  AUTO_REPORT_MAX_CATEGORIES,
+  normalizeAutoReportCategories
+} from '@shared/shards/auto-gameflow'
 import { z } from 'zod'
 
 import { AkariIpcMain } from '../ipc'
@@ -149,17 +154,9 @@ export class AutoGameflowMain implements IAkariShardInitDispose {
         },
         autoReportCategories: {
           default: this.settings.autoReportCategories,
-          schema: z.array(
-            z.enum([
-              'NEGATIVE_ATTITUDE',
-              'VERBAL_ABUSE',
-              'LEAVING_AFK',
-              'ASSISTING_ENEMY_TEAM',
-              'HATE_SPEECH',
-              'THIRD_PARTY_TOOLS',
-              'INAPPROPRIATE_NAME'
-            ])
-          )
+          schema: z.array(z.enum(AUTO_REPORT_CATEGORIES)).max(AUTO_REPORT_MAX_CATEGORIES),
+          restore: ({ value }) => normalizeAutoReportCategories(value),
+          transform: ({ value }) => normalizeAutoReportCategories(value)
         },
         autoSendARAMTeamSideEnabled: {
           default: this.settings.autoSendARAMTeamSideEnabled,
@@ -266,5 +263,7 @@ export class AutoGameflowMain implements IAkariShardInitDispose {
     this._watchLogging()
   }
 
-  async onDispose() {}
+  async onDispose() {
+    this._reportController.dispose()
+  }
 }
