@@ -627,7 +627,14 @@ export abstract class BaseAkariWindow<
         return
       }
 
-      if (!this._window.isVisible()) {
+      const nativeVisible = this._window.isVisible()
+      if (!this.state.show || !nativeVisible) {
+        if (this.state.show !== nativeVisible) {
+          this._logger.warn(
+            `Window visibility state mismatch (${this._namespace}): state.show=${this.state.show}, nativeVisible=${nativeVisible}; reissuing show`
+          )
+        }
+
         if (inactive) {
           this._window.showInactive()
         } else {
@@ -663,7 +670,14 @@ export abstract class BaseAkariWindow<
       return
     }
 
-    if (!this._window.isVisible()) {
+    const nativeVisible = this._window.isVisible()
+    if (!this.state.show || !nativeVisible) {
+      if (this.state.show !== nativeVisible) {
+        this._logger.warn(
+          `Window visibility state mismatch (${this._namespace}): state.show=${this.state.show}, nativeVisible=${nativeVisible}; reissuing show`
+        )
+      }
+
       if (inactive) {
         this._window.showInactive()
       } else {
@@ -675,10 +689,15 @@ export abstract class BaseAkariWindow<
   }
 
   hide() {
-    if (this._window && (this._window.isVisible() || this._window.isMinimized())) {
-      this._window.hide()
-      this._syncShowStateFromWindow()
+    if (!this._window) {
+      return
     }
+
+    if (this._window.isVisible() || this._window.isMinimized()) {
+      this._window.hide()
+    }
+
+    this._syncShowStateFromWindow()
   }
 
   private _syncShowStateFromWindow() {
