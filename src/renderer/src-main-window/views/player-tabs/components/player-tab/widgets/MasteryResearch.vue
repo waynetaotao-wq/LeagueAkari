@@ -362,7 +362,7 @@ import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
 import { SgpRenderer } from '@renderer-shared/shards/sgp'
 import { useSgpStore } from '@renderer-shared/shards/sgp/store'
 import { NButton, NSelect, NSpin } from 'naive-ui'
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 
 import { usePlayerTab } from '../context'
 import {
@@ -436,6 +436,13 @@ const api: MasteryFetchApi = {
     return normalizeTimeline(data) ?? (data as any)
   }
 }
+
+onBeforeUnmount(() => {
+  // 关闭/切换玩家页签时中止在途分析：不让 5 路并发的时间线拉取在后台继续消耗 SGP 配额
+  seq++
+  abort?.abort()
+  abort = null
+})
 
 async function startAnalyze() {
   const mySeq = ++seq

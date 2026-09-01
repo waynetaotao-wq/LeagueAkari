@@ -116,7 +116,7 @@ import { useInstance } from '@renderer-shared/shards'
 import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import { NButton } from 'naive-ui'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { AkariIpcRenderer } from '@renderer-shared/shards/ipc'
 import { onMounted, shallowRef } from 'vue'
@@ -130,12 +130,28 @@ const ipc = useInstance(AkariIpcRenderer)
 
 /** 本人熟练度表（championId → 点数）；拉取失败保持空表=零修正 */
 const masteries = shallowRef<Record<number, number>>({})
-onMounted(async () => {
-  try {
-    const got = await ipc.call('window-manager-main/draftgap-window', 'getMasteries')
-    if (got && typeof got === 'object') masteries.value = got as Record<number, number>
-  } catch {}
-})
+let masteriesInFlight: Promise<void> | null = null
+
+/**
+ * 拉取熟练度。OP.GG 窗口常在 LCU 尚未连接时就已挂载，首次必空；
+ * 因此不只在挂载时拉一次，而是在每次区块可见时若仍为空则重试（主进程对空结果不缓存）。
+ */
+function ensureMasteries() {
+  if (Object.keys(masteries.value).length > 0 || masteriesInFlight) return
+  masteriesInFlight = (async () => {
+    try {
+      const got = await ipc.call('window-manager-main/draftgap-window', 'getMasteries')
+      if (got && typeof got === 'object' && Object.keys(got).length > 0) {
+        masteries.value = got as Record<number, number>
+      }
+    } catch {
+      // 保持空表=零修正；下次可见时再试
+    } finally {
+      masteriesInFlight = null
+    }
+  })()
+}
+onMounted(ensureMasteries)
 const resources = useAkariResourceProvider()
 const { overview } = useOpgg()
 
@@ -188,6 +204,15 @@ const visible = computed(
     currentChampionId.value > 0 &&
     benchIds.value.length > 0 &&
     advices.value.length > 0
+)
+
+// 进入大乱斗选人（此时 LCU 必已连接）：熟练度若仍为空则重试，保证本人熟练修正生效
+watch(
+  () => isMayhemData.value && lcs.gameflow.phase === 'ChampSelect',
+  (inMayhemPick) => {
+    if (inMayhemPick) ensureMasteries()
+  },
+  { immediate: true }
 )
 
 const swapping = ref(false)

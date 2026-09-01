@@ -116,7 +116,7 @@ import { useInstance } from '@renderer-shared/shards'
 import { SgpRenderer } from '@renderer-shared/shards/sgp'
 import { useSgpStore } from '@renderer-shared/shards/sgp/store'
 import { NPopover } from 'naive-ui'
-import { computed, reactive, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, watch } from 'vue'
 
 import { useOngoingGamePanel } from '../../context'
 import {
@@ -144,8 +144,9 @@ interface MidResult {
   deep: MidDeepResult
 }
 
-/** 模块级缓存：同一对局界面反复渲染 / 重进不重拉 */
-const midlaneCache = new Map<string, MidResult>()
+/** 模块级缓存：同一对局界面反复渲染 / 重进不重拉；30 分钟过期，整天不关客户端也不会跨版本沿用旧结论 */
+const MIDLANE_CACHE_TTL = 30 * 60 * 1000
+const midlaneCache = new Map<string, { at: number; result: MidResult }>()
 
 const position = computed(() => ongoingGame.value.positionAssignments?.[puuid]?.position)
 const championId = computed(() => ongoingGame.value.championSelections?.[puuid] ?? null)
@@ -163,6 +164,16 @@ const state = reactive<{
 }>({ phase: 'idle', progressDone: 0, progressTotal: 0, result: null })
 
 let seq = 0
+/** 在途请求的中止器：依赖变化 / 卡片隐藏 / 卸载时取消旧一轮，避免 5 路并发在后台继续打 SGP */
+let abort: AbortController | null = null
+
+function cancelInFlight() {
+  seq++
+  if (abort) {
+    abort.abort()
+    abort = null
+  }
+}
 
 async function run() {
   const myPuuid = puuid
@@ -170,12 +181,17 @@ async function run() {
   if (!myPuuid || !myChampion) return
   const key = `${myPuuid}:${myChampion}:${sgps.availability.sgpServerId}`
   const cached = midlaneCache.get(key)
-  if (cached) {
-    state.result = cached
+  if (cached && Date.now() - cached.at < MIDLANE_CACHE_TTL) {
+    cancelInFlight()
+    state.result = cached.result
     state.phase = 'done'
     return
   }
-  const mySeq = ++seq
+  if (cached) midlaneCache.delete(key)
+  cancelInFlight()
+  const mySeq = seq
+  abort = new AbortController()
+  const signal = abort.signal
   state.phase = 'list'
   state.result = null
   state.progressDone = 0
@@ -198,9 +214,10 @@ async function run() {
           state.progressDone = c
           state.progressTotal = t
         }
-      }
+      },
+      signal
     )
-    if (mySeq !== seq) return
+    if (mySeq !== seq || signal.aborted) return
     state.phase = 'deep'
     state.progressDone = 0
     state.progressTotal = Math.min(DEEP_GAMES, ladder.games.length)
@@ -221,11 +238,12 @@ async function run() {
           state.progressDone = d
           state.progressTotal = t
         }
-      }
+      },
+      signal
     )
-    if (mySeq !== seq) return
+    if (mySeq !== seq || signal.aborted) return
     const result: MidResult = { ladder, deep }
-    midlaneCache.set(key, result)
+    midlaneCache.set(key, { at: Date.now(), result })
     state.result = result
     state.phase = 'done'
   } catch {
@@ -236,10 +254,19 @@ async function run() {
 watch(
   () => [visible.value, puuid, championId.value] as const,
   ([v]) => {
-    if (v) void run()
+    if (v) {
+      void run()
+    } else {
+      // 不再可见（分路变化 / 英雄清空 / SGP 不可用）：中止在途请求，避免后台空转
+      cancelInFlight()
+    }
   },
   { immediate: true }
 )
+
+onBeforeUnmount(() => {
+  cancelInFlight()
+})
 
 const hasData = computed(() => !!state.result && state.result.deep.deepGames > 0)
 
