@@ -20,6 +20,7 @@ import { LoggerRenderer } from '@renderer-shared/shards/logger'
 import { OngoingGameRenderer } from '@renderer-shared/shards/ongoing-game'
 import { PiniaMobxUtilsRenderer } from '@renderer-shared/shards/pinia-mobx-utils'
 import { RendererDebugRenderer } from '@renderer-shared/shards/renderer-debug'
+import { GameRefocusRenderer } from '@renderer-shared/shards/game-refocus'
 import { RespawnTimerRenderer } from '@renderer-shared/shards/respawn-timer'
 import { RiotClientRenderer } from '@renderer-shared/shards/riot-client'
 import { SavedPlayerRenderer } from '@renderer-shared/shards/saved-player'
@@ -63,6 +64,7 @@ manager.use(OngoingGameRenderer)
 manager.use(PiniaMobxUtilsRenderer)
 manager.use(RendererDebugRenderer)
 manager.use(RespawnTimerRenderer)
+manager.use(GameRefocusRenderer)
 manager.use(RiotClientRenderer)
 manager.use(SavedPlayerRenderer)
 manager.use(SelfHostedLcuDataRenderer)

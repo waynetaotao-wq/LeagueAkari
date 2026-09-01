@@ -18,6 +18,28 @@
           />
         </SettingsRow>
       </SettingsSection>
+      <!-- [lolps] 复活自动切回游戏 -->
+      <SettingsSection setting-id="misc.game-refocus" title="复活自动切回游戏">
+        <SettingsRow
+          setting-id="misc.game-refocus.enabled"
+          label="死亡后若在其他窗口，复活前 2 秒自动切回游戏"
+          :label-description="
+            grs.state.supported
+              ? '只做窗口切换（等价于 Alt+Tab），不模拟任何按键；人已在游戏里时不会有任何动作。' +
+                '判断“是否在游戏里”需要以管理员身份运行，否则每次复活都会执行一次无害的切换。' +
+                (grs.state.lastTriggeredAt ? ' 本局已触发。' : '')
+              : '当前系统不支持（仅 Windows）'
+          "
+          :label-width="400"
+        >
+          <NSwitch
+            size="small"
+            :value="grs.settings.enabled"
+            :disabled="!grs.state.supported"
+            @update:value="(val) => gr.setEnabled(val)"
+          />
+        </SettingsRow>
+      </SettingsSection>
       <!-- [lolps] 团队之选窗口开关 -->
       <SettingsSection setting-id="misc.draftgap" title="团队之选（选人推荐窗口）">
         <SettingsRow
@@ -100,6 +122,8 @@ import { useInstance } from '@renderer-shared/shards'
 import { useAkariNavigationStep } from '@renderer-shared/shards/akari-navigation'
 import { AppCommonRenderer } from '@renderer-shared/shards/app-common'
 import { useAppCommonStore } from '@renderer-shared/shards/app-common/store'
+import { GameRefocusRenderer } from '@renderer-shared/shards/game-refocus'
+import { useGameRefocusStore } from '@renderer-shared/shards/game-refocus/store'
 import { RespawnTimerRenderer } from '@renderer-shared/shards/respawn-timer'
 import { useRespawnTimerStore } from '@renderer-shared/shards/respawn-timer/store'
 import { WindowManagerRenderer } from '@renderer-shared/shards/window-manager'
@@ -118,6 +142,8 @@ const a = useInstance(AppCommonRenderer)
 const as = useAppCommonStore()
 const rts = useRespawnTimerStore()
 const rt = useInstance(RespawnTimerRenderer)
+const grs = useGameRefocusStore()
+const gr = useInstance(GameRefocusRenderer)
 
 const wm = useInstance(WindowManagerRenderer)
 const wms = useWindowManagerStore()
