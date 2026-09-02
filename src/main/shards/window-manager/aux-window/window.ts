@@ -188,12 +188,15 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
   }
 
   private _showAndEnsurePainted() {
+    const wasHidden = !!this._window && !this._window.isDestroyed() && !this._window.isVisible()
     this.showOrRestore()
     const win = this._window
     if (!win || win.isDestroyed()) return
     try {
       win.webContents.invalidate()
     } catch {}
+    // 从隐藏态显示（典型：对局结束回大厅）：无感的 1px 尺寸往返，先发制人重建绘制表面
+    if (wasHidden) this._nudgeWindowSize()
 
     this._cancelHealCheck()
     const seq = this._healSeq
@@ -222,6 +225,20 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
       if (typeof textLength === 'number' && textLength === 0) {
         this._logger.warn('[lolps] aux window is blank after show, reloading')
         wc.reload()
+        return
+      }
+
+      // DOM 有内容但可能根本没画到屏幕上（游戏独占全屏期间被隐藏后，合成器表面失效的黑窗）：
+      // 截屏采样，几乎全黑即判定为未绘制 → 尺寸微动重建表面 + 重载页面
+      const brightRatio = await this._measureBrightRatio()
+      if (seq !== this._healSeq) return
+      this._logger.info(
+        `[lolps] aux window paint check: text=${textLength} bright=${(brightRatio * 100).toFixed(1)}%`
+      )
+      if (brightRatio >= 0 && brightRatio < 0.01) {
+        this._logger.warn('[lolps] aux window painted black, nudging size and reloading')
+        this._nudgeWindowSize()
+        wc.reload()
       }
     } catch (error) {
       this._logger.warn(`[lolps] aux window health check failed, reloading: ${String(error)}`)
@@ -229,6 +246,47 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
         wc.reload()
       } catch {}
     }
+  }
+
+  /** 截屏并按 8px 网格采样，返回"亮像素"占比；无法截屏时返回 -1（不触发自愈） */
+  private async _measureBrightRatio(): Promise<number> {
+    const win = this._window
+    if (!win || win.isDestroyed()) return -1
+    try {
+      const image = await win.webContents.capturePage()
+      const { width, height } = image.getSize()
+      if (width <= 0 || height <= 0) return -1
+      const bitmap = image.toBitmap() // BGRA
+      let bright = 0
+      let total = 0
+      for (let y = 0; y < height; y += 8) {
+        for (let x = 0; x < width; x += 8) {
+          const i = (y * width + x) * 4
+          const b = bitmap[i]
+          const g = bitmap[i + 1]
+          const r = bitmap[i + 2]
+          total++
+          // 暗色主题底色 #141416 的最大通道 ≈ 22；正文/图标远高于 40
+          if (Math.max(r, g, b) > 40) bright++
+        }
+      }
+      return total > 0 ? bright / total : -1
+    } catch {
+      return -1
+    }
+  }
+
+  /** 1px 尺寸往返，迫使系统重建窗口绘制表面（基类记忆尺寸会在回弹后落回原值） */
+  private _nudgeWindowSize() {
+    const win = this._window
+    if (!win || win.isDestroyed()) return
+    try {
+      const [w, h] = win.getSize()
+      win.setSize(w, h + 1)
+      setTimeout(() => {
+        if (!win.isDestroyed()) win.setSize(w, h)
+      }, 60)
+    } catch {}
   }
 
   override async onInit() {
