@@ -83,6 +83,10 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
     this._mobxUtils.reaction(
       () => showTiming.get(),
       (timing) => {
+        // [lolps] 诊断：回大厅不显示时，凭这一行能判断是"时机没触发"还是"显示动作被拦"
+        this._logger.info(
+          `[lolps] aux timing=${timing} phase=${this._leagueClient.data.gameflow.phase} autoShow=${this.settings.autoShow} ready=${this.state.ready} nativeVisible=${this._window && !this._window.isDestroyed() ? this._window.isVisible() : 'n/a'} stateShow=${this.state.show}`
+        )
         if (timing === 'ignore') {
           return
         }
@@ -91,6 +95,7 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
           this._showAndEnsurePainted()
         } else {
           this._cancelHealCheck()
+          this._hiddenByTiming = true
           this.hide()
         }
       },
@@ -187,16 +192,42 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
     }
   }
 
+  /** 上一次是否由显示时机逻辑主动隐藏（用于识别"被系统误认为可见"的黑窗） */
+  private _hiddenByTiming = false
+
   private _showAndEnsurePainted() {
-    const wasHidden = !!this._window && !this._window.isDestroyed() && !this._window.isVisible()
+    const cameFromHidden = this._hiddenByTiming
+    this._hiddenByTiming = false
+    const before = this._window
+    if (before && !before.isDestroyed()) {
+      const nativeVisible = before.isVisible()
+      this._logger.info(
+        `[lolps] aux show requested: fromHidden=${cameFromHidden} nativeVisible=${nativeVisible} stateShow=${this.state.show} minimized=${before.isMinimized()}`
+      )
+      // 我们明明隐藏过，系统却说它可见：这正是"窗口在、内容黑"的状态，先真隐藏再显示以重建
+      if (cameFromHidden && nativeVisible) {
+        this._logger.warn('[lolps] aux window reports visible after our hide; forcing hide/show cycle')
+        try {
+          before.hide()
+        } catch {}
+      }
+    }
+
     this.showOrRestore()
     const win = this._window
     if (!win || win.isDestroyed()) return
+    // 显示动作被基类守卫拦下但窗口实际不可见：强制显示
+    if (!win.isVisible()) {
+      this._logger.warn('[lolps] aux window still invisible after showOrRestore; forcing show()')
+      try {
+        win.show()
+      } catch {}
+    }
     try {
       win.webContents.invalidate()
     } catch {}
     // 从隐藏态显示（典型：对局结束回大厅）：无感的 1px 尺寸往返，先发制人重建绘制表面
-    if (wasHidden) this._nudgeWindowSize()
+    if (cameFromHidden) this._nudgeWindowSize()
 
     this._cancelHealCheck()
     const seq = this._healSeq
