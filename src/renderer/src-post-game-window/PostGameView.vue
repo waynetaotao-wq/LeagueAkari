@@ -37,7 +37,7 @@
           </div>
           <div class="pg-stat">
             <div class="pg-stat-value" :class="ratingClass(view.me.rating)">
-              {{ view.me.rating.toFixed(1) }}
+              {{ formatAkariRating(view.me.rating) }}
               <span v-if="view.me.tag" class="pg-tag" :class="view.me.tagClass">{{ view.me.tag }}</span>
             </div>
             <div class="pg-stat-label">对局评分</div>
@@ -77,7 +77,7 @@
             </span>
             <span class="pg-col-kda">{{ row.kills }}/{{ row.deaths }}/{{ row.assists }}</span>
             <span class="pg-col-rating">
-              <span :class="ratingClass(row.rating)">{{ row.rating.toFixed(1) }}</span>
+              <span :class="ratingClass(row.rating)">{{ formatAkariRating(row.rating) }}</span>
               <span v-if="row.tag" class="pg-tag" :class="row.tagClass">{{ row.tag }}</span>
             </span>
           </div>
@@ -97,7 +97,8 @@ import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import {
   type AkariScore,
   type AkariScorePosition,
-  computeAkariScores
+  computeAkariScores,
+  formatAkariRating
 } from '@renderer-shared/components/match-card/utils/akari-score'
 import { parseStoredCalibration } from '@renderer-shared/components/match-card/utils/akari-score-calibration'
 import { buildAkariScoreInputs } from '@renderer-shared/components/match-card/utils/akari-score-input'

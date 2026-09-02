@@ -9,7 +9,7 @@
           class="font-bold tabular-nums"
           :class="[size === 'md' ? 'text-base leading-5' : 'text-[11px] leading-4', ratingClass]"
         >
-          {{ score.rating.toFixed(1) }}
+          {{ formatAkariRating(score.rating) }}
           <span
             v-if="size === 'md'"
             class="text-[11px] font-normal text-black/60 dark:text-white/60"
@@ -26,7 +26,7 @@
     </template>
     <div class="w-44 text-xs">
       <div class="mb-1 flex items-baseline justify-between">
-        <span class="font-bold">对局评分 {{ score.rating.toFixed(1) }}</span>
+        <span class="font-bold">对局评分 {{ formatAkariRating(score.rating) }} / {{ AKARI_RATING_DISPLAY_MAX }}</span>
         <span class="text-[10px] text-black/60 dark:text-white/60">
           {{ positionText }}{{ tag ? ` · ${tag.text}` : '' }}
         </span>
@@ -59,7 +59,13 @@
 import { NPopover } from 'naive-ui'
 import { computed } from 'vue'
 
-import { AKARI_METRIC_LABELS, type AkariMetricKey, type AkariScore } from '../utils/akari-score'
+import {
+  AKARI_METRIC_LABELS,
+  AKARI_RATING_DISPLAY_MAX,
+  type AkariMetricKey,
+  type AkariScore,
+  formatAkariRating
+} from '../utils/akari-score'
 
 const props = withDefaults(
   defineProps<{

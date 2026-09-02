@@ -217,3 +217,15 @@ describe('Akari score', () => {
     expect(normalizePosition(null)).toBe('UNKNOWN')
   })
 })
+
+describe('display scale', () => {
+  it('maps the internal 0-10 rating onto the WeGame-like 17.4 scale without touching thresholds', async () => {
+    const { AKARI_RATING_DISPLAY_MAX, formatAkariRating } = await import('./akari-score')
+    expect(AKARI_RATING_DISPLAY_MAX).toBe(17.4)
+    expect(formatAkariRating(10)).toBe('17.4')
+    expect(formatAkariRating(5)).toBe('8.7')
+    expect(formatAkariRating(0)).toBe('0.0')
+    // 尽力局阈值仍是内部 8.0（显示为 13.9），MVP/SVP 判定不受显示量表影响
+    expect(formatAkariRating(AKARI_CARRY_LOSS_THRESHOLD)).toBe('13.9')
+  })
+})

@@ -132,6 +132,17 @@ export const AKARI_METRIC_CAP = 2.5
 /** 尽力局阈值（0–10 量表） */
 export const AKARI_CARRY_LOSS_THRESHOLD = 8.0
 
+/**
+ * 显示量表满分（可调区）：内部计算恒为 0–10，界面按比例换算显示。
+ * 17.4 = WeGame 量表满分，便于与熟悉的分数直觉对齐；阈值 / 颜色档位 / MVP 判定均不受影响。
+ */
+export const AKARI_RATING_DISPLAY_MAX = 17.4
+
+/** 内部 0–10 评分 → 显示量表字符串（一位小数） */
+export function formatAkariRating(rating: number): string {
+  return ((rating * AKARI_RATING_DISPLAY_MAX) / 10).toFixed(1)
+}
+
 export const AKARI_METRIC_LABELS: Record<AkariMetricKey, string> = {
   damage: '输出',
   tank: '坦度',
