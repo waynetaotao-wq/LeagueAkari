@@ -88,8 +88,9 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
         }
 
         if (timing === 'show') {
-          this.showOrRestore()
+          this._showAndEnsurePainted()
         } else {
+          this._cancelHealCheck()
           this.hide()
         }
       },
@@ -167,10 +168,78 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
     })
   }
 
+  /**
+   * [lolps] 回大厅黑窗自愈。
+   *
+   * 对局期间此窗被隐藏，回大厅再显示时偶发整窗黑屏（内容未绘制）——可能是渲染进程在
+   * 游戏独占全屏期间被系统回收/崩溃（基类对 render-process-gone 仅记日志），也可能是
+   * 合成器未重绘。两种原因离线无法区分，因此做与原因无关的自愈：
+   * 显示后强制重绘；稍后自检"渲染进程已崩"或"页面正文为空"，任一命中即重载页面。
+   */
+  private _healTimer: NodeJS.Timeout | null = null
+  private _healSeq = 0
+
+  private _cancelHealCheck() {
+    this._healSeq++
+    if (this._healTimer) {
+      clearTimeout(this._healTimer)
+      this._healTimer = null
+    }
+  }
+
+  private _showAndEnsurePainted() {
+    this.showOrRestore()
+    const win = this._window
+    if (!win || win.isDestroyed()) return
+    try {
+      win.webContents.invalidate()
+    } catch {}
+
+    this._cancelHealCheck()
+    const seq = this._healSeq
+    this._healTimer = setTimeout(() => {
+      this._healTimer = null
+      void this._healIfBlank(seq)
+    }, 800)
+  }
+
+  private async _healIfBlank(seq: number) {
+    if (seq !== this._healSeq) return
+    const win = this._window
+    if (!win || win.isDestroyed() || !win.isVisible()) return
+    const wc = win.webContents
+    try {
+      if (wc.isCrashed()) {
+        this._logger.warn('[lolps] aux window renderer crashed, reloading')
+        wc.reload()
+        return
+      }
+      const textLength = await wc.executeJavaScript(
+        'document.body ? document.body.innerText.trim().length : 0',
+        true
+      )
+      if (seq !== this._healSeq) return
+      if (typeof textLength === 'number' && textLength === 0) {
+        this._logger.warn('[lolps] aux window is blank after show, reloading')
+        wc.reload()
+      }
+    } catch (error) {
+      this._logger.warn(`[lolps] aux window health check failed, reloading: ${String(error)}`)
+      try {
+        wc.reload()
+      } catch {}
+    }
+  }
+
   override async onInit() {
     await super.onInit()
 
     this._watchAuxWindow()
+  }
+
+  override async onDispose() {
+    this._cancelHealCheck()
+    await super.onDispose()
   }
 
   protected override getSettingPropKeys() {
