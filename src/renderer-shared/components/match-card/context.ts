@@ -16,6 +16,8 @@ import {
   toValue
 } from 'vue'
 
+import { type AkariScoreResult, computeAkariScores } from './utils/akari-score'
+
 export type MatchCardContext = {
   isExpanded: Ref<boolean>
   puuid: Ref<string | undefined>
@@ -33,6 +35,8 @@ export type MatchCardContext = {
 
   participant: Ref<ReturnType<typeof toParticipants>[number] | null>
   team: Ref<ReturnType<typeof toTeams>['teamStatMap'][string] | null>
+  /** [lolps] 本局 Akari 评分（MVP / SVP / 尽力局），仅两队模式有值 */
+  akariScores: Ref<AkariScoreResult>
 
   // events
   navigateToSummonerByPuuid: (puuid: string, setCurrent?: boolean) => void
@@ -89,6 +93,14 @@ export function provideMatchCard(props: {
   const team = computed(() => {
     if (!participant.value) return null
     return teams.value.teamStatMap[participant.value.teamIdentifier] ?? null
+  })
+
+  // [lolps] 评分只在本局 10 人内比较，摘要数据即可计算，折叠态就能显示
+  const akariScores = computed<AkariScoreResult>(() => {
+    if (!basicInfo.value.isTwoTeam) {
+      return { byPuuid: new Map(), mvpPuuid: null, svpPuuid: null }
+    }
+    return computeAkariScores(participants.value, basicInfo.value.gameDuration)
   })
 
   const draftOptions = computed<DraftOptions>(() => {
@@ -148,6 +160,7 @@ export function provideMatchCard(props: {
 
     participant,
     team,
+    akariScores,
 
     // events
     navigateToSummonerByPuuid: props.navigateToSummonerByPuuid,

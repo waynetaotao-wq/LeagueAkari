@@ -208,10 +208,17 @@
             </div>
           </NTooltip>
           <div
-            v-if="participant.position && participant.position.toLowerCase() !== 'invalid'"
-            class="flex items-center gap-1 text-[11px] text-black/60 dark:text-white/60"
+            v-if="
+              (participant.position && participant.position.toLowerCase() !== 'invalid') ||
+              akariScores.byPuuid.has(participant.puuid)
+            "
+            class="flex items-center gap-1.5 text-[11px] text-black/60 dark:text-white/60"
           >
-            <span>{{ position(participant.position) }}</span>
+            <span v-if="participant.position && participant.position.toLowerCase() !== 'invalid'">
+              {{ position(participant.position) }}
+            </span>
+            <!-- [lolps] 本局 Akari 评分与 MVP / SVP / 尽力局 -->
+            <AkariScoreBadge :score="akariScores.byPuuid.get(participant.puuid)" size="sm" />
           </div>
         </div>
       </div>
@@ -313,6 +320,7 @@ import { computed } from 'vue'
 
 import { useMatchCard } from '../context'
 import Atakhan from '../icons/Atakhan.vue'
+import AkariScoreBadge from './AkariScoreBadge.vue'
 import Baron from '../icons/Baron.vue'
 import Dragon from '../icons/Dragon.vue'
 import Inhibitor from '../icons/Inhibitor.vue'
@@ -397,8 +405,15 @@ const { teamIdentifier } = defineProps<{
   teamIdentifier: string
 }>()
 
-const { basicInfo, teams, participants, puuid, hidePrivacy, navigateToSummonerByPuuid } =
-  useMatchCard()
+const {
+  basicInfo,
+  teams,
+  participants,
+  puuid,
+  hidePrivacy,
+  navigateToSummonerByPuuid,
+  akariScores
+} = useMatchCard()
 
 const team = computed(() => {
   return teams.value.teamStatMap[teamIdentifier]

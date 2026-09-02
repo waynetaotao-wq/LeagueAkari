@@ -163,6 +163,11 @@
                       </div>
                     </div>
                   </div>
+
+                  <!-- [lolps] Akari 评分 + MVP / SVP / 尽力局（仅两队模式） -->
+                  <div v-if="myAkariScore" class="flex min-w-22 items-center justify-center">
+                    <AkariScoreBadge :score="myAkariScore" size="md" />
+                  </div>
                 </div>
               </template>
               <RadarChart :puuid="puuid" />
@@ -459,6 +464,7 @@ import { useGameResultName } from './utils/text'
 import { useCardBorderClass, useWinResultStyleType } from './utils/theme'
 import { formatSeconds } from './utils/time'
 import ManyTags from './widgets/ManyTags.vue'
+import AkariScoreBadge from './widgets/AkariScoreBadge.vue'
 import RadarChart from './widgets/RadarChart.vue'
 
 defineEmits<{
@@ -472,10 +478,17 @@ const {
   participants,
   isExpanded,
   hidePrivacy,
-  navigateToSummonerByPuuid
+  navigateToSummonerByPuuid,
+  akariScores
 } = useMatchCard()
 
 const { formatExtremeNumber } = useNumberFormatter()
+
+// [lolps] 当前查看的玩家在本局的 Akari 评分
+const myAkariScore = computed(() => {
+  const p = puuid.value
+  return p ? (akariScores.value.byPuuid.get(p) ?? null) : null
+})
 
 const gameResultName = useGameResultName()
 
