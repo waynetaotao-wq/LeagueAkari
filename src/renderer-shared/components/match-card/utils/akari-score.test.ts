@@ -274,3 +274,41 @@ describe('display scale', () => {
     expect(formatAkariRating(AKARI_CARRY_LOSS_THRESHOLD)).toBe('10.0')
   })
 })
+
+describe('game tags: stricter stomp / blame rules', () => {
+  it('detects a long stomp without surrender through the team gold ratio', () => {
+    // 40 分钟 40:22、无投降，但经济领先 30%
+    const game = realGame().map((p) => ({
+      ...p,
+      gameEndedInSurrender: false,
+      goldEarned: p.teamIdentifier === 'R' ? Math.round(p.goldEarned * 1.3) : p.goldEarned
+    }))
+    const result = computeAkariScores(game, 40 * 60)
+    const winners = [...result.byPuuid.values()].filter((s) => ['leoleeoh', 'biubiubiu', 'hideonpsy'].includes(s.puuid))
+    expect(winners.every((s) => s.tag === 'stomp' || s.tag === 'carry' || s.tag === 'lying')).toBe(true)
+    expect(winners.some((s) => s.tag === 'stomp')).toBe(true)
+  })
+
+  it('does not call an even-gold early surrender a stomp', () => {
+    const game = realGame().map((p) => ({
+      ...p,
+      gameEndedInSurrender: true,
+      kills: 6,
+      deaths: 6,
+      assists: 6,
+      goldEarned: 10000
+    }))
+    const result = computeAkariScores(game, 20 * 60)
+    expect([...result.byPuuid.values()].some((s) => s.tag === 'stomp')).toBe(false)
+  })
+
+  it('never blames anyone when the whole losing team collapsed', () => {
+    const game = realGame().map((p) =>
+      p.teamIdentifier === 'B'
+        ? { ...p, kills: 0, deaths: 9, assists: 1, totalDamageDealtToChampions: 4000, goldEarned: 5000, cs: 60 }
+        : p
+    )
+    const result = computeAkariScores(game, DURATION)
+    expect([...result.byPuuid.values()].some((s) => s.tag === 'blame')).toBe(false)
+  })
+})

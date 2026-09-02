@@ -112,6 +112,8 @@ export interface AkariMetricSample {
   afkTeammate: boolean
   kills: number
   surrender: boolean
+  gold: number
+  turretTakedowns: number
 }
 
 export type AkariPositionWeights = Record<AkariScorePosition, Record<AkariMetricKey, number>>
@@ -171,9 +173,18 @@ export const AKARI_TAG_THRESHOLDS = {
   blameMax: 5.0,
   /** 躺赢/甩锅：需低于队友均值至少此内部分差 */
   belowTeamInternal: 1.0,
-  /** 碾压局（队伍层面）：击杀比 ≥ 此值（且己方 ≥ 15 杀），或对方投降且时长 ≤ stompMaxMinutes */
+  /**
+   * 碾压局（队伍层面），满足其一：
+   *  a) 队伍经济比 ≥ stompGoldRatio（最硬的信号，不依赖投降与时长）
+   *  b) 己方 ≥ 15 杀且击杀比 ≥ stompKillRatio
+   *  c) 对方投降且时长 ≤ stompMaxMinutes 且经济比 ≥ stompSurrenderGoldRatio（排除崩盘前的胶着局）
+   */
+  stompGoldRatio: 1.25,
   stompKillRatio: 2.0,
-  stompMaxMinutes: 25
+  stompMaxMinutes: 25,
+  stompSurrenderGoldRatio: 1.12,
+  /** 甩锅局额外条件：队友均值（内部分）≥ 此值——整队崩盘时不给任何人扣甩锅帽子 */
+  blameTeammatesMinInternal: 4.5
 } as const
 /** 尽力局阈值（内部 0–10 量表，由显示阈值换算而来） */
 export const AKARI_CARRY_LOSS_THRESHOLD = fromDisplayRating(AKARI_TAG_THRESHOLDS.effortMin)
@@ -314,6 +325,8 @@ interface Derived {
   afkTeammate: boolean
   kills: number
   surrender: boolean
+  gold: number
+  turretTakedowns: number
 }
 
 /**
@@ -443,7 +456,9 @@ export function computeAkariMetrics(
         bonus: clamp(multi + solo + steals, 0, 0.35),
         afkTeammate: p.hadAfkTeammate === true,
         kills,
-        surrender: p.gameEndedInSurrender === true
+        surrender: p.gameEndedInSurrender === true,
+        gold,
+        turretTakedowns: num(p.turretTakedowns)
       })
     }
   }
@@ -522,7 +537,9 @@ export function computeAkariMetrics(
       bonus: d.bonus,
       afkTeammate: d.afkTeammate,
       kills: d.kills,
-      surrender: d.surrender
+      surrender: d.surrender,
+      gold: d.gold,
+      turretTakedowns: d.turretTakedowns
     })
   }
   return samples
@@ -634,19 +651,27 @@ function assignGameTags(
     teams.set(d.teamIdentifier, list)
   }
   const teamKills = new Map<string, number>()
-  for (const [key, list] of teams) teamKills.set(key, list.reduce((s, d) => s + d.kills, 0))
+  const teamGold = new Map<string, number>()
+  for (const [key, list] of teams) {
+    teamKills.set(key, list.reduce((s, d) => s + d.kills, 0))
+    teamGold.set(key, list.reduce((s, d) => s + d.gold, 0))
+  }
   const minutes = gameDurationSeconds / 60
 
   for (const [key, list] of teams) {
     const enemyKey = [...teams.keys()].find((k) => k !== key)
     const myKills = teamKills.get(key) ?? 0
     const enemyKills = enemyKey ? (teamKills.get(enemyKey) ?? 0) : 0
+    const myGold = teamGold.get(key) ?? 0
+    const enemyGold = enemyKey ? (teamGold.get(enemyKey) ?? 0) : 0
+    const goldRatio = enemyGold > 0 ? myGold / enemyGold : 1
     const win = list[0]?.win ?? false
     const surrendered = list.some((d) => d.surrender)
     const stomp =
       win &&
-      ((myKills >= 15 && myKills >= enemyKills * T.stompKillRatio) ||
-        (surrendered && minutes <= T.stompMaxMinutes))
+      (goldRatio >= T.stompGoldRatio ||
+        (myKills >= 15 && myKills >= enemyKills * T.stompKillRatio) ||
+        (surrendered && minutes <= T.stompMaxMinutes && goldRatio >= T.stompSurrenderGoldRatio))
     const ratings = list.map((d) => scores.get(d.puuid)!.rating)
     const sortedDesc = [...ratings].sort((a, b) => b - a)
     const teamMin = Math.min(...ratings)
@@ -669,7 +694,12 @@ function assignGameTags(
         else if (stomp) s.tag = 'stomp'
       } else {
         if (display >= T.effortMin) s.tag = 'effort'
-        else if (display <= T.blameMax && r === teamMin && othersAvg - r >= T.belowTeamInternal) {
+        else if (
+          display <= T.blameMax &&
+          r === teamMin &&
+          othersAvg - r >= T.belowTeamInternal &&
+          othersAvg >= T.blameTeammatesMinInternal
+        ) {
           s.tag = 'blame'
         }
       }
