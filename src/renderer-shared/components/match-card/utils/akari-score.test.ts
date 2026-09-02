@@ -138,6 +138,75 @@ describe('Akari score', () => {
     expect(computeAkariScores(oneTeam, DURATION).byPuuid.size).toBe(0)
   })
 
+  it('credits mitigation to tanks (v2)', () => {
+    const plain = computeAkariScores(realGame(), DURATION)
+    const game = realGame().map((p) =>
+      p.puuid === 'iubethy' ? { ...p, damageSelfMitigated: 60000 } : { ...p, damageSelfMitigated: 8000 }
+    )
+    const withMitigation = computeAkariScores(game, DURATION)
+    expect(withMitigation.byPuuid.get('iubethy')!.metrics.tank).toBeGreaterThan(
+      plain.byPuuid.get('iubethy')!.metrics.tank!
+    )
+  })
+
+  it('credits heals and shields to enchanter supports (v2)', () => {
+    const plain = computeAkariScores(realGame(), DURATION)
+    const game = realGame().map((p) =>
+      p.puuid === 'hideonpsy'
+        ? { ...p, healsOnTeammates: 9000, shieldsOnTeammates: 6000 }
+        : { ...p, healsOnTeammates: 200, shieldsOnTeammates: 0 }
+    )
+    const withSupport = computeAkariScores(game, DURATION)
+    expect(plain.byPuuid.get('hideonpsy')!.metrics.support).toBeUndefined()
+    expect(withSupport.byPuuid.get('hideonpsy')!.metrics.support).toBeGreaterThan(1.5)
+    expect(withSupport.byPuuid.get('hideonpsy')!.rating).toBeGreaterThan(
+      plain.byPuuid.get('hideonpsy')!.rating
+    )
+  })
+
+  it('weighs time spent dead into survival (v2)', () => {
+    const cheapDeaths = realGame().map((p) =>
+      p.puuid === 'zed' ? { ...p, totalTimeSpentDead: 30 } : { ...p, totalTimeSpentDead: 120 }
+    )
+    const costlyDeaths = realGame().map((p) =>
+      p.puuid === 'zed' ? { ...p, totalTimeSpentDead: 400 } : { ...p, totalTimeSpentDead: 120 }
+    )
+    expect(computeAkariScores(cheapDeaths, DURATION).byPuuid.get('zed')!.metrics.survival).toBeGreaterThan(
+      computeAkariScores(costlyDeaths, DURATION).byPuuid.get('zed')!.metrics.survival!
+    )
+  })
+
+  it('folds objective damage and epic takedowns into one objective metric (v2)', () => {
+    const game = realGame().map((p) => ({
+      ...p,
+      damageDealtToObjectives: p.position === 'JUNGLE' ? 30000 : 8000,
+      epicTakedowns: p.position === 'JUNGLE' ? 4 : 1
+    }))
+    const result = computeAkariScores(game, DURATION)
+    expect(result.byPuuid.get('bumma')!.metrics.objective).toBeGreaterThan(1.5)
+    expect(result.byPuuid.get('zed')!.metrics.objective).toBeLessThan(1)
+  })
+
+  it('rewards lane dominance only where lane data exists (v2)', () => {
+    const game = realGame().map((p) =>
+      p.puuid === 'zed'
+        ? { ...p, maxCsAdvantageOnLaneOpponent: 40, maxLevelLeadLaneOpponent: 2 }
+        : p.puuid === 'donk666'
+          ? { ...p, maxCsAdvantageOnLaneOpponent: -20, maxLevelLeadLaneOpponent: 0 }
+          : p
+    )
+    const result = computeAkariScores(game, DURATION)
+    expect(result.byPuuid.get('zed')!.metrics.lane).toBeGreaterThan(1.4)
+    expect(result.byPuuid.get('donk666')!.metrics.lane).toBeLessThan(1)
+    expect(result.byPuuid.get('bumma')!.metrics.lane).toBeUndefined()
+  })
+
+  it('skips early-surrender (remake) games entirely', () => {
+    const result = computeAkariScores(realGame(), DURATION, { earlySurrender: true })
+    expect(result.byPuuid.size).toBe(0)
+    expect(result.skipped).toBe('early-surrender')
+  })
+
   it('keeps position weights well-formed and normalizes aliases', () => {
     for (const weights of Object.values(AKARI_POSITION_WEIGHTS)) {
       const sum = Object.values(weights).reduce((s, w) => s + w, 0)

@@ -26,7 +26,7 @@
     </template>
     <div class="w-44 text-xs">
       <div class="mb-1 flex items-baseline justify-between">
-        <span class="font-bold">Akari 评分 {{ score.rating.toFixed(1) }}</span>
+        <span class="font-bold">对局评分 {{ score.rating.toFixed(1) }}</span>
         <span class="text-[10px] text-black/60 dark:text-white/60">
           {{ positionText }}{{ tag ? ` · ${tag.text}` : '' }}
         </span>
@@ -45,7 +45,8 @@
         </span>
       </div>
       <div class="mt-1 text-[10px] leading-4 text-black/50 dark:text-white/45">
-        各项为相对本局期望的倍数（1.00× = 本局平均）；按分路加权，只在本局 10 人内比较
+        各项为相对本局期望的倍数（1.00× = 本局平均）；按分路加权，只在本局 10 人内比较。
+        与总览侧栏的 "Akari Score"（官方绝对量表）不是同一指标。
       </div>
     </div>
   </NPopover>

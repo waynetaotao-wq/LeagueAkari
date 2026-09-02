@@ -1,11 +1,13 @@
 /**
- * [lolps] Akari 评分（对局内个人表现评分，OP.GG OP Score 同类思路）
+ * [lolps] 对局评分（每局每人 0–10，OP.GG OP Score 同类思路；界面名"对局评分"，
+ * 与官方绝对量表 `computeSingleAkariScore`（"Akari Score"）无关，文件名沿用历史）。
  *
- * 设计原则（与手册 §10.26 一致）：
- * 1. 归一化：每项指标换成"占队伍份额"或"每分钟"，再除以本局期望值 → 比率 r（1.0 = 本局平均水平）
- * 2. 分路加权：五个位置各一组权重；位置未知时用通用配置（打野/辅助可由数据推断）
+ * 设计原则（手册 §10.26 / §10.27）：
+ * 1. 归一化：每项换成"占队伍份额"或"每分钟"，再除以本局期望 → 比率 r（1.0 = 本局平均）
+ * 2. 分路加权：五个位置各一组权重；位置未知用通用配置（打野/辅助可由数据推断）
  * 3. 局内相对：只在本局 10 人内比较，不受版本 / 段位 / 模式影响
- * 4. 映射：composite（≈1.0 平均）→ 5 + 5·tanh(α·(c−1))，压到 0–10
+ * 4. 数据源未提供的项自动剔除并把权重归一到其余项（LCU 摘要缺字段时优雅退化）
+ * 5. 映射：composite（≈1.0 平均）→ 5 + 5·tanh(α·(c−1))，压到 0–10
  *
  * 全部离线计算，只读战绩摘要，不接触任何外部服务。
  */
@@ -33,23 +35,44 @@ export interface AkariScoreInput {
   tripleKills: number
   quadraKills: number
   pentaKills: number
+
+  // ---- v2 扩展（SGP 摘要有；LCU 摘要部分缺失，缺失即不参与）----
+  /** 免伤量：坦克真正挡下的伤害 */
+  damageSelfMitigated?: number | null
+  /** 本局坐牢总秒数：比"死亡次数"更能反映死亡代价 */
+  totalTimeSpentDead?: number | null
+  /** 给队友的治疗 + 护盾（辅助/坦克的支援贡献） */
+  healsOnTeammates?: number | null
+  shieldsOnTeammates?: number | null
+  /** 有效治疗与护盾（挑战数据；给队友数据缺失时兜底） */
+  effectiveHealAndShielding?: number | null
+  /** 对目标伤害：建筑 + 史诗野怪 */
+  damageDealtToObjectives?: number | null
+  /** 龙 / 男爵 / 峡谷先锋参与击杀次数之和 */
+  epicTakedowns?: number | null
+  /** 对线补刀最大领先（可为负）与最大等级领先 */
+  maxCsAdvantageOnLaneOpponent?: number | null
+  maxLevelLeadLaneOpponent?: number | null
 }
 
 export type AkariMetricKey =
   | 'damage'
-  | 'taken'
+  | 'tank'
+  | 'support'
   | 'kp'
-  | 'deaths'
+  | 'survival'
   | 'gold'
   | 'cs'
   | 'vision'
   | 'cc'
-  | 'tower'
+  | 'objective'
+  | 'lane'
+  | 'efficiency'
 
 export interface AkariScore {
   puuid: string
   rating: number
-  /** 各指标比率（1.0 = 本局期望），用于悬浮拆解 */
+  /** 各指标比率（1.0 = 本局期望），用于悬浮拆解；缺数据的项不出现 */
   metrics: Partial<Record<AkariMetricKey, number>>
   position: AkariScorePosition
   isMvp: boolean
@@ -62,55 +85,75 @@ export interface AkariScoreResult {
   byPuuid: Map<string, AkariScore>
   mvpPuuid: string | null
   svpPuuid: string | null
+  /** 提前投降（重开）局：不评分 */
+  skipped: 'early-surrender' | null
 }
 
 /** 映射曲线陡峭度：c=1.35 → ≈8.5，c=1.6 → ≈9.5，c=0.7 → ≈1.8，c=1.05 → ≈5.6 */
 export const AKARI_SCORE_ALPHA = 2.5
-/** 单项比率上限：防止极端值（如 0 死亡）压过其它维度 */
+/** 单项比率上限：防止极端值（如 0 死亡 / 唯一治疗者）压过其它维度 */
 export const AKARI_METRIC_CAP = 2.5
 /** 尽力局阈值（0–10 量表） */
 export const AKARI_CARRY_LOSS_THRESHOLD = 8.0
 
 export const AKARI_METRIC_LABELS: Record<AkariMetricKey, string> = {
   damage: '输出',
-  taken: '承伤',
+  tank: '坦度',
+  support: '支援',
   kp: '参团',
-  deaths: '生存',
+  survival: '生存',
   gold: '经济',
   cs: '补刀',
   vision: '视野',
   cc: '控制',
-  tower: '推塔'
+  objective: '目标',
+  lane: '对线',
+  efficiency: '效率'
 }
 
-/** 分路权重（可调区；每组和为 1，代码里会再归一化，改动时无需手工配平） */
+/** 分路权重（可调区；代码内自动归一化，改动无需手工配平） */
 export const AKARI_POSITION_WEIGHTS: Record<AkariScorePosition, Record<AkariMetricKey, number>> = {
-  TOP: { damage: 0.22, taken: 0.18, kp: 0.1, deaths: 0.15, gold: 0.12, cs: 0.1, vision: 0.03, cc: 0.05, tower: 0.05 },
-  JUNGLE: { damage: 0.15, taken: 0.12, kp: 0.22, deaths: 0.15, gold: 0.12, cs: 0.06, vision: 0.08, cc: 0.05, tower: 0.05 },
-  MIDDLE: { damage: 0.26, taken: 0.03, kp: 0.16, deaths: 0.15, gold: 0.14, cs: 0.12, vision: 0.05, cc: 0.05, tower: 0.04 },
-  BOTTOM: { damage: 0.28, taken: 0.02, kp: 0.12, deaths: 0.15, gold: 0.15, cs: 0.14, vision: 0.04, cc: 0.02, tower: 0.08 },
-  UTILITY: { damage: 0.1, taken: 0.12, kp: 0.22, deaths: 0.14, gold: 0.04, cs: 0.02, vision: 0.2, cc: 0.14, tower: 0.02 },
-  UNKNOWN: { damage: 0.22, taken: 0.1, kp: 0.15, deaths: 0.15, gold: 0.13, cs: 0.1, vision: 0.06, cc: 0.05, tower: 0.04 }
+  TOP: {
+    damage: 0.18, tank: 0.16, support: 0.02, kp: 0.09, survival: 0.14, gold: 0.1,
+    cs: 0.08, vision: 0.03, cc: 0.05, objective: 0.06, lane: 0.06, efficiency: 0.03
+  },
+  JUNGLE: {
+    damage: 0.13, tank: 0.1, support: 0.02, kp: 0.2, survival: 0.13, gold: 0.09,
+    cs: 0.05, vision: 0.07, cc: 0.05, objective: 0.12, lane: 0, efficiency: 0.04
+  },
+  MIDDLE: {
+    damage: 0.22, tank: 0.03, support: 0.02, kp: 0.14, survival: 0.14, gold: 0.11,
+    cs: 0.1, vision: 0.04, cc: 0.05, objective: 0.05, lane: 0.07, efficiency: 0.03
+  },
+  BOTTOM: {
+    damage: 0.24, tank: 0.02, support: 0.02, kp: 0.11, survival: 0.14, gold: 0.12,
+    cs: 0.11, vision: 0.03, cc: 0.02, objective: 0.08, lane: 0.07, efficiency: 0.04
+  },
+  UTILITY: {
+    damage: 0.07, tank: 0.1, support: 0.18, kp: 0.2, survival: 0.12, gold: 0.03,
+    cs: 0.01, vision: 0.16, cc: 0.11, objective: 0.02, lane: 0, efficiency: 0
+  },
+  UNKNOWN: {
+    damage: 0.18, tank: 0.09, support: 0.05, kp: 0.14, survival: 0.14, gold: 0.1,
+    cs: 0.08, vision: 0.06, cc: 0.05, objective: 0.06, lane: 0.03, efficiency: 0.02
+  }
 }
 
 const METRIC_KEYS: AkariMetricKey[] = [
-  'damage',
-  'taken',
-  'kp',
-  'deaths',
-  'gold',
-  'cs',
-  'vision',
-  'cc',
-  'tower'
+  'damage', 'tank', 'support', 'kp', 'survival', 'gold',
+  'cs', 'vision', 'cc', 'objective', 'lane', 'efficiency'
 ]
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
-function safeNumber(value: unknown): number {
+function num(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function has(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function mean(values: number[]): number {
@@ -135,20 +178,15 @@ export function normalizePosition(position: string | null | undefined): AkariSco
  */
 function inferPositions(team: AkariScoreInput[]): Map<string, AkariScorePosition> {
   const out = new Map<string, AkariScorePosition>()
-  if (team.length !== 5) {
-    for (const p of team) out.set(p.puuid, normalizePosition(p.position))
-    return out
-  }
   const known = team.filter((p) => normalizePosition(p.position) !== 'UNKNOWN')
-  if (known.length === team.length) {
+  if (team.length !== 5 || known.length === team.length) {
     for (const p of team) out.set(p.puuid, normalizePosition(p.position))
     return out
   }
   const byJungle = [...team].sort((a, b) => b.neutralMinionsKilled - a.neutralMinionsKilled)
   const jungle = byJungle[0].neutralMinionsKilled >= 20 ? byJungle[0] : null
   const rest = team.filter((p) => p !== jungle)
-  const bySupport = [...rest].sort((a, b) => a.cs - b.cs || b.visionScore - a.visionScore)
-  const support = bySupport[0]
+  const support = [...rest].sort((a, b) => a.cs - b.cs || b.visionScore - a.visionScore)[0]
   for (const p of team) {
     if (p === jungle) out.set(p.puuid, 'JUNGLE')
     else if (p === support) out.set(p.puuid, 'UTILITY')
@@ -157,34 +195,47 @@ function inferPositions(team: AkariScoreInput[]): Map<string, AkariScorePosition
   return out
 }
 
-interface DerivedMetrics {
+interface Derived {
   puuid: string
   teamIdentifier: string
   win: boolean
   position: AkariScorePosition
+  size: number
   dmgShare: number
-  takenShare: number
-  towerShare: number
+  tankShare: number
+  supportShare: number | null
+  objectiveDmgShare: number | null
+  epicShare: number | null
   kp: number
   deathShare: number
+  timeDeadShare: number | null
   gpm: number
   cspm: number
   vspm: number
   ccpm: number
+  efficiency: number | null
+  lane: number | null
   bonus: number
 }
 
 /**
  * 计算本局全部参与者的评分。仅对两队（5v5 / 大乱斗等）有意义；
- * 参与者不足 2 人或时长为 0 时返回空结果。
+ * 参与者不足 2 人、时长为 0 或提前投降局返回空结果。
  */
 export function computeAkariScores(
   participants: AkariScoreInput[],
-  gameDurationSeconds: number
+  gameDurationSeconds: number,
+  options: { earlySurrender?: boolean } = {}
 ): AkariScoreResult {
-  const empty: AkariScoreResult = { byPuuid: new Map(), mvpPuuid: null, svpPuuid: null }
-  const minutes = safeNumber(gameDurationSeconds) / 60
-  if (participants.length < 2 || minutes <= 0) return empty
+  const empty = (skipped: AkariScoreResult['skipped'] = null): AkariScoreResult => ({
+    byPuuid: new Map(),
+    mvpPuuid: null,
+    svpPuuid: null,
+    skipped
+  })
+  if (options.earlySurrender) return empty('early-surrender')
+  const minutes = num(gameDurationSeconds) / 60
+  if (participants.length < 2 || minutes <= 0) return empty()
 
   const teams = new Map<string, AkariScoreInput[]>()
   for (const p of participants) {
@@ -192,98 +243,151 @@ export function computeAkariScores(
     list.push(p)
     teams.set(p.teamIdentifier, list)
   }
-  if (teams.size !== 2) return empty
+  if (teams.size !== 2) return empty()
 
   const positionByPuuid = new Map<string, AkariScorePosition>()
   for (const team of teams.values()) {
     for (const [puuid, position] of inferPositions(team)) positionByPuuid.set(puuid, position)
   }
 
-  // 队伍份额
-  const derived: DerivedMetrics[] = []
+  // 全局可用性：某项原始数据整局缺失/全 0 → 该项不参与，权重归一到其余项
+  const anyPresent = (pick: (p: AkariScoreInput) => number | null | undefined) =>
+    participants.some((p) => {
+      const v = pick(p)
+      return has(v) && v !== 0
+    })
+  const supportViaTeammates = anyPresent((p) => num(p.healsOnTeammates) + num(p.shieldsOnTeammates))
+  const supportViaEffective = !supportViaTeammates && anyPresent((p) => p.effectiveHealAndShielding)
+  const supportAvailable = supportViaTeammates || supportViaEffective
+  const objectiveViaObjectives = anyPresent((p) => p.damageDealtToObjectives)
+  const objectiveViaTowers = !objectiveViaObjectives && anyPresent((p) => p.totalDamageToTowers)
+  const objectiveAvailable = objectiveViaObjectives || objectiveViaTowers
+  const epicAvailable = anyPresent((p) => p.epicTakedowns)
+  const timeDeadAvailable = participants.some((p) => has(p.totalTimeSpentDead))
+  const laneAvailable = participants.some(
+    (p) => has(p.maxCsAdvantageOnLaneOpponent) || has(p.maxLevelLeadLaneOpponent)
+  )
+  const visionAvailable = anyPresent((p) => p.visionScore)
+  const ccAvailable = anyPresent((p) => p.timeCCingOthers)
+  const tankAvailable = anyPresent((p) => num(p.totalDamageTaken) + num(p.damageSelfMitigated))
+  const efficiencyAvailable = anyPresent((p) => p.goldEarned)
+
+  const derived: Derived[] = []
   for (const team of teams.values()) {
-    const teamKills = team.reduce((s, p) => s + safeNumber(p.kills), 0)
-    const teamDeaths = team.reduce((s, p) => s + safeNumber(p.deaths), 0)
-    const teamDmg = team.reduce((s, p) => s + safeNumber(p.totalDamageDealtToChampions), 0)
-    const teamTaken = team.reduce((s, p) => s + safeNumber(p.totalDamageTaken), 0)
-    const teamTower = team.reduce((s, p) => s + safeNumber(p.totalDamageToTowers), 0)
     const size = team.length
+    const sum = (pick: (p: AkariScoreInput) => number) => team.reduce((s, p) => s + pick(p), 0)
+    const teamKills = sum((p) => num(p.kills))
+    const teamDeaths = sum((p) => num(p.deaths))
+    const teamDmg = sum((p) => num(p.totalDamageDealtToChampions))
+    const teamTank = sum((p) => num(p.totalDamageTaken) + num(p.damageSelfMitigated))
+    const teamSupport = supportViaTeammates
+      ? sum((p) => num(p.healsOnTeammates) + num(p.shieldsOnTeammates))
+      : sum((p) => num(p.effectiveHealAndShielding))
+    const teamObjective = objectiveViaObjectives
+      ? sum((p) => num(p.damageDealtToObjectives))
+      : sum((p) => num(p.totalDamageToTowers))
+    const teamEpic = sum((p) => num(p.epicTakedowns))
+    const teamTimeDead = sum((p) => num(p.totalTimeSpentDead))
+    const share = (value: number, total: number) => (total > 0 ? value / total : 1 / size)
+
     for (const p of team) {
-      const kills = safeNumber(p.kills)
-      const deaths = safeNumber(p.deaths)
-      const assists = safeNumber(p.assists)
+      const kills = num(p.kills)
+      const deaths = num(p.deaths)
+      const assists = num(p.assists)
+      const gold = num(p.goldEarned)
       const multi =
-        safeNumber(p.doubleKills) * 0.03 +
-        safeNumber(p.tripleKills) * 0.06 +
-        safeNumber(p.quadraKills) * 0.1 +
-        safeNumber(p.pentaKills) * 0.15
-      const solo = clamp(safeNumber(p.soloKills), 0, 5) * 0.02
+        num(p.doubleKills) * 0.03 +
+        num(p.tripleKills) * 0.06 +
+        num(p.quadraKills) * 0.1 +
+        num(p.pentaKills) * 0.15
+      const solo = clamp(num(p.soloKills), 0, 5) * 0.02
+      const supportValue = supportViaTeammates
+        ? num(p.healsOnTeammates) + num(p.shieldsOnTeammates)
+        : num(p.effectiveHealAndShielding)
+      const objectiveValue = objectiveViaObjectives
+        ? num(p.damageDealtToObjectives)
+        : num(p.totalDamageToTowers)
+      let lane: number | null = null
+      if (laneAvailable && (has(p.maxCsAdvantageOnLaneOpponent) || has(p.maxLevelLeadLaneOpponent))) {
+        lane =
+          1 +
+          clamp(num(p.maxCsAdvantageOnLaneOpponent) / 40, -0.6, 0.6) +
+          clamp(num(p.maxLevelLeadLaneOpponent) / 4, -0.3, 0.3)
+      }
       derived.push({
         puuid: p.puuid,
         teamIdentifier: p.teamIdentifier,
         win: p.win,
         position: positionByPuuid.get(p.puuid) ?? 'UNKNOWN',
-        dmgShare: teamDmg > 0 ? safeNumber(p.totalDamageDealtToChampions) / teamDmg : 1 / size,
-        takenShare: teamTaken > 0 ? safeNumber(p.totalDamageTaken) / teamTaken : 1 / size,
-        towerShare: teamTower > 0 ? safeNumber(p.totalDamageToTowers) / teamTower : 1 / size,
+        size,
+        dmgShare: share(num(p.totalDamageDealtToChampions), teamDmg),
+        tankShare: share(num(p.totalDamageTaken) + num(p.damageSelfMitigated), teamTank),
+        supportShare: supportAvailable ? share(supportValue, teamSupport) : null,
+        objectiveDmgShare: objectiveAvailable ? share(objectiveValue, teamObjective) : null,
+        epicShare: epicAvailable && teamEpic > 0 ? num(p.epicTakedowns) / teamEpic : null,
         kp: teamKills > 0 ? (kills + assists) / teamKills : 0,
         deathShare: teamDeaths > 0 ? deaths / teamDeaths : 0,
-        gpm: safeNumber(p.goldEarned) / minutes,
-        cspm: safeNumber(p.cs) / minutes,
-        vspm: safeNumber(p.visionScore) / minutes,
-        ccpm: safeNumber(p.timeCCingOthers) / minutes,
+        timeDeadShare:
+          timeDeadAvailable && teamTimeDead > 0 ? num(p.totalTimeSpentDead) / teamTimeDead : null,
+        gpm: gold / minutes,
+        cspm: num(p.cs) / minutes,
+        vspm: num(p.visionScore) / minutes,
+        ccpm: num(p.timeCCingOthers) / minutes,
+        efficiency: gold > 0 ? num(p.totalDamageDealtToChampions) / gold : null,
+        lane,
         bonus: clamp(multi + solo, 0, 0.3)
       })
     }
   }
 
-  // 每分钟类指标的期望：同位置对手可比时取两人均值，否则取全局均值
   const gameMean = {
     kp: mean(derived.map((d) => d.kp)),
     gpm: mean(derived.map((d) => d.gpm)),
     cspm: mean(derived.map((d) => d.cspm)),
     vspm: mean(derived.map((d) => d.vspm)),
-    ccpm: mean(derived.map((d) => d.ccpm))
+    ccpm: mean(derived.map((d) => d.ccpm)),
+    efficiency: mean(derived.map((d) => d.efficiency ?? 0))
   }
-  const counterpart = (d: DerivedMetrics) =>
+  const counterpart = (d: Derived) =>
     d.position === 'UNKNOWN'
       ? null
       : (derived.find((o) => o.teamIdentifier !== d.teamIdentifier && o.position === d.position) ??
         null)
   const ratio = (value: number, expected: number) =>
     expected > 0 ? clamp(value / expected, 0, AKARI_METRIC_CAP) : value > 0 ? AKARI_METRIC_CAP : 1
-  const pairExpected = (d: DerivedMetrics, key: 'gpm' | 'cspm', fallback: number) => {
+  const pairExpected = (d: Derived, pick: (x: Derived) => number, fallback: number) => {
     const c = counterpart(d)
-    return c ? (d[key] + c[key]) / 2 : fallback
+    return c ? (pick(d) + pick(c)) / 2 : fallback
   }
-
-  const teamSize = (d: DerivedMetrics) => teams.get(d.teamIdentifier)?.length ?? 5
-  // 某项原始数据整局为 0（数据源未提供）时剔除该项，权重自动归一到其余项，避免被 1.0 稀释
-  const rawAllZero = (key: keyof AkariScoreInput) =>
-    participants.every((p) => safeNumber(p[key]) === 0)
-  const droppedMetrics = new Set<AkariMetricKey>()
-  if (rawAllZero('visionScore')) droppedMetrics.add('vision')
-  if (rawAllZero('timeCCingOthers')) droppedMetrics.add('cc')
-  if (rawAllZero('totalDamageToTowers')) droppedMetrics.add('tower')
-  if (rawAllZero('totalDamageTaken')) droppedMetrics.add('taken')
 
   const scores = new Map<string, AkariScore>()
   for (const d of derived) {
-    const size = teamSize(d)
-    const share = 1 / size
-    const metrics: Partial<Record<AkariMetricKey, number>> = {
-      damage: ratio(d.dmgShare, share),
-      taken: ratio(d.takenShare, share),
-      kp: ratio(d.kp, gameMean.kp),
-      // 死亡份额越低越好：份额=平均 → 1.0；0 死亡 → 上限
-      deaths: clamp((1 - d.deathShare) / (1 - share), 0, AKARI_METRIC_CAP),
-      gold: ratio(d.gpm, pairExpected(d, 'gpm', gameMean.gpm)),
-      cs: ratio(d.cspm, pairExpected(d, 'cspm', gameMean.cspm)),
-      vision: ratio(d.vspm, gameMean.vspm),
-      cc: ratio(d.ccpm, gameMean.ccpm),
-      tower: ratio(d.towerShare, share)
+    const share = 1 / d.size
+    const metrics: Partial<Record<AkariMetricKey, number>> = {}
+    metrics.damage = ratio(d.dmgShare, share)
+    if (tankAvailable) metrics.tank = ratio(d.tankShare, share)
+    if (d.supportShare !== null) metrics.support = ratio(d.supportShare, share)
+    metrics.kp = ratio(d.kp, gameMean.kp)
+    // 生存：死亡份额与坐牢时长份额各半（无坐牢数据时只用死亡份额）；份额=平均 → 1.0，0 死 → 上限
+    const deathBlend =
+      d.timeDeadShare !== null ? 0.5 * d.deathShare + 0.5 * d.timeDeadShare : d.deathShare
+    metrics.survival = clamp((1 - deathBlend) / (1 - share), 0, AKARI_METRIC_CAP)
+    metrics.gold = ratio(d.gpm, pairExpected(d, (x) => x.gpm, gameMean.gpm))
+    metrics.cs = ratio(d.cspm, pairExpected(d, (x) => x.cspm, gameMean.cspm))
+    if (visionAvailable) metrics.vision = ratio(d.vspm, gameMean.vspm)
+    if (ccAvailable) metrics.cc = ratio(d.ccpm, gameMean.ccpm)
+    if (d.objectiveDmgShare !== null) {
+      const dmgPart = ratio(d.objectiveDmgShare, share)
+      metrics.objective =
+        d.epicShare !== null ? 0.6 * dmgPart + 0.4 * ratio(d.epicShare, share) : dmgPart
     }
-    for (const key of droppedMetrics) delete metrics[key]
+    if (d.lane !== null) metrics.lane = clamp(d.lane, 0.1, AKARI_METRIC_CAP)
+    if (efficiencyAvailable && d.efficiency !== null) {
+      metrics.efficiency = ratio(
+        d.efficiency,
+        pairExpected(d, (x) => x.efficiency ?? 0, gameMean.efficiency)
+      )
+    }
 
     const weights = AKARI_POSITION_WEIGHTS[d.position]
     let weightSum = 0
@@ -311,7 +415,6 @@ export function computeAkariScores(
 
   // MVP：全场最高；SVP：败方最高（若其同时是全场最高则只记 MVP）；尽力局：输且 ≥ 阈值
   let mvpPuuid: string | null = null
-  let svpPuuid: string | null = null
   let best = -1
   for (const s of scores.values()) {
     if (s.rating > best) {
@@ -319,6 +422,7 @@ export function computeAkariScores(
       mvpPuuid = s.puuid
     }
   }
+  let svpPuuid: string | null = null
   let bestLoser = -1
   for (const d of derived) {
     if (d.win) continue
@@ -336,5 +440,5 @@ export function computeAkariScores(
     s.isCarryLoss = !d.win && s.rating >= AKARI_CARRY_LOSS_THRESHOLD
   }
 
-  return { byPuuid: scores, mvpPuuid, svpPuuid }
+  return { byPuuid: scores, mvpPuuid, svpPuuid, skipped: null }
 }

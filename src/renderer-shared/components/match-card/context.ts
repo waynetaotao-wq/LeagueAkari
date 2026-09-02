@@ -17,6 +17,7 @@ import {
 } from 'vue'
 
 import { type AkariScoreResult, computeAkariScores } from './utils/akari-score'
+import { buildAkariScoreInputs } from './utils/akari-score-input'
 
 export type MatchCardContext = {
   isExpanded: Ref<boolean>
@@ -95,12 +96,17 @@ export function provideMatchCard(props: {
     return teams.value.teamStatMap[participant.value.teamIdentifier] ?? null
   })
 
-  // [lolps] 评分只在本局 10 人内比较，摘要数据即可计算，折叠态就能显示
+  // [lolps] 对局评分只在本局 10 人内比较，摘要数据即可计算，折叠态就能显示；
+  // v2 从原始摘要补充免伤 / 坐牢 / 治疗护盾 / 目标 / 对线领先等字段（SGP 全、LCU 部分）
   const akariScores = computed<AkariScoreResult>(() => {
     if (!basicInfo.value.isTwoTeam) {
-      return { byPuuid: new Map(), mvpPuuid: null, svpPuuid: null }
+      return { byPuuid: new Map(), mvpPuuid: null, svpPuuid: null, skipped: null }
     }
-    return computeAkariScores(participants.value, basicInfo.value.gameDuration)
+    const { inputs, earlySurrender } = buildAkariScoreInputs(
+      toValue(props.summary),
+      participants.value
+    )
+    return computeAkariScores(inputs, basicInfo.value.gameDuration, { earlySurrender })
   })
 
   const draftOptions = computed<DraftOptions>(() => {
