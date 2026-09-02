@@ -41,7 +41,11 @@ function synth(
       win: z > 0,
       metrics,
       bonus: 0,
-      afkTeammate: false
+      afkTeammate: false,
+      kills: 0,
+      surrender: false,
+      gold: 0,
+      turretTakedowns: 0
     })
   }
   return out
