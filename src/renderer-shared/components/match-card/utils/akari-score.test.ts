@@ -331,7 +331,15 @@ describe('carry rule (≥ 11.0, lead over team third by 1.25 internal ≈ 2.5 di
     // 赢方五人评分接近（无人明显拉开）：不应出现 carry
     const game = realGame().map((p) =>
       p.teamIdentifier === 'R'
-        ? { ...p, kills: 6, deaths: 4, assists: 8, totalDamageDealtToChampions: 18000, goldEarned: 11500 }
+        ? {
+            ...p,
+            kills: 6,
+            deaths: 4,
+            assists: 8,
+            totalDamageDealtToChampions: 18000,
+            totalDamageTaken: 18000,
+            goldEarned: 11500
+          }
         : p
     )
     const result = computeAkariScores(game, DURATION)
