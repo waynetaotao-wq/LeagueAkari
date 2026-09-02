@@ -53,6 +53,18 @@ export interface AkariScoreInput {
   /** 对线补刀最大领先（可为负）与最大等级领先 */
   maxCsAdvantageOnLaneOpponent?: number | null
   maxLevelLeadLaneOpponent?: number | null
+  /** 视野质量：控制守卫 + 排眼 */
+  controlWardsPlaced?: number | null
+  wardTakedowns?: number | null
+  /** 控制质量：定身敌方英雄次数 */
+  immobilizations?: number | null
+  /** 推进压制：镀层 + 参与推塔 */
+  turretPlatesTaken?: number | null
+  turretTakedowns?: number | null
+  /** 抢龙 / 抢男爵等偷取次数（加成项） */
+  objectiveSteals?: number | null
+  /** 本局有队友挂机（仅标注，不入分） */
+  hadAfkTeammate?: boolean | null
 }
 
 export type AkariMetricKey =
@@ -79,6 +91,30 @@ export interface AkariScore {
   isSvp: boolean
   /** 输了但表现在阈值之上 */
   isCarryLoss: boolean
+  /** 本局有队友挂机（语境标注） */
+  afkTeammate: boolean
+}
+
+/** 本局某玩家的相对指标样本（校准拟合与评分共用） */
+export interface AkariMetricSample {
+  puuid: string
+  teamIdentifier: string
+  position: AkariScorePosition
+  win: boolean
+  metrics: Partial<Record<AkariMetricKey, number>>
+  bonus: number
+  afkTeammate: boolean
+}
+
+export type AkariPositionWeights = Record<AkariScorePosition, Record<AkariMetricKey, number>>
+
+// 权重覆盖（由"用我的战绩校准"写入；null = 使用内置先验）
+let activeWeightsOverride: AkariPositionWeights | null = null
+export function setAkariPositionWeights(weights: AkariPositionWeights | null) {
+  activeWeightsOverride = weights
+}
+export function getAkariPositionWeights(): AkariPositionWeights {
+  return activeWeightsOverride ?? AKARI_POSITION_WEIGHTS
 }
 
 export interface AkariScoreResult {
@@ -215,27 +251,25 @@ interface Derived {
   ccpm: number
   efficiency: number | null
   lane: number | null
+  visionQualityPm: number | null
+  immobPm: number | null
+  pressureShare: number | null
   bonus: number
+  afkTeammate: boolean
 }
 
 /**
- * 计算本局全部参与者的评分。仅对两队（5v5 / 大乱斗等）有意义；
- * 参与者不足 2 人、时长为 0 或提前投降局返回空结果。
+ * 计算本局全部参与者的相对指标样本（1.0 = 本局期望）。评分与权重校准共用这一步。
+ * 仅对两队有意义；参与者不足 2 人、时长为 0 或提前投降局返回空数组。
  */
-export function computeAkariScores(
+export function computeAkariMetrics(
   participants: AkariScoreInput[],
   gameDurationSeconds: number,
   options: { earlySurrender?: boolean } = {}
-): AkariScoreResult {
-  const empty = (skipped: AkariScoreResult['skipped'] = null): AkariScoreResult => ({
-    byPuuid: new Map(),
-    mvpPuuid: null,
-    svpPuuid: null,
-    skipped
-  })
-  if (options.earlySurrender) return empty('early-surrender')
+): AkariMetricSample[] {
+  if (options.earlySurrender) return []
   const minutes = num(gameDurationSeconds) / 60
-  if (participants.length < 2 || minutes <= 0) return empty()
+  if (participants.length < 2 || minutes <= 0) return []
 
   const teams = new Map<string, AkariScoreInput[]>()
   for (const p of participants) {
@@ -243,7 +277,7 @@ export function computeAkariScores(
     list.push(p)
     teams.set(p.teamIdentifier, list)
   }
-  if (teams.size !== 2) return empty()
+  if (teams.size !== 2) return []
 
   const positionByPuuid = new Map<string, AkariScorePosition>()
   for (const team of teams.values()) {
@@ -271,6 +305,9 @@ export function computeAkariScores(
   const ccAvailable = anyPresent((p) => p.timeCCingOthers)
   const tankAvailable = anyPresent((p) => num(p.totalDamageTaken) + num(p.damageSelfMitigated))
   const efficiencyAvailable = anyPresent((p) => p.goldEarned)
+  const visionQualityAvailable = anyPresent((p) => num(p.controlWardsPlaced) + num(p.wardTakedowns))
+  const immobAvailable = anyPresent((p) => p.immobilizations)
+  const pressureAvailable = anyPresent((p) => num(p.turretPlatesTaken) + num(p.turretTakedowns))
 
   const derived: Derived[] = []
   for (const team of teams.values()) {
@@ -288,6 +325,7 @@ export function computeAkariScores(
       : sum((p) => num(p.totalDamageToTowers))
     const teamEpic = sum((p) => num(p.epicTakedowns))
     const teamTimeDead = sum((p) => num(p.totalTimeSpentDead))
+    const teamPressure = sum((p) => num(p.turretPlatesTaken) + num(p.turretTakedowns))
     const share = (value: number, total: number) => (total > 0 ? value / total : 1 / size)
 
     for (const p of team) {
@@ -301,6 +339,7 @@ export function computeAkariScores(
         num(p.quadraKills) * 0.1 +
         num(p.pentaKills) * 0.15
       const solo = clamp(num(p.soloKills), 0, 5) * 0.02
+      const steals = clamp(num(p.objectiveSteals) * 0.05, 0, 0.1)
       const supportValue = supportViaTeammates
         ? num(p.healsOnTeammates) + num(p.shieldsOnTeammates)
         : num(p.effectiveHealAndShielding)
@@ -335,7 +374,16 @@ export function computeAkariScores(
         ccpm: num(p.timeCCingOthers) / minutes,
         efficiency: gold > 0 ? num(p.totalDamageDealtToChampions) / gold : null,
         lane,
-        bonus: clamp(multi + solo, 0, 0.3)
+        visionQualityPm: visionQualityAvailable
+          ? (num(p.controlWardsPlaced) + num(p.wardTakedowns)) / minutes
+          : null,
+        immobPm: immobAvailable ? num(p.immobilizations) / minutes : null,
+        pressureShare:
+          pressureAvailable && teamPressure > 0
+            ? (num(p.turretPlatesTaken) + num(p.turretTakedowns)) / teamPressure
+            : null,
+        bonus: clamp(multi + solo + steals, 0, 0.35),
+        afkTeammate: p.hadAfkTeammate === true
       })
     }
   }
@@ -346,7 +394,9 @@ export function computeAkariScores(
     cspm: mean(derived.map((d) => d.cspm)),
     vspm: mean(derived.map((d) => d.vspm)),
     ccpm: mean(derived.map((d) => d.ccpm)),
-    efficiency: mean(derived.map((d) => d.efficiency ?? 0))
+    efficiency: mean(derived.map((d) => d.efficiency ?? 0)),
+    visionQualityPm: mean(derived.map((d) => d.visionQualityPm ?? 0)),
+    immobPm: mean(derived.map((d) => d.immobPm ?? 0))
   }
   const counterpart = (d: Derived) =>
     d.position === 'UNKNOWN'
@@ -360,7 +410,7 @@ export function computeAkariScores(
     return c ? (pick(d) + pick(c)) / 2 : fallback
   }
 
-  const scores = new Map<string, AkariScore>()
+  const samples: AkariMetricSample[] = []
   for (const d of derived) {
     const share = 1 / d.size
     const metrics: Partial<Record<AkariMetricKey, number>> = {}
@@ -374,12 +424,27 @@ export function computeAkariScores(
     metrics.survival = clamp((1 - deathBlend) / (1 - share), 0, AKARI_METRIC_CAP)
     metrics.gold = ratio(d.gpm, pairExpected(d, (x) => x.gpm, gameMean.gpm))
     metrics.cs = ratio(d.cspm, pairExpected(d, (x) => x.cspm, gameMean.cspm))
-    if (visionAvailable) metrics.vision = ratio(d.vspm, gameMean.vspm)
-    if (ccAvailable) metrics.cc = ratio(d.ccpm, gameMean.ccpm)
+    if (visionAvailable) {
+      // 视野 = 视野分 0.7 + 视野质量（控制守卫+排眼）0.3（有数据时）
+      const scorePart = ratio(d.vspm, gameMean.vspm)
+      metrics.vision =
+        d.visionQualityPm !== null
+          ? 0.7 * scorePart + 0.3 * ratio(d.visionQualityPm, gameMean.visionQualityPm)
+          : scorePart
+    }
+    if (ccAvailable) {
+      // 控制 = 控制时长 0.6 + 定身次数 0.4（有数据时）
+      const timePart = ratio(d.ccpm, gameMean.ccpm)
+      metrics.cc =
+        d.immobPm !== null ? 0.6 * timePart + 0.4 * ratio(d.immobPm, gameMean.immobPm) : timePart
+    }
     if (d.objectiveDmgShare !== null) {
-      const dmgPart = ratio(d.objectiveDmgShare, share)
-      metrics.objective =
-        d.epicShare !== null ? 0.6 * dmgPart + 0.4 * ratio(d.epicShare, share) : dmgPart
+      // 目标 = 对目标伤害 0.5 + 史诗野怪参与 0.3 + 推进压制（镀层/推塔）0.2，缺项按可用部分归一
+      const parts: Array<[number, number]> = [[0.5, ratio(d.objectiveDmgShare, share)]]
+      if (d.epicShare !== null) parts.push([0.3, ratio(d.epicShare, share)])
+      if (d.pressureShare !== null) parts.push([0.2, ratio(d.pressureShare, share)])
+      const wsum = parts.reduce((a, [w]) => a + w, 0)
+      metrics.objective = parts.reduce((a, [w, v]) => a + (w / wsum) * v, 0)
     }
     if (d.lane !== null) metrics.lane = clamp(d.lane, 0.1, AKARI_METRIC_CAP)
     if (efficiencyAvailable && d.efficiency !== null) {
@@ -388,28 +453,65 @@ export function computeAkariScores(
         pairExpected(d, (x) => x.efficiency ?? 0, gameMean.efficiency)
       )
     }
-
-    const weights = AKARI_POSITION_WEIGHTS[d.position]
-    let weightSum = 0
-    let composite = 0
-    for (const key of METRIC_KEYS) {
-      const value = metrics[key]
-      if (value === undefined) continue
-      weightSum += weights[key]
-      composite += weights[key] * value
-    }
-    composite = weightSum > 0 ? composite / weightSum : 1
-    composite += d.bonus
-
-    const rating = clamp(5 + 5 * Math.tanh(AKARI_SCORE_ALPHA * (composite - 1)), 0, 10)
-    scores.set(d.puuid, {
+    samples.push({
       puuid: d.puuid,
-      rating: Math.round(rating * 10) / 10,
-      metrics,
+      teamIdentifier: d.teamIdentifier,
       position: d.position,
+      win: d.win,
+      metrics,
+      bonus: d.bonus,
+      afkTeammate: d.afkTeammate
+    })
+  }
+  return samples
+}
+
+/** 用当前权重把相对指标样本折算为 0–10 评分 */
+export function rateAkariSample(sample: AkariMetricSample, weightsTable = getAkariPositionWeights()) {
+  const weights = weightsTable[sample.position] ?? AKARI_POSITION_WEIGHTS.UNKNOWN
+  let weightSum = 0
+  let composite = 0
+  for (const key of METRIC_KEYS) {
+    const value = sample.metrics[key]
+    if (value === undefined) continue
+    weightSum += weights[key]
+    composite += weights[key] * value
+  }
+  composite = weightSum > 0 ? composite / weightSum : 1
+  composite += sample.bonus
+  const rating = clamp(5 + 5 * Math.tanh(AKARI_SCORE_ALPHA * (composite - 1)), 0, 10)
+  return Math.round(rating * 10) / 10
+}
+
+/**
+ * 计算本局全部参与者的评分（含 MVP / SVP / 尽力局）。
+ */
+export function computeAkariScores(
+  participants: AkariScoreInput[],
+  gameDurationSeconds: number,
+  options: { earlySurrender?: boolean } = {}
+): AkariScoreResult {
+  const empty = (skipped: AkariScoreResult['skipped'] = null): AkariScoreResult => ({
+    byPuuid: new Map(),
+    mvpPuuid: null,
+    svpPuuid: null,
+    skipped
+  })
+  if (options.earlySurrender) return empty('early-surrender')
+  const samples = computeAkariMetrics(participants, gameDurationSeconds)
+  if (samples.length === 0) return empty()
+
+  const scores = new Map<string, AkariScore>()
+  for (const sample of samples) {
+    scores.set(sample.puuid, {
+      puuid: sample.puuid,
+      rating: rateAkariSample(sample),
+      metrics: sample.metrics,
+      position: sample.position,
       isMvp: false,
       isSvp: false,
-      isCarryLoss: false
+      isCarryLoss: false,
+      afkTeammate: sample.afkTeammate
     })
   }
 
@@ -424,7 +526,7 @@ export function computeAkariScores(
   }
   let svpPuuid: string | null = null
   let bestLoser = -1
-  for (const d of derived) {
+  for (const d of samples) {
     if (d.win) continue
     const s = scores.get(d.puuid)!
     if (s.rating > bestLoser) {
@@ -433,7 +535,7 @@ export function computeAkariScores(
     }
   }
   if (svpPuuid === mvpPuuid) svpPuuid = null
-  for (const d of derived) {
+  for (const d of samples) {
     const s = scores.get(d.puuid)!
     s.isMvp = s.puuid === mvpPuuid
     s.isSvp = s.puuid === svpPuuid

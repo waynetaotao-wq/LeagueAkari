@@ -16,6 +16,7 @@ import { ExtraAssetsMain } from '@main/shards/extra-assets'
 import { FeatureGatingMain } from '@main/shards/feature-gating'
 import { GameClientMain } from '@main/shards/game-client'
 import { GameRefocusMain } from '@main/shards/game-refocus'
+import { MatchRatingMain } from '@main/shards/match-rating'
 import { InGameSendMain } from '@main/shards/in-game-send'
 import { AkariIpcMain } from '@main/shards/ipc'
 import { KeyboardShortcutsMain } from '@main/shards/keyboard-shortcuts'
@@ -343,6 +344,7 @@ export function bootstrap() {
     manager.use(OngoingGameMain)
     manager.use(RespawnTimerMain)
     manager.use(GameRefocusMain)
+    manager.use(MatchRatingMain)
     manager.use(SavedPlayerMain)
     manager.use(SgpMain)
     manager.use(StatisticsMain)

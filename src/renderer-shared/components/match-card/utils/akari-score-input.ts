@@ -99,7 +99,14 @@ export function buildAkariScoreInputs(
         damageDealtToObjectives: opt(r?.damageDealtToObjectives),
         epicTakedowns: sumOpt(c?.dragonTakedowns, c?.baronTakedowns, c?.riftHeraldTakedowns),
         maxCsAdvantageOnLaneOpponent: opt(c?.maxCsAdvantageOnLaneOpponent),
-        maxLevelLeadLaneOpponent: opt(c?.maxLevelLeadLaneOpponent)
+        maxLevelLeadLaneOpponent: opt(c?.maxLevelLeadLaneOpponent),
+        controlWardsPlaced: opt(c?.controlWardsPlaced),
+        wardTakedowns: opt(c?.wardTakedowns),
+        immobilizations: opt(c?.enemyChampionImmobilizations),
+        turretPlatesTaken: opt(c?.turretPlatesTaken),
+        turretTakedowns: opt(r?.turretTakedowns ?? c?.turretTakedowns),
+        objectiveSteals: sumOpt(r?.objectivesStolen, c?.epicMonsterSteals),
+        hadAfkTeammate: typeof c?.hadAfkTeammate === 'number' ? c.hadAfkTeammate > 0 : null
       }
     })
     return { inputs, earlySurrender }
@@ -115,7 +122,11 @@ export function buildAkariScoreInputs(
     return {
       ...base(p),
       damageSelfMitigated: opt(s?.damageSelfMitigated),
-      damageDealtToObjectives: opt(s?.damageDealtToObjectives)
+      damageDealtToObjectives: opt(s?.damageDealtToObjectives),
+      // LCU 没有控制守卫"放置"字段，用购买数近似；排眼用 wardsKilled
+      controlWardsPlaced: opt(s?.visionWardsBoughtInGame),
+      wardTakedowns: opt(s?.wardsKilled),
+      turretTakedowns: opt(s?.turretKills)
     }
   })
   return { inputs, earlySurrender }

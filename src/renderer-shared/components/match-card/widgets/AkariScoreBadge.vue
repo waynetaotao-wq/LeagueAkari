@@ -44,6 +44,9 @@
           {{ row.ratio.toFixed(2) }}×
         </span>
       </div>
+      <div v-if="score.afkTeammate" class="mt-1 text-[10px] text-amber-700 dark:text-amber-300">
+        本局有队友挂机，分数仅供参考
+      </div>
       <div class="mt-1 text-[10px] leading-4 text-black/50 dark:text-white/45">
         各项为相对本局期望的倍数（1.00× = 本局平均）；按分路加权，只在本局 10 人内比较。
         与总览侧栏的 "Akari Score"（官方绝对量表）不是同一指标。
