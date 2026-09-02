@@ -163,10 +163,10 @@ export function formatAkariRating(rating: number): string {
 export const AKARI_TAG_THRESHOLDS = {
   /** 输了但表现 ≥ 此分 → 尽力局 */
   effortMin: 10.0,
-  /** 赢了且 ≥ 此分并明显高于队友 → carry 局 */
-  carryMin: 12.0,
-  /** carry 局：需领先队内第二高至少此内部分差 */
-  carryLeadInternal: 1.0,
+  /** 赢了且 ≥ 此分并明显高于队友 → carry 局（11.0 ≈ 比本局平均高 18%） */
+  carryMin: 11.0,
+  /** carry 局：需领先队内第三高至少此内部分差（1.25 内部 ≈ 2.5 显示分；允许双 carry 同时成立） */
+  carryLeadInternal: 1.25,
   /** 赢了但 ≤ 此分且明显低于队友 → 躺赢局 */
   lyingMax: 6.0,
   /** 输了且 ≤ 此分、全队最低且明显低于队友 → 甩锅局 */
@@ -631,7 +631,7 @@ export function computeAkariScores(
 /**
  * 对局标签（WeGame 式，但按更严格、可解释的规则）：
  * - 挂机局：己方有挂机（语境标签，优先级最高，因其它标签在挂机局里都不可靠）
- * - 赢：Carry 局 = 分 ≥ carryMin 且领先队内第二高 ≥ carryLead；
+ * - 赢：Carry 局 = 分 ≥ carryMin 且领先队内第三高 ≥ carryLead（前两名可同时成立）；
  *       躺赢局 = 分 ≤ lyingMax 且低于队友均值 ≥ belowTeam；
  *       碾压局 = 队伍层面碾压（击杀比 ≥ 2 且 ≥ 15 杀，或对方投降且 ≤ 25 分钟）且非以上两者
  * - 输：尽力局 = 分 ≥ effortMin；
@@ -682,14 +682,14 @@ function assignGameTags(
       const display = toDisplayRating(r)
       const others = ratings.filter((_, i) => list[i].puuid !== d.puuid)
       const othersAvg = others.length ? others.reduce((a, b) => a + b, 0) / others.length : r
-      const second = sortedDesc.find((x) => x < r) ?? (sortedDesc.length > 1 ? sortedDesc[1] : r)
+      const third = sortedDesc[Math.min(2, sortedDesc.length - 1)] ?? r
 
       if (s.afkTeammate) {
         s.tag = 'afk'
         continue
       }
       if (win) {
-        if (display >= T.carryMin && r - second >= T.carryLeadInternal) s.tag = 'carry'
+        if (display >= T.carryMin && r - third >= T.carryLeadInternal) s.tag = 'carry'
         else if (display <= T.lyingMax && othersAvg - r >= T.belowTeamInternal) s.tag = 'lying'
         else if (stomp) s.tag = 'stomp'
       } else {

@@ -312,3 +312,29 @@ describe('game tags: stricter stomp / blame rules', () => {
     expect([...result.byPuuid.values()].some((s) => s.tag === 'blame')).toBe(false)
   })
 })
+
+describe('carry rule (≥ 11.0, lead over team third by 1.25 internal ≈ 2.5 displayed)', () => {
+  it('lets a duo carry both earn the tag while the third stays untagged', () => {
+    const game = realGame().map((p) => {
+      if (p.puuid === 'biubiubiu') {
+        return { ...p, kills: 12, deaths: 2, assists: 9, totalDamageDealtToChampions: 34000, goldEarned: 15500 }
+      }
+      return p
+    })
+    const result = computeAkariScores(game, DURATION)
+    expect(result.byPuuid.get('iubethy')!.tag).toBe('carry')
+    expect(result.byPuuid.get('biubiubiu')!.tag).toBe('carry')
+    expect(result.byPuuid.get('hideonpsy')!.tag).not.toBe('carry')
+  })
+
+  it('does not tag the best player of an ordinary win as carry', () => {
+    // 赢方五人评分接近（无人明显拉开）：不应出现 carry
+    const game = realGame().map((p) =>
+      p.teamIdentifier === 'R'
+        ? { ...p, kills: 6, deaths: 4, assists: 8, totalDamageDealtToChampions: 18000, goldEarned: 11500 }
+        : p
+    )
+    const result = computeAkariScores(game, DURATION)
+    expect([...result.byPuuid.values()].some((s) => s.tag === 'carry')).toBe(false)
+  })
+})
