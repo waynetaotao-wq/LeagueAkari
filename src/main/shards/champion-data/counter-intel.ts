@@ -23,7 +23,9 @@ import {
   fetchLaneKillRates
 } from './counter-intel-web'
 import {
+  type UnanchoredMatchupEstimate,
   buildVerifiedMatchupOverlay,
+  estimateUnanchoredMatchup,
   isPlausibleMatchupBuild,
   resolveComparableMatchupGames
 } from './matchup-build'
@@ -407,13 +409,21 @@ export class ChampionDataCounterIntel {
     }
     const meta = readMatchupMeta(data)
     const genericMeta = readMatchupMeta(genericData)
-    const matchupGames =
+    let matchupGames =
       meta && genericMeta ? resolveComparableMatchupGames(meta.play, genericMeta.play) : null
+
+    // 对手不在两份 counters 里（OP.GG 只收前 60 个对手，冷门对位天然无锚点）：
+    // 改用"区块母体互证"——各区母体彼此对齐且相对通用显著缩小，同样能证明 target 生效。
+    let unanchored: UnanchoredMatchupEstimate | null = null
+    if (!meta && !genericMeta) {
+      unanchored = estimateUnanchoredMatchup(data, genericData)
+      if (unanchored) matchupGames = unanchored.games
+    }
 
     let overlay: MatchupBuildResult['overlay'] = null
     let parsedSections: string[] = []
     let targetVerified = false
-    if (meta && matchupGames && isPlausibleMatchupBuild(data, matchupGames)) {
+    if (matchupGames && isPlausibleMatchupBuild(data, matchupGames)) {
       const built = buildVerifiedMatchupOverlay(data, genericData, matchupGames)
       parsedSections = built.parsedSections
       targetVerified = parsedSections.length >= 2
@@ -422,7 +432,7 @@ export class ChampionDataCounterIntel {
 
     if (targetVerified) {
       this._deps.logger.info(
-        `[MatchupBuild] ${params.myChampionId} vs ${params.opponentChampionId}@${params.position} region=${params.region} tier=${params.tier} version=${sourceVersion ?? 'latest'}: sections=[${parsedSections.join(', ')}]`
+        `[MatchupBuild] ${params.myChampionId} vs ${params.opponentChampionId}@${params.position} region=${params.region} tier=${params.tier} version=${sourceVersion ?? 'latest'}: sections=[${parsedSections.join(', ')}]${unanchored ? ` (冷门对位，无 counters 锚点，母体互证约 ${Math.round(unanchored.games)} 场)` : ''}`
       )
     } else {
       this._deps.logger.warn(
@@ -438,7 +448,8 @@ export class ChampionDataCounterIntel {
       tier: params.tier,
       version: requestedVersion,
       sourceVersion,
-      meta,
+      // 冷门对位无 counters 胜负时，用召唤师技能区块的汇总胜负作为对位元信息（同一母体的划分）
+      meta: meta ?? (targetVerified ? (unanchored?.meta ?? null) : null),
       overlay,
       parsedSections,
       targetVerified,

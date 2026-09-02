@@ -232,7 +232,7 @@
             v-if="!intel.laneKillAvailable"
             class="py-2 text-center text-xs text-[#666666] dark:text-[#b2b2b2]"
           >
-            数据源改版，暂不可用（胜率不受影响）
+            暂无单杀率数据（该对位样本不足或数据源异常，不影响胜率）
           </div>
           <NScrollbar v-else class="max-h-100">
             <div
@@ -437,6 +437,8 @@ function updateManualLane(value: string) {
 
 const effectiveLane = computed<LaneName | ''>(() => {
   if (assignedLane.value) return assignedLane.value
+  // 选人会话结束后（加载/对局中）改读真实阵容里我的位置，提示与分路下拉不再显示"未获取"
+  if (inGameLane.value) return inGameLane.value
   return (LANES as readonly string[]).includes(manualLane.value)
     ? (manualLane.value as LaneName)
     : ''
@@ -453,6 +455,28 @@ const observedMatchupSession = computed(() =>
     gameflowSession: lcs.gameflow.session
   })
 )
+const IN_GAME_PHASES = new Set(['GameStart', 'InProgress', 'Reconnect'])
+const LCU_TO_LANE: Record<string, LaneName> = {
+  TOP: 'top',
+  JUNGLE: 'jungle',
+  MIDDLE: 'middle',
+  BOTTOM: 'bottom',
+  UTILITY: 'utility'
+}
+/** 对局内（选人会话已消失）从本局真实阵容读取我的分路；与 inGameMatchup 同一 gameId 门 */
+const inGameLane = computed<LaneName | ''>(() => {
+  if (!IN_GAME_PHASES.has(String(lcs.gameflow.phase))) return ''
+  const gd = (lcs.gameflow.session as any)?.gameData
+  const myPuuid = lcs.summoner.me?.puuid
+  if (!gd || !myPuuid) return ''
+  if (!isCurrentMatchupGameData(observedMatchupSession.value, gd.gameId)) return ''
+  const all: any[] = [
+    ...(Array.isArray(gd.teamOne) ? gd.teamOne : []),
+    ...(Array.isArray(gd.teamTwo) ? gd.teamTwo : [])
+  ]
+  const meEntry = all.find((x) => x?.puuid === myPuuid)
+  return LCU_TO_LANE[String(meEntry?.selectedPosition ?? '').toUpperCase()] ?? ''
+})
 const observedMatchupSessionKey = computed(() =>
   matchupSessionIdentityKey(observedMatchupSession.value)
 )
@@ -704,7 +728,6 @@ async function fetchBzRow(
 }
 
 /** 视为"对局进行中"的阶段（含加载与断线重连）；只锁英雄身份，筛选仍可刷新。 */
-const IN_GAME_PHASES = new Set(['GameStart', 'InProgress', 'Reconnect'])
 /** LaneName ↔ LCU 位置串（键必须与 LANES 一致：top/jungle/middle/bottom/utility） */
 const LANE_TO_LCU: Record<string, string> = {
   top: 'TOP',
@@ -712,13 +735,6 @@ const LANE_TO_LCU: Record<string, string> = {
   middle: 'MIDDLE',
   bottom: 'BOTTOM',
   utility: 'UTILITY'
-}
-const LCU_TO_LANE: Record<string, LaneName> = {
-  TOP: 'top',
-  JUNGLE: 'jungle',
-  MIDDLE: 'middle',
-  BOTTOM: 'bottom',
-  UTILITY: 'utility'
 }
 
 /**

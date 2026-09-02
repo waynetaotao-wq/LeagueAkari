@@ -366,6 +366,71 @@ function hasMeaningfulCohortReduction(
   )
 }
 
+/** 无锚点验证的最小样本：低于此值的冷门对位数据噪声过大，宁可回通用 */
+export const MIN_UNANCHORED_MATCHUP_GAMES = 5
+
+export interface UnanchoredMatchupEstimate {
+  /** 由 target 各区块母体取中位数得到的对位场次估计 */
+  games: number
+  /** 由召唤师技能区块行统计汇总的对位胜负（各行按技能组合划分整个母体） */
+  meta: { play: number; win: number } | null
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
+/**
+ * 对手不在 counters 列表时的替代验证（OP.GG 的 counters 只收前 60 个对手，
+ * 冷门对位天然没有锚点）。证明 target_champion 确实生效的依据改为：
+ * ① target 至少两个区块能估算母体，且彼此对齐（同一小样本）；
+ * ② 这些母体相对通用母体显著缩小（服务端若忽略 target，母体会与通用几乎相同）。
+ * 满足则返回估计场次与由召唤师技能区块汇总的胜负；否则 null（调用方 fail closed）。
+ */
+export function estimateUnanchoredMatchup(
+  targetData: unknown,
+  genericData: unknown
+): UnanchoredMatchupEstimate | null {
+  const target = buildMatchupOverlay(targetData)
+  const generic = buildMatchupOverlay(genericData)
+  const cohorts: number[] = []
+  const genericCohorts: number[] = []
+  for (const key of MATCHUP_SECTION_KEYS) {
+    const t = estimateSectionCohort(targetData, target.overlay, key)
+    const g = estimateSectionCohort(genericData, generic.overlay, key)
+    if (t !== null && g !== null) {
+      cohorts.push(t)
+      genericCohorts.push(g)
+    }
+  }
+  if (cohorts.length < 2) return null
+  const games = median(cohorts)
+  if (!Number.isFinite(games) || games < MIN_UNANCHORED_MATCHUP_GAMES) return null
+  // 至少两个区块与中位数对齐，且各自相对通用显著缩小
+  let verified = 0
+  for (let index = 0; index < cohorts.length; index++) {
+    if (
+      isCohortAlignedWithMatchup(cohorts[index], games) &&
+      hasMeaningfulCohortReduction(cohorts[index], genericCohorts[index], games)
+    ) {
+      verified++
+    }
+  }
+  if (verified < 2) return null
+
+  let play = 0
+  let win = 0
+  for (const row of target.overlay.summoner_spells) {
+    if (!hasValidStats(row)) continue
+    play += row.play
+    win += row.win
+  }
+  const meta = play > 0 && win >= 0 && win <= play ? { play, win } : null
+  return { games, meta }
+}
+
 /** 两个并行响应的 counters 锚点必须仍属同一统计快照；漂移过大时整次 fail closed。 */
 export function resolveComparableMatchupGames(
   targetGames: number,
