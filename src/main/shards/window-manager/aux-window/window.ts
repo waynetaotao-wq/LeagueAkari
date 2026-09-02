@@ -213,15 +213,33 @@ export class AkariAuxWindow extends BaseAkariWindow<AuxWindowState, AuxWindowSet
       }
     }
 
-    this.showOrRestore()
+    // 根因（日志实证）：窗口曾被最小化、随后又被我们隐藏，基类 showOrRestore() 见到"已最小化"
+    // 只做 restore() 就返回——系统层面窗口变为可见，但 Chromium 未走真正的 show 流程，内容停留在
+    // 隐藏态 → 窗口在、内容黑。因此凡是"从隐藏态回来"的显示一律自己处理：先 restore 再真正 show。
     const win = this._window
     if (!win || win.isDestroyed()) return
-    // 显示动作被基类守卫拦下但窗口实际不可见：强制显示
-    if (!win.isVisible()) {
-      this._logger.warn('[lolps] aux window still invisible after showOrRestore; forcing show()')
+    if (cameFromHidden) {
+      if (win.isMinimized()) {
+        this._logger.warn('[lolps] aux window was minimized while hidden; restoring then showing')
+        try {
+          win.restore()
+        } catch {}
+      }
       try {
         win.show()
       } catch {}
+      if (!win.isVisible()) {
+        this._logger.warn('[lolps] aux window still invisible after show(); retrying showOrRestore')
+        this.showOrRestore()
+      }
+    } else {
+      this.showOrRestore()
+      if (!win.isVisible()) {
+        this._logger.warn('[lolps] aux window still invisible after showOrRestore; forcing show()')
+        try {
+          win.show()
+        } catch {}
+      }
     }
     try {
       win.webContents.invalidate()
