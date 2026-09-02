@@ -192,14 +192,13 @@ import {
   type AkariMetricKey,
   type AkariScorePosition
 } from '@renderer-shared/components/match-card/utils/akari-score'
-import { runCalibration } from '@renderer-shared/components/match-card/utils/akari-score-calibrate-runner'
 import { parseStoredCalibration } from '@renderer-shared/components/match-card/utils/akari-score-calibration'
+import { useRatingCalibration } from '@renderer-shared/components/match-card/utils/use-rating-calibration'
 import { GameRefocusRenderer } from '@renderer-shared/shards/game-refocus'
 import { useGameRefocusStore } from '@renderer-shared/shards/game-refocus/store'
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import { MatchRatingRenderer } from '@renderer-shared/shards/match-rating'
 import { useMatchRatingStore } from '@renderer-shared/shards/match-rating/store'
-import { SgpRenderer } from '@renderer-shared/shards/sgp'
 import { useSgpStore } from '@renderer-shared/shards/sgp/store'
 import { RespawnTimerRenderer } from '@renderer-shared/shards/respawn-timer'
 import { useRespawnTimerStore } from '@renderer-shared/shards/respawn-timer/store'
@@ -209,8 +208,8 @@ import {
   useWindowManagerStore
 } from '@renderer-shared/shards/window-manager/store'
 import { useTranslation } from 'i18next-vue'
-import { NButton, NCollapseTransition, NPopover, NScrollbar, NSwitch, useMessage } from 'naive-ui'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { NButton, NCollapseTransition, NPopover, NScrollbar, NSwitch } from 'naive-ui'
+import { computed } from 'vue'
 
 import { MISC_SETTINGS_NAVIGATION_STEP_KEY, type MiscSettingsNavigationPayload } from './navigation'
 
@@ -226,14 +225,13 @@ const gr = useInstance(GameRefocusRenderer)
 // ===== [lolps] 对局评分权重校准 =====
 const mrs = useMatchRatingStore()
 const mr = useInstance(MatchRatingRenderer)
-const sgp = useInstance(SgpRenderer)
 const sgps = useSgpStore()
 const lcs = useLeagueClientStore()
-const message = useMessage()
-const CALIBRATION_GAMES = 400
-const calibrating = ref(false)
-const calibrationProgress = ref<[number, number]>([0, 0])
-let calibrationAbort: AbortController | null = null
+const {
+  calibrating,
+  progressText: calibrationProgressText,
+  calibrate: runRatingCalibration
+} = useRatingCalibration()
 
 const parsedCalibration = computed(() => parseStoredCalibration(mrs.settings.calibration))
 const canCalibrate = computed(
@@ -242,22 +240,18 @@ const canCalibrate = computed(
     sgps.availability.serversSupported.matchHistory &&
     !!lcs.summoner.me?.puuid
 )
-const calibrationProgressText = computed(() => {
-  const [done, total] = calibrationProgress.value
-  return total > 0 ? `拉取 ${done}/${total}…` : '准备中…'
-})
 const calibrationStatusText = computed(() => {
   const c = parsedCalibration.value
   const source = c?.sourceName ? `基于 ${c.sourceName} ` : '基于你 '
   const base = c
     ? `${source}最近 ${c.games} 场（${c.totalSamples} 个玩家样本）拟合的权重 · ${new Date(c.calibratedAt).toLocaleString()}`
     : '当前使用内置先验权重（未校准）'
+  const how =
+    '原理：拉取召唤师峡谷战绩，按位置用逻辑回归找出真正预测胜负的指标；样本少时向内置权重收缩。也可在任意玩家的战绩页用他的对局校准（例如王者高手）。'
   const switched =
     c?.sourcePuuid && lcs.summoner.me?.puuid && c.sourcePuuid !== lcs.summoner.me.puuid
       ? ' 当前登录账号与校准来源不同：权重反映的是来源账号所在分段的规律，换号仍可用；若段位差异大建议重新校准。'
       : ''
-  const how =
-    '原理：拉取你的召唤师峡谷战绩，按位置用逻辑回归找出真正预测胜负的指标；样本少时向内置权重收缩。'
   const avail = sgps.availability.serversSupported.matchHistory ? '' : ' 当前区服不支持 SGP 战绩，暂不可校准。'
   return `${base}。${how}${switched}${avail}`
 })
@@ -290,49 +284,14 @@ const calibrationView = computed(() => {
   return { positions, rows, footnote }
 })
 
-async function startCalibration() {
-  const puuid = lcs.summoner.me?.puuid
-  if (!puuid || calibrating.value) return
-  calibrating.value = true
-  calibrationProgress.value = [0, CALIBRATION_GAMES]
-  calibrationAbort?.abort()
-  calibrationAbort = new AbortController()
-  try {
-    const { stored, collected } = await runCalibration(
-      (startIndex, count) =>
-        sgp.api.matchHistoryQuery
-          .getMatchHistorySummaryByPlayerPuuid(puuid, {
-            startIndex,
-            count,
-            __sgpServerId: sgps.availability.sgpServerId
-          })
-          .then((r) => r.data),
-      {
-        games: CALIBRATION_GAMES,
-        onProgress: (done, total) => (calibrationProgress.value = [done, total]),
-        signal: calibrationAbort.signal,
-        source: {
-          puuid,
-          name: lcs.summoner.me?.gameName || lcs.summoner.me?.displayName || undefined
-        }
-      }
-    )
-    if (collected.games < 20) {
-      message.warning(`可用的峡谷对局只有 ${collected.games} 场，样本太少，未保存（至少 20 场）`)
-      return
-    }
-    await mr.saveCalibration(JSON.stringify(stored))
-    message.success(`已用 ${collected.games} 场（${stored.totalSamples} 个样本）完成校准`)
-  } catch (error) {
-    message.error(`校准失败：${String(error)}`)
-  } finally {
-    calibrating.value = false
-  }
+function startCalibration() {
+  const me = lcs.summoner.me
+  if (!me?.puuid) return
+  void runRatingCalibration({
+    puuid: me.puuid,
+    name: me.gameName || me.displayName || undefined
+  })
 }
-
-onBeforeUnmount(() => {
-  calibrationAbort?.abort()
-})
 
 const wm = useInstance(WindowManagerRenderer)
 const wms = useWindowManagerStore()
