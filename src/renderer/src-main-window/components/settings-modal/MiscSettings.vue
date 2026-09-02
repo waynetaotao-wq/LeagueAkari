@@ -104,6 +104,35 @@
           </div>
         </SettingsRow>
       </SettingsSection>
+      <!-- [lolps] 赛后小结弹窗 -->
+      <SettingsSection setting-id="misc.post-game" title="赛后小结弹窗">
+        <SettingsRow
+          setting-id="misc.post-game.enabled"
+          label="对局结算后自动弹出赛后小结"
+          label-description="在屏幕右下角弹出：本局英雄、游戏 ID、胜负、时长、KDA，以及双方每位玩家的对局评分与 MVP / SVP / 尽力局。回大厅后保持显示，直到关闭、超时或进入下一局。"
+          :label-width="400"
+        >
+          <NSwitch
+            size="small"
+            :value="pgs.settings.enabled"
+            @update:value="(val) => wm.postGameWindow.setEnabled(val)"
+          />
+        </SettingsRow>
+        <SettingsRow
+          setting-id="misc.post-game.auto-close"
+          label="自动收起"
+          label-description="弹出后经过该时间自动收起；选择“不自动收起”则一直显示到手动关闭"
+          :label-width="400"
+        >
+          <NSelect
+            size="small"
+            class="w-36"
+            :value="pgs.settings.autoCloseSeconds"
+            :options="postGameAutoCloseOptions"
+            @update:value="(val) => wm.postGameWindow.setAutoCloseSeconds(val)"
+          />
+        </SettingsRow>
+      </SettingsSection>
       <!-- [lolps] 团队之选窗口开关 -->
       <SettingsSection setting-id="misc.draftgap" title="团队之选（选人推荐窗口）">
         <SettingsRow
@@ -205,10 +234,11 @@ import { useRespawnTimerStore } from '@renderer-shared/shards/respawn-timer/stor
 import { WindowManagerRenderer } from '@renderer-shared/shards/window-manager'
 import {
   useDraftgapWindowStore,
+  usePostGameWindowStore,
   useWindowManagerStore
 } from '@renderer-shared/shards/window-manager/store'
 import { useTranslation } from 'i18next-vue'
-import { NButton, NCollapseTransition, NPopover, NScrollbar, NSwitch } from 'naive-ui'
+import { NButton, NCollapseTransition, NPopover, NScrollbar, NSelect, NSwitch } from 'naive-ui'
 import { computed } from 'vue'
 
 import { MISC_SETTINGS_NAVIGATION_STEP_KEY, type MiscSettingsNavigationPayload } from './navigation'
@@ -296,6 +326,13 @@ function startCalibration() {
 const wm = useInstance(WindowManagerRenderer)
 const wms = useWindowManagerStore()
 const dgs = useDraftgapWindowStore()
+const pgs = usePostGameWindowStore()
+const postGameAutoCloseOptions = [
+  { label: '1 分钟', value: 60 },
+  { label: '2 分钟', value: 120 },
+  { label: '5 分钟', value: 300 },
+  { label: '不自动收起', value: 0 }
+]
 
 useAkariNavigationStep<MiscSettingsNavigationPayload>({
   key: MISC_SETTINGS_NAVIGATION_STEP_KEY,

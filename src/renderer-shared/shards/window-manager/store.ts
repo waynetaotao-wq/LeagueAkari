@@ -84,6 +84,27 @@ export const useOpggWindowStore = defineStore('shard:window-manager-renderer/opg
   }
 })
 
+// [lolps] 赛后小结窗口设置（与主进程 post-game-window settingSchema 对齐）
+export const usePostGameWindowStore = defineStore(
+  'shard:window-manager-renderer/post-game-window',
+  () => {
+    const settings = shallowReactive({
+      enabled: true,
+      autoShow: true,
+      opacity: 1,
+      pinned: true,
+      autoCloseSeconds: 120
+    })
+
+    const basicWindowState = useBasicWindowStates()
+
+    return {
+      settings,
+      ...basicWindowState
+    }
+  }
+)
+
 // [lolps] 团队之选窗口设置（与主进程 draftgap-window settingSchema 对齐）
 export const useDraftgapWindowStore = defineStore(
   'shard:window-manager-renderer/draftgap-window',

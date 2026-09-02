@@ -11,6 +11,7 @@ export const MAIN_SHARD_NAMESPACE_ONGOING_GAME_WINDOW = 'window-manager-main/ong
 export const MAIN_SHARD_NAMESPACE_CD_TIMER_WINDOW = 'window-manager-main/cd-timer-window'
 // [lolps] 团队之选窗口
 export const MAIN_SHARD_NAMESPACE_DRAFTGAP_WINDOW = 'window-manager-main/draftgap-window'
+export const MAIN_SHARD_NAMESPACE_POST_GAME_WINDOW = 'window-manager-main/post-game-window'
 
 export interface WindowManagerRendererContext {
   ipc: AkariIpcRenderer

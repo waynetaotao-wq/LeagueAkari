@@ -94,6 +94,7 @@ export default defineConfig({
         '@ongoing-game-window': resolve('src/renderer/src-ongoing-game-window'),
         '@cd-timer-window': resolve('src/renderer/src-cd-timer-window'),
         '@draftgap-window': resolve('src/renderer/src-draftgap-window'),
+        '@post-game-window': resolve('src/renderer/src-post-game-window'),
         '@shared': resolve('src/shared'),
         '@renderer-shared': resolve('src/renderer-shared')
       }
@@ -119,7 +120,8 @@ export default defineConfig({
           opggWindow: resolve(__dirname, 'src/renderer/opgg-window.html'),
           ongoingGameWindow: resolve(__dirname, 'src/renderer/ongoing-game-window.html'),
           cdTimerWindow: resolve(__dirname, 'src/renderer/cd-timer-window.html'),
-          draftgapWindow: resolve(__dirname, 'src/renderer/draftgap-window.html')
+          draftgapWindow: resolve(__dirname, 'src/renderer/draftgap-window.html'),
+          postGameWindow: resolve(__dirname, 'src/renderer/post-game-window.html')
         }
       }
     }

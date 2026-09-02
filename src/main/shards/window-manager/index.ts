@@ -16,6 +16,7 @@ import { AkariAuxWindow } from './aux-window/window'
 import { settingToNativeBackgroundMaterial } from './background-material-resolver'
 import { AkariCdTimerWindow } from './cd-timer-window/windows'
 import { AkariDraftgapWindow } from './draftgap-window/window'
+import { AkariPostGameWindow } from './post-game-window/window'
 import { WINDOW_MANAGER_MAIN_NAMESPACE, type WindowManagerMainContext } from './context'
 import { WindowManagerLifecycleController } from './lifecycle-controller'
 import { AkariMainWindow } from './main-window/window'
@@ -41,6 +42,7 @@ export class WindowManagerMain implements IAkariShardInitDispose {
   public readonly ongoingGameWindow: AkariOngoingGameWindow
   public readonly cdTimerWindow: AkariCdTimerWindow
   public readonly draftgapWindow: AkariDraftgapWindow
+  public readonly postGameWindow: AkariPostGameWindow
 
   constructor(
     private readonly _ipc: AkariIpcMain,
@@ -75,13 +77,15 @@ export class WindowManagerMain implements IAkariShardInitDispose {
     this.ongoingGameWindow = new AkariOngoingGameWindow(this._context)
     this.cdTimerWindow = new AkariCdTimerWindow(this._context)
     this.draftgapWindow = new AkariDraftgapWindow(this._context)
+    this.postGameWindow = new AkariPostGameWindow(this._context)
     this._lifecycleController = new WindowManagerLifecycleController(this._context, {
       mainWindow: this.mainWindow,
       auxWindow: this.auxWindow,
       opggWindow: this.opggWindow,
       ongoingGameWindow: this.ongoingGameWindow,
       cdTimerWindow: this.cdTimerWindow,
-      draftgapWindow: this.draftgapWindow
+      draftgapWindow: this.draftgapWindow,
+      postGameWindow: this.postGameWindow
     })
   }
 

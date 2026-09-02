@@ -3,6 +3,7 @@ import {
   MAIN_SHARD_NAMESPACE_AUX_WINDOW,
   MAIN_SHARD_NAMESPACE_CD_TIMER_WINDOW,
   MAIN_SHARD_NAMESPACE_DRAFTGAP_WINDOW,
+  MAIN_SHARD_NAMESPACE_POST_GAME_WINDOW,
   MAIN_SHARD_NAMESPACE_MAIN_WINDOW,
   MAIN_SHARD_NAMESPACE_ONGOING_GAME_WINDOW,
   MAIN_SHARD_NAMESPACE_OPGG_WINDOW,
@@ -12,6 +13,7 @@ import {
   useAuxWindowStore,
   useCdTimerWindowStore,
   useDraftgapWindowStore,
+  usePostGameWindowStore,
   useMainWindowStore,
   useOngoingGameWindowStore,
   useOpggWindowStore
@@ -141,6 +143,37 @@ export class AkariDraftgapWindow extends BaseAkariWindowRenderer<
 
   setEnabled(value: boolean) {
     return this._context.setting.set(MAIN_SHARD_NAMESPACE_DRAFTGAP_WINDOW, 'enabled', value)
+  }
+}
+
+// [lolps] 赛后小结窗口（渲染端设置代理）
+export class AkariPostGameWindow extends BaseAkariWindowRenderer<
+  ReturnType<typeof usePostGameWindowStore>,
+  ReturnType<typeof usePostGameWindowStore>['settings']
+> {
+  constructor(_context: WindowManagerRendererContext) {
+    super(
+      _context,
+      MAIN_SHARD_NAMESPACE_POST_GAME_WINDOW,
+      () => usePostGameWindowStore(),
+      () => usePostGameWindowStore().settings
+    )
+  }
+
+  setAutoShow(value: boolean) {
+    return this._context.setting.set(MAIN_SHARD_NAMESPACE_POST_GAME_WINDOW, 'autoShow', value)
+  }
+
+  setEnabled(value: boolean) {
+    return this._context.setting.set(MAIN_SHARD_NAMESPACE_POST_GAME_WINDOW, 'enabled', value)
+  }
+
+  setAutoCloseSeconds(value: number) {
+    return this._context.setting.set(
+      MAIN_SHARD_NAMESPACE_POST_GAME_WINDOW,
+      'autoCloseSeconds',
+      value
+    )
   }
 }
 

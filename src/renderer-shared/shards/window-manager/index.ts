@@ -14,6 +14,7 @@ import {
   AkariAuxWindow,
   AkariCdTimerWindow,
   AkariDraftgapWindow,
+  AkariPostGameWindow,
   AkariMainWindow,
   AkariOngoingGameWindow,
   AkariOpggWindow
@@ -22,6 +23,7 @@ import {
 export {
   AkariCdTimerWindow,
   AkariDraftgapWindow,
+  AkariPostGameWindow,
   AkariOngoingGameWindow,
   AkariOpggWindow,
   type WindowManagerRendererContext
@@ -40,6 +42,7 @@ export class WindowManagerRenderer implements IAkariShardInitDispose {
   public cdTimerWindow: AkariCdTimerWindow
   // [lolps] 团队之选窗口
   public draftgapWindow: AkariDraftgapWindow
+  public postGameWindow: AkariPostGameWindow
 
   constructor(
     @Dep(AkariIpcRenderer) private readonly _ipc: AkariIpcRenderer,
@@ -59,6 +62,7 @@ export class WindowManagerRenderer implements IAkariShardInitDispose {
     this.ongoingGameWindow = new AkariOngoingGameWindow(this.context)
     this.cdTimerWindow = new AkariCdTimerWindow(this.context)
     this.draftgapWindow = new AkariDraftgapWindow(this.context)
+    this.postGameWindow = new AkariPostGameWindow(this.context)
   }
 
   async onInit() {
@@ -72,6 +76,7 @@ export class WindowManagerRenderer implements IAkariShardInitDispose {
     await this.ongoingGameWindow.onInit()
     await this.cdTimerWindow.onInit()
     await this.draftgapWindow.onInit()
+    await this.postGameWindow.onInit()
   }
 
   setBackgroundMaterial(value: string) {
