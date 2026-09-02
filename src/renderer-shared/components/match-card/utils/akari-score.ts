@@ -65,6 +65,8 @@ export interface AkariScoreInput {
   objectiveSteals?: number | null
   /** 本局有队友挂机（仅标注，不入分） */
   hadAfkTeammate?: boolean | null
+  /** 本局以投降结束（用于碾压局判定） */
+  gameEndedInSurrender?: boolean | null
 }
 
 export type AkariMetricKey =
@@ -89,10 +91,14 @@ export interface AkariScore {
   position: AkariScorePosition
   isMvp: boolean
   isSvp: boolean
-  /** 输了但表现在阈值之上 */
+  /** 输了但表现在阈值之上（= tag === 'effort'） */
   isCarryLoss: boolean
   /** 本局有队友挂机（语境标注） */
   afkTeammate: boolean
+  /** 荣誉徽标：MVP / SVP */
+  badge: 'MVP' | 'SVP' | null
+  /** 对局标签（WeGame 式，规则见 assignGameTags） */
+  tag: AkariGameTag | null
 }
 
 /** 本局某玩家的相对指标样本（校准拟合与评分共用） */
@@ -104,6 +110,8 @@ export interface AkariMetricSample {
   metrics: Partial<Record<AkariMetricKey, number>>
   bonus: number
   afkTeammate: boolean
+  kills: number
+  surrender: boolean
 }
 
 export type AkariPositionWeights = Record<AkariScorePosition, Record<AkariMetricKey, number>>
@@ -129,18 +137,55 @@ export interface AkariScoreResult {
 export const AKARI_SCORE_ALPHA = 2.5
 /** 单项比率上限：防止极端值（如 0 死亡 / 唯一治疗者）压过其它维度 */
 export const AKARI_METRIC_CAP = 2.5
-/** 尽力局阈值（0–10 量表） */
-export const AKARI_CARRY_LOSS_THRESHOLD = 8.0
-
 /**
- * 显示量表满分（可调区）：内部计算恒为 0–10，界面按比例换算显示。
- * 17.4 = WeGame 量表满分，便于与熟悉的分数直觉对齐；阈值 / 颜色档位 / MVP 判定均不受影响。
+ * 显示量表（可调区）：内部计算恒为 0–10（5.0 = 本局平均水平）。
+ * 界面按 WeGame 式分布换算：平均 → 7.5，内部满分 10 → 17.4（几乎打不出来），
+ * 碾压全场的 MVP 通常落在 13–15，崩盘局 3–5。颜色档位与 MVP/SVP 判定不受量表影响。
  */
 export const AKARI_RATING_DISPLAY_MAX = 17.4
+export const AKARI_RATING_DISPLAY_CENTER = 7.5
+const DISPLAY_SLOPE = (AKARI_RATING_DISPLAY_MAX - AKARI_RATING_DISPLAY_CENTER) / 5
 
+export function toDisplayRating(rating: number): number {
+  return clamp(AKARI_RATING_DISPLAY_CENTER + (rating - 5) * DISPLAY_SLOPE, 0, AKARI_RATING_DISPLAY_MAX)
+}
+export function fromDisplayRating(display: number): number {
+  return 5 + (display - AKARI_RATING_DISPLAY_CENTER) / DISPLAY_SLOPE
+}
 /** 内部 0–10 评分 → 显示量表字符串（一位小数） */
 export function formatAkariRating(rating: number): string {
-  return ((rating * AKARI_RATING_DISPLAY_MAX) / 10).toFixed(1)
+  return toDisplayRating(rating).toFixed(1)
+}
+
+/** 标签阈值（按显示量表定义，便于对照 WeGame 手感；可调区） */
+export const AKARI_TAG_THRESHOLDS = {
+  /** 输了但表现 ≥ 此分 → 尽力局 */
+  effortMin: 10.0,
+  /** 赢了且 ≥ 此分并明显高于队友 → carry 局 */
+  carryMin: 12.0,
+  /** carry 局：需领先队内第二高至少此内部分差 */
+  carryLeadInternal: 1.0,
+  /** 赢了但 ≤ 此分且明显低于队友 → 躺赢局 */
+  lyingMax: 6.0,
+  /** 输了且 ≤ 此分、全队最低且明显低于队友 → 甩锅局 */
+  blameMax: 5.0,
+  /** 躺赢/甩锅：需低于队友均值至少此内部分差 */
+  belowTeamInternal: 1.0,
+  /** 碾压局（队伍层面）：击杀比 ≥ 此值（且己方 ≥ 15 杀），或对方投降且时长 ≤ stompMaxMinutes */
+  stompKillRatio: 2.0,
+  stompMaxMinutes: 25
+} as const
+/** 尽力局阈值（内部 0–10 量表，由显示阈值换算而来） */
+export const AKARI_CARRY_LOSS_THRESHOLD = fromDisplayRating(AKARI_TAG_THRESHOLDS.effortMin)
+
+export type AkariGameTag = 'carry' | 'lying' | 'stomp' | 'effort' | 'blame' | 'afk'
+export const AKARI_GAME_TAG_LABELS: Record<AkariGameTag, string> = {
+  carry: 'Carry 局',
+  lying: '躺赢局',
+  stomp: '碾压局',
+  effort: '尽力局',
+  blame: '甩锅局',
+  afk: '挂机局'
 }
 
 export const AKARI_METRIC_LABELS: Record<AkariMetricKey, string> = {
@@ -267,6 +312,8 @@ interface Derived {
   pressureShare: number | null
   bonus: number
   afkTeammate: boolean
+  kills: number
+  surrender: boolean
 }
 
 /**
@@ -394,7 +441,9 @@ export function computeAkariMetrics(
             ? (num(p.turretPlatesTaken) + num(p.turretTakedowns)) / teamPressure
             : null,
         bonus: clamp(multi + solo + steals, 0, 0.35),
-        afkTeammate: p.hadAfkTeammate === true
+        afkTeammate: p.hadAfkTeammate === true,
+        kills,
+        surrender: p.gameEndedInSurrender === true
       })
     }
   }
@@ -471,7 +520,9 @@ export function computeAkariMetrics(
       win: d.win,
       metrics,
       bonus: d.bonus,
-      afkTeammate: d.afkTeammate
+      afkTeammate: d.afkTeammate,
+      kills: d.kills,
+      surrender: d.surrender
     })
   }
   return samples
@@ -522,7 +573,9 @@ export function computeAkariScores(
       isMvp: false,
       isSvp: false,
       isCarryLoss: false,
-      afkTeammate: sample.afkTeammate
+      afkTeammate: sample.afkTeammate,
+      badge: null,
+      tag: null
     })
   }
 
@@ -550,8 +603,76 @@ export function computeAkariScores(
     const s = scores.get(d.puuid)!
     s.isMvp = s.puuid === mvpPuuid
     s.isSvp = s.puuid === svpPuuid
-    s.isCarryLoss = !d.win && s.rating >= AKARI_CARRY_LOSS_THRESHOLD
+    s.badge = s.isMvp ? 'MVP' : s.isSvp ? 'SVP' : null
   }
+  assignGameTags(samples, scores, gameDurationSeconds)
+  for (const s of scores.values()) s.isCarryLoss = s.tag === 'effort'
 
   return { byPuuid: scores, mvpPuuid, svpPuuid, skipped: null }
+}
+
+/**
+ * 对局标签（WeGame 式，但按更严格、可解释的规则）：
+ * - 挂机局：己方有挂机（语境标签，优先级最高，因其它标签在挂机局里都不可靠）
+ * - 赢：Carry 局 = 分 ≥ carryMin 且领先队内第二高 ≥ carryLead；
+ *       躺赢局 = 分 ≤ lyingMax 且低于队友均值 ≥ belowTeam；
+ *       碾压局 = 队伍层面碾压（击杀比 ≥ 2 且 ≥ 15 杀，或对方投降且 ≤ 25 分钟）且非以上两者
+ * - 输：尽力局 = 分 ≥ effortMin；
+ *       甩锅局 = 分 ≤ blameMax 且全队最低且低于队友均值 ≥ belowTeam
+ * 其余不打标签（"数据不够极端就不下结论"）。
+ */
+function assignGameTags(
+  samples: AkariMetricSample[],
+  scores: Map<string, AkariScore>,
+  gameDurationSeconds: number
+) {
+  const T = AKARI_TAG_THRESHOLDS
+  const teams = new Map<string, AkariMetricSample[]>()
+  for (const d of samples) {
+    const list = teams.get(d.teamIdentifier) ?? []
+    list.push(d)
+    teams.set(d.teamIdentifier, list)
+  }
+  const teamKills = new Map<string, number>()
+  for (const [key, list] of teams) teamKills.set(key, list.reduce((s, d) => s + d.kills, 0))
+  const minutes = gameDurationSeconds / 60
+
+  for (const [key, list] of teams) {
+    const enemyKey = [...teams.keys()].find((k) => k !== key)
+    const myKills = teamKills.get(key) ?? 0
+    const enemyKills = enemyKey ? (teamKills.get(enemyKey) ?? 0) : 0
+    const win = list[0]?.win ?? false
+    const surrendered = list.some((d) => d.surrender)
+    const stomp =
+      win &&
+      ((myKills >= 15 && myKills >= enemyKills * T.stompKillRatio) ||
+        (surrendered && minutes <= T.stompMaxMinutes))
+    const ratings = list.map((d) => scores.get(d.puuid)!.rating)
+    const sortedDesc = [...ratings].sort((a, b) => b - a)
+    const teamMin = Math.min(...ratings)
+
+    for (const d of list) {
+      const s = scores.get(d.puuid)!
+      const r = s.rating
+      const display = toDisplayRating(r)
+      const others = ratings.filter((_, i) => list[i].puuid !== d.puuid)
+      const othersAvg = others.length ? others.reduce((a, b) => a + b, 0) / others.length : r
+      const second = sortedDesc.find((x) => x < r) ?? (sortedDesc.length > 1 ? sortedDesc[1] : r)
+
+      if (s.afkTeammate) {
+        s.tag = 'afk'
+        continue
+      }
+      if (win) {
+        if (display >= T.carryMin && r - second >= T.carryLeadInternal) s.tag = 'carry'
+        else if (display <= T.lyingMax && othersAvg - r >= T.belowTeamInternal) s.tag = 'lying'
+        else if (stomp) s.tag = 'stomp'
+      } else {
+        if (display >= T.effortMin) s.tag = 'effort'
+        else if (display <= T.blameMax && r === teamMin && othersAvg - r >= T.belowTeamInternal) {
+          s.tag = 'blame'
+        }
+      }
+    }
+  }
 }

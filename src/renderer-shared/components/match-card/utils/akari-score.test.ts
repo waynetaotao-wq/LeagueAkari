@@ -218,14 +218,59 @@ describe('Akari score', () => {
   })
 })
 
+describe('game tags (WeGame-style, strict rules)', () => {
+  it('tags the standout winner as carry, the weakest winner as lying, others in a stomp as stomp', () => {
+    // 真实对局：红队 32:22 杀、蓝队 24 分钟投降 → 队伍层面碾压
+    const game = realGame().map((p) => ({ ...p, gameEndedInSurrender: true }))
+    const result = computeAkariScores(game, DURATION)
+    expect(result.byPuuid.get('iubethy')!.tag).toBe('carry')
+    expect(result.byPuuid.get('iubethy')!.badge).toBe('MVP')
+    expect(result.byPuuid.get('donk666')!.tag).toBe('lying')
+    expect(result.byPuuid.get('biubiubiu')!.tag).toBe('stomp')
+  })
+
+  it('tags losers: effort needs ≥ 10.0 displayed, blame needs team-lowest and clearly below teammates', () => {
+    const base = computeAkariScores(realGame(), DURATION)
+    // 这局败方最高约 9.9，未达 10.0 → 无尽力局
+    expect([...base.byPuuid.values()].some((s) => s.tag === 'effort')).toBe(false)
+    // 队内最低且明显低于队友 → 甩锅局；仅一人
+    const blamed = [...base.byPuuid.values()].filter((s) => s.tag === 'blame')
+    expect(blamed.length).toBeLessThanOrEqual(1)
+    const boosted = realGame().map((p) =>
+      p.puuid === 'zed' ? { ...p, kills: 16, deaths: 3, assists: 6, totalDamageDealtToChampions: 42000, goldEarned: 16000 } : p
+    )
+    const r2 = computeAkariScores(boosted, DURATION)
+    expect(r2.byPuuid.get('zed')!.tag).toBe('effort')
+    expect(r2.byPuuid.get('zed')!.isCarryLoss).toBe(true)
+  })
+
+  it('marks every member of a team with an AFK as afk, overriding other tags', () => {
+    const game = realGame().map((p) => (p.teamIdentifier === 'R' ? { ...p, hadAfkTeammate: true } : p))
+    const result = computeAkariScores(game, DURATION)
+    for (const id of ['iubethy', 'leoleeoh', 'donk666', 'biubiubiu', 'hideonpsy']) {
+      expect(result.byPuuid.get(id)!.tag).toBe('afk')
+    }
+    expect(result.byPuuid.get('bumma')!.tag).not.toBe('afk')
+  })
+
+  it('does not call a close win a stomp', () => {
+    const close = realGame().map((p) =>
+      p.teamIdentifier === 'R' ? { ...p, kills: 5, deaths: 5, assists: 5 } : { ...p, kills: 5, deaths: 5, assists: 5 }
+    )
+    const result = computeAkariScores(close, DURATION)
+    expect([...result.byPuuid.values()].some((s) => s.tag === 'stomp')).toBe(false)
+  })
+})
+
 describe('display scale', () => {
   it('maps the internal 0-10 rating onto the WeGame-like 17.4 scale without touching thresholds', async () => {
     const { AKARI_RATING_DISPLAY_MAX, formatAkariRating } = await import('./akari-score')
     expect(AKARI_RATING_DISPLAY_MAX).toBe(17.4)
+    // WeGame 式分布：平均 7.5，内部满分才 17.4（几乎打不出来），低分端钳到 0
     expect(formatAkariRating(10)).toBe('17.4')
-    expect(formatAkariRating(5)).toBe('8.7')
+    expect(formatAkariRating(5)).toBe('7.5')
     expect(formatAkariRating(0)).toBe('0.0')
-    // 尽力局阈值仍是内部 8.0（显示为 13.9），MVP/SVP 判定不受显示量表影响
-    expect(formatAkariRating(AKARI_CARRY_LOSS_THRESHOLD)).toBe('13.9')
+    // 尽力局阈值以显示分定义（≥ 10.0），内部换算约 6.26
+    expect(formatAkariRating(AKARI_CARRY_LOSS_THRESHOLD)).toBe('10.0')
   })
 })

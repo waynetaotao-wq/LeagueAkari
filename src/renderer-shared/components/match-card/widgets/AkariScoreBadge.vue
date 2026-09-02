@@ -17,10 +17,11 @@
           >
         </div>
         <span
-          v-if="tag"
-          class="rounded px-1 text-[10px] leading-4 font-bold"
-          :class="tag.class"
-          >{{ tag.text }}</span
+          v-for="chip of chips"
+          :key="chip.text"
+          class="rounded px-1 text-[10px] leading-4 font-bold whitespace-nowrap"
+          :class="chip.class"
+          >{{ chip.text }}</span
         >
       </div>
     </template>
@@ -28,7 +29,7 @@
       <div class="mb-1 flex items-baseline justify-between">
         <span class="font-bold">对局评分 {{ formatAkariRating(score.rating) }} / {{ AKARI_RATING_DISPLAY_MAX }}</span>
         <span class="text-[10px] text-black/60 dark:text-white/60">
-          {{ positionText }}{{ tag ? ` · ${tag.text}` : '' }}
+          {{ positionText }}{{ chips.length ? ` · ${chips.map((c) => c.text).join(' · ')}` : '' }}
         </span>
       </div>
       <div v-for="row of breakdown" :key="row.key" class="flex items-center gap-2 py-px">
@@ -60,8 +61,10 @@ import { NPopover } from 'naive-ui'
 import { computed } from 'vue'
 
 import {
+  AKARI_GAME_TAG_LABELS,
   AKARI_METRIC_LABELS,
   AKARI_RATING_DISPLAY_MAX,
+  type AkariGameTag,
   type AkariMetricKey,
   type AkariScore,
   formatAkariRating
@@ -92,19 +95,24 @@ const ratingClass = computed(() => {
   return 'text-red-600 dark:text-red-300'
 })
 
-const tag = computed(() => {
+const TAG_CLASS: Record<AkariGameTag, string> = {
+  carry: 'bg-sky-500/20 text-sky-700 dark:text-sky-300',
+  stomp: 'bg-teal-500/20 text-teal-700 dark:text-teal-300',
+  lying: 'bg-lime-500/20 text-lime-700 dark:text-lime-300',
+  effort: 'bg-violet-500/20 text-violet-700 dark:text-violet-300',
+  blame: 'bg-orange-500/20 text-orange-700 dark:text-orange-300',
+  afk: 'bg-neutral-500/20 text-neutral-700 dark:text-neutral-300'
+}
+
+/** 芯片：荣誉徽标（MVP/SVP）在前，对局标签在后 */
+const chips = computed(() => {
   const s = props.score
-  if (!s) return null
-  if (s.isMvp) {
-    return { text: 'MVP', class: 'bg-amber-500/20 text-amber-700 dark:text-amber-300' }
-  }
-  if (s.isSvp) {
-    return { text: 'SVP', class: 'bg-sky-500/20 text-sky-700 dark:text-sky-300' }
-  }
-  if (s.isCarryLoss) {
-    return { text: '尽力局', class: 'bg-violet-500/20 text-violet-700 dark:text-violet-300' }
-  }
-  return null
+  if (!s) return []
+  const out: Array<{ text: string; class: string }> = []
+  if (s.badge === 'MVP') out.push({ text: 'MVP', class: 'bg-amber-500/20 text-amber-700 dark:text-amber-300' })
+  if (s.badge === 'SVP') out.push({ text: 'SVP', class: 'bg-sky-500/20 text-sky-700 dark:text-sky-300' })
+  if (s.tag) out.push({ text: AKARI_GAME_TAG_LABELS[s.tag], class: TAG_CLASS[s.tag] })
+  return out
 })
 
 const positionText = computed(() => (props.score ? POSITION_TEXT[props.score.position] : ''))

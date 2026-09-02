@@ -106,7 +106,8 @@ export function buildAkariScoreInputs(
         turretPlatesTaken: opt(c?.turretPlatesTaken),
         turretTakedowns: opt(r?.turretTakedowns ?? c?.turretTakedowns),
         objectiveSteals: sumOpt(r?.objectivesStolen, c?.epicMonsterSteals),
-        hadAfkTeammate: typeof c?.hadAfkTeammate === 'number' ? c.hadAfkTeammate > 0 : null
+        hadAfkTeammate: typeof c?.hadAfkTeammate === 'number' ? c.hadAfkTeammate > 0 : null,
+        gameEndedInSurrender: r?.gameEndedInSurrender === true
       }
     })
     return { inputs, earlySurrender }
@@ -126,7 +127,8 @@ export function buildAkariScoreInputs(
       // LCU 没有控制守卫"放置"字段，用购买数近似；排眼用 wardsKilled
       controlWardsPlaced: opt(s?.visionWardsBoughtInGame),
       wardTakedowns: opt(s?.wardsKilled),
-      turretTakedowns: opt(s?.turretKills)
+      turretTakedowns: opt(s?.turretKills),
+      gameEndedInSurrender: s?.gameEndedInSurrender === true
     }
   })
   return { inputs, earlySurrender }

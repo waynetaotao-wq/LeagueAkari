@@ -38,7 +38,9 @@
           <div class="pg-stat">
             <div class="pg-stat-value" :class="ratingClass(view.me.rating)">
               {{ formatAkariRating(view.me.rating) }}
-              <span v-if="view.me.tag" class="pg-tag" :class="view.me.tagClass">{{ view.me.tag }}</span>
+              <span v-for="chip of view.me.chips" :key="chip.text" class="pg-tag" :class="chip.class">
+                {{ chip.text }}
+              </span>
             </div>
             <div class="pg-stat-label">对局评分</div>
           </div>
@@ -78,7 +80,9 @@
             <span class="pg-col-kda">{{ row.kills }}/{{ row.deaths }}/{{ row.assists }}</span>
             <span class="pg-col-rating">
               <span :class="ratingClass(row.rating)">{{ formatAkariRating(row.rating) }}</span>
-              <span v-if="row.tag" class="pg-tag" :class="row.tagClass">{{ row.tag }}</span>
+              <span v-for="chip of row.chips" :key="chip.text" class="pg-tag" :class="chip.class">
+                {{ chip.text }}
+              </span>
             </span>
           </div>
         </div>
@@ -95,6 +99,8 @@
 <script setup lang="ts">
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import {
+  AKARI_GAME_TAG_LABELS,
+  type AkariGameTag,
   type AkariScore,
   type AkariScorePosition,
   computeAkariScores,
@@ -245,12 +251,21 @@ function ratingClass(r: number) {
   return 'text-red-300'
 }
 
-function tagOf(s: AkariScore | undefined) {
-  if (!s) return { tag: '', tagClass: '' }
-  if (s.isMvp) return { tag: 'MVP', tagClass: 'pg-tag-mvp' }
-  if (s.isSvp) return { tag: 'SVP', tagClass: 'pg-tag-svp' }
-  if (s.isCarryLoss) return { tag: '尽力局', tagClass: 'pg-tag-carry' }
-  return { tag: '', tagClass: '' }
+const TAG_CLASS: Record<AkariGameTag, string> = {
+  carry: 'pg-tag-sky',
+  stomp: 'pg-tag-teal',
+  lying: 'pg-tag-lime',
+  effort: 'pg-tag-violet',
+  blame: 'pg-tag-orange',
+  afk: 'pg-tag-gray'
+}
+function chipsOf(s: AkariScore | undefined) {
+  const out: Array<{ text: string; class: string }> = []
+  if (!s) return out
+  if (s.badge === 'MVP') out.push({ text: 'MVP', class: 'pg-tag-mvp' })
+  if (s.badge === 'SVP') out.push({ text: 'SVP', class: 'pg-tag-svp' })
+  if (s.tag) out.push({ text: AKARI_GAME_TAG_LABELS[s.tag], class: TAG_CLASS[s.tag] })
+  return out
 }
 
 const view = computed(() => {
@@ -272,7 +287,7 @@ const view = computed(() => {
 
     const rowOf = (p: (typeof participants)[number]) => {
       const s = scores.byPuuid.get(p.puuid)
-      const { tag, tagClass } = tagOf(s)
+      const chips = chipsOf(s)
       return {
         puuid: p.puuid,
         isMe: p.puuid === myPuuid,
@@ -283,8 +298,7 @@ const view = computed(() => {
         assists: p.assists,
         rating: s?.rating ?? 0,
         positionText: s ? POSITION_TEXT[s.position] : '',
-        tag,
-        tagClass,
+        chips,
         win: p.win
       }
     }
@@ -518,9 +532,29 @@ const view = computed(() => {
   background: rgba(14, 165, 233, 0.25);
   color: #7dd3fc;
 }
-.pg-tag-carry {
+.pg-tag-sky {
+  background: rgba(14, 165, 233, 0.25);
+  color: #7dd3fc;
+}
+.pg-tag-teal {
+  background: rgba(20, 184, 166, 0.25);
+  color: #5eead4;
+}
+.pg-tag-lime {
+  background: rgba(132, 204, 22, 0.25);
+  color: #bef264;
+}
+.pg-tag-violet {
   background: rgba(139, 92, 246, 0.25);
   color: #c4b5fd;
+}
+.pg-tag-orange {
+  background: rgba(249, 115, 22, 0.25);
+  color: #fdba74;
+}
+.pg-tag-gray {
+  background: rgba(156, 163, 175, 0.25);
+  color: #d1d5db;
 }
 .pg-footer {
   display: flex;
