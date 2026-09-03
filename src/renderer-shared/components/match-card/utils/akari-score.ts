@@ -421,13 +421,34 @@ interface Derived {
  * 计算本局全部参与者的相对指标样本（1.0 = 本局期望）。评分与权重校准共用这一步。
  * 仅对两队有意义；参与者不足 2 人、时长为 0 或提前投降局返回空数组。
  */
+/**
+ * 默认口径（2026-09-03 用 4 局顶尖对局对照 OP.GG 校准：排名一致性 0.53 → 0.855，MVP 4/4）：
+ * 份额按全场计、对位均值占 25%。
+ */
+export const AKARI_DEFAULT_SHARE_SCOPE: 'game' | 'team' = 'game'
+export const AKARI_DEFAULT_PAIR_BLEND = 0.25
+
+export interface AkariMetricOptions {
+  earlySurrender?: boolean
+  mode?: AkariScoreMode
+  /**
+   * 份额口径：'game' = 占全场份额（输方打得少份额自然低，胜负效应来自真实表现；默认），
+   * 'team' = 占本队份额（旧口径，输方账面与赢方一样好看）
+   */
+  shareScope?: 'game' | 'team'
+  /** 输出/坦度/支援/参团/目标等指标里"同位置对手均值"所占比例（0 = 只用位置基线；默认 0.25） */
+  pairBlend?: number
+}
+
 export function computeAkariMetrics(
   participants: AkariScoreInput[],
   gameDurationSeconds: number,
-  options: { earlySurrender?: boolean; mode?: AkariScoreMode } = {}
+  options: AkariMetricOptions = {}
 ): AkariMetricSample[] {
   if (options.earlySurrender) return []
   const mode: AkariScoreMode = options.mode ?? 'sr'
+  const shareScope = options.shareScope ?? AKARI_DEFAULT_SHARE_SCOPE
+  const pairBlend = options.pairBlend ?? AKARI_DEFAULT_PAIR_BLEND
   const minutes = num(gameDurationSeconds) / 60
   if (participants.length < 2 || minutes <= 0) return []
 
@@ -474,6 +495,23 @@ export function computeAkariMetrics(
   const immobAvailable = anyPresent((p) => p.immobilizations)
   const pressureAvailable = anyPresent((p) => num(p.turretPlatesTaken) + num(p.turretTakedowns))
 
+  // 全场总量（'game' 口径：每人份额 = 值 / (全场总量 / 队数)，全场平均仍为 1/size，
+  // 但打得多的队整体 >1/size、打得少的队整体 <1/size——胜负效应来自真实表现，不是加分）
+  const teamCount = teams.size
+  const gsum = (pick: (p: AkariScoreInput) => number) => participants.reduce((s, p) => s + pick(p), 0)
+  const gameKills = gsum((p) => num(p.kills))
+  const gameDeaths = gsum((p) => num(p.deaths))
+  const gameDmg = gsum((p) => num(p.totalDamageDealtToChampions))
+  const gameSupport = supportViaTeammates
+    ? gsum((p) => num(p.healsOnTeammates) + num(p.shieldsOnTeammates))
+    : gsum((p) => num(p.effectiveHealAndShielding))
+  const gameObjective = objectiveViaObjectives
+    ? gsum((p) => num(p.damageDealtToObjectives))
+    : gsum((p) => num(p.totalDamageToTowers))
+  const gameEpic = gsum((p) => num(p.epicTakedowns))
+  const gameTimeDead = gsum((p) => num(p.totalTimeSpentDead))
+  const gamePressure = gsum((p) => num(p.turretPlatesTaken) + num(p.turretTakedowns))
+
   const derived: Derived[] = []
   for (const team of teams.values()) {
     const size = team.length
@@ -492,6 +530,9 @@ export function computeAkariMetrics(
     const teamTimeDead = sum((p) => num(p.totalTimeSpentDead))
     const teamPressure = sum((p) => num(p.turretPlatesTaken) + num(p.turretTakedowns))
     const share = (value: number, total: number) => (total > 0 ? value / total : 1 / size)
+    /** 按口径选择分母：全场总量/队数 或 本队总量 */
+    const scoped = (value: number, teamTotal: number, gameTotal: number) =>
+      shareScope === 'game' ? share(value, gameTotal / teamCount) : share(value, teamTotal)
 
     for (const p of team) {
       const kills = num(p.kills)
@@ -524,15 +565,49 @@ export function computeAkariMetrics(
         win: p.win,
         position: positionByPuuid.get(p.puuid) ?? 'UNKNOWN',
         size,
-        dmgShare: share(num(p.totalDamageDealtToChampions), teamDmg),
+        dmgShare: scoped(num(p.totalDamageDealtToChampions), teamDmg, gameDmg),
+        // 坦度保持本队口径：输方被动承伤天然更多，按全场算会奖励送死
         tankShare: share(num(p.totalDamageTaken) + num(p.damageSelfMitigated), teamTank),
-        supportShare: supportAvailable ? share(supportValue, teamSupport) : null,
-        objectiveDmgShare: objectiveAvailable ? share(objectiveValue, teamObjective) : null,
-        epicShare: epicAvailable && teamEpic > 0 ? num(p.epicTakedowns) / teamEpic : null,
-        kp: teamKills > 0 ? (kills + assists) / teamKills : 0,
-        deathShare: teamDeaths > 0 ? deaths / teamDeaths : 0,
-        timeDeadShare:
-          timeDeadAvailable && teamTimeDead > 0 ? num(p.totalTimeSpentDead) / teamTimeDead : null,
+        supportShare: supportAvailable ? scoped(supportValue, teamSupport, gameSupport) : null,
+        objectiveDmgShare: objectiveAvailable
+          ? scoped(objectiveValue, teamObjective, gameObjective)
+          : null,
+        epicShare: epicAvailable
+          ? shareScope === 'game'
+            ? gameEpic > 0
+              ? num(p.epicTakedowns) / (gameEpic / teamCount)
+              : null
+            : teamEpic > 0
+              ? num(p.epicTakedowns) / teamEpic
+              : null
+          : null,
+        // 参团：'game' 口径 = 参与击杀数 / (全场击杀/队数)，赢方整体高于输方
+        kp:
+          shareScope === 'game'
+            ? gameKills > 0
+              ? (kills + assists) / (gameKills / teamCount)
+              : 0
+            : teamKills > 0
+              ? (kills + assists) / teamKills
+              : 0,
+        // 死亡：'game' 口径 = 死亡 / (全场死亡/队数)，输方死得多整体份额高 → 生存低
+        deathShare:
+          shareScope === 'game'
+            ? gameDeaths > 0
+              ? deaths / (gameDeaths / teamCount)
+              : 0
+            : teamDeaths > 0
+              ? deaths / teamDeaths
+              : 0,
+        timeDeadShare: timeDeadAvailable
+          ? shareScope === 'game'
+            ? gameTimeDead > 0
+              ? num(p.totalTimeSpentDead) / (gameTimeDead / teamCount)
+              : null
+            : teamTimeDead > 0
+              ? num(p.totalTimeSpentDead) / teamTimeDead
+              : null
+          : null,
         gpm: gold / minutes,
         cspm: num(p.cs) / minutes,
         vspm: num(p.visionScore) / minutes,
@@ -543,10 +618,15 @@ export function computeAkariMetrics(
           ? (num(p.controlWardsPlaced) + num(p.wardTakedowns)) / minutes
           : null,
         immobPm: immobAvailable ? num(p.immobilizations) / minutes : null,
-        pressureShare:
-          pressureAvailable && teamPressure > 0
-            ? (num(p.turretPlatesTaken) + num(p.turretTakedowns)) / teamPressure
-            : null,
+        pressureShare: pressureAvailable
+          ? shareScope === 'game'
+            ? gamePressure > 0
+              ? (num(p.turretPlatesTaken) + num(p.turretTakedowns)) / (gamePressure / teamCount)
+              : null
+            : teamPressure > 0
+              ? (num(p.turretPlatesTaken) + num(p.turretTakedowns)) / teamPressure
+              : null
+          : null,
         bonus: clamp(multi + solo + steals, 0, 0.35),
         afkTeammate: p.hadAfkTeammate === true,
         kills,
@@ -595,7 +675,9 @@ export function computeAkariMetrics(
     const exp = (pick: (x: Derived) => number, baselineExpected: number | null, fallback: number) => {
       const c = counterpart(d)
       const pair = c ? (pick(d) + pick(c)) / 2 : null
-      if (pair !== null && baselineExpected !== null) return (pair + baselineExpected) / 2
+      if (pair !== null && baselineExpected !== null) {
+        return pairBlend * pair + (1 - pairBlend) * baselineExpected
+      }
       if (baselineExpected !== null) return baselineExpected
       return pair ?? fallback
     }
@@ -714,7 +796,7 @@ export function rateAkariSample(sample: AkariMetricSample, weightsTable = getAka
 export function computeAkariScores(
   participants: AkariScoreInput[],
   gameDurationSeconds: number,
-  options: { earlySurrender?: boolean; mode?: AkariScoreMode } = {}
+  options: AkariMetricOptions = {}
 ): AkariScoreResult {
   const empty = (skipped: AkariScoreResult['skipped'] = null): AkariScoreResult => ({
     byPuuid: new Map(),
@@ -723,7 +805,11 @@ export function computeAkariScores(
     skipped
   })
   if (options.earlySurrender) return empty('early-surrender')
-  const samples = computeAkariMetrics(participants, gameDurationSeconds, { mode: options.mode })
+  const samples = computeAkariMetrics(participants, gameDurationSeconds, {
+    mode: options.mode,
+    shareScope: options.shareScope,
+    pairBlend: options.pairBlend
+  })
   if (samples.length === 0) return empty()
 
   const scores = new Map<string, AkariScore>()
