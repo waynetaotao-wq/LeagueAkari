@@ -8,11 +8,12 @@ import { makeAutoObservable, observableRef } from 'mobx'
 
 export class ChampionDataSettings {
   preferredSource: ChampionDataSourceId = 'opgg'
+  // [lolps] 默认韩服 · 翡翠+（对位构筑 / 克制榜 / 通用构筑共用此偏好；用户可随时改回全地区）
   preferences: ChampionDataPreferences = {
     mode: 'ranked',
     position: 'top',
-    region: 'global',
-    tier: 'all'
+    region: 'kr',
+    tier: 'emerald_plus'
   }
 
   setPreferredSource(source: ChampionDataSourceId) {

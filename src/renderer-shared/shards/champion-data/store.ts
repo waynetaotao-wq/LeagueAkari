@@ -13,8 +13,8 @@ export const useChampionDataStore = defineStore('shard:champion-data-renderer', 
     preferences: {
       mode: 'ranked',
       position: 'top',
-      region: 'global',
-      tier: 'all'
+      region: 'kr',
+      tier: 'emerald_plus'
     } as ChampionDataPreferences
   })
   const availability = shallowRef<ChampionDataSourceAvailability>({

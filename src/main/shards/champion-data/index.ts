@@ -110,6 +110,7 @@ export class ChampionDataMain implements IAkariShardInitDispose {
 
   async onInit() {
     await this._settingService.applyToState()
+    await this._migrateRegionTierDefaults()
     this._mobxUtils.propSync(ChampionDataMain.id, 'settings', this.settings, [
       'preferredSource',
       'preferences'
@@ -128,6 +129,25 @@ export class ChampionDataMain implements IAkariShardInitDispose {
   async onDispose() {
     this._ipcHandlers.dispose()
     this._counterIntel.dispose()
+  }
+
+  /**
+   * [lolps] 一次性迁移：旧存档若仍是官方默认的 global/all，改为 kr/emerald_plus；
+   * 之后用户手动选回全地区不会再被覆盖（以 regionTierDefaultsMigrated 标记）。
+   */
+  private async _migrateRegionTierDefaults() {
+    const migrated = await this._settingService._getFromStorage('regionTierDefaultsMigrated')
+    if (migrated) return
+    const { region, tier } = this.settings.preferences
+    if (region === 'global' && String(tier) === 'all') {
+      await this._settingService.set('preferences', {
+        ...this.settings.preferences,
+        region: 'kr',
+        tier: 'emerald_plus'
+      })
+      this._logger.info('[lolps] champion-data preferences migrated to kr / emerald_plus')
+    }
+    await this._settingService._saveToStorage('regionTierDefaultsMigrated', true)
   }
 
   loadOverview(query: Parameters<ChampionDataServiceController['loadOverview']>[0]) {
