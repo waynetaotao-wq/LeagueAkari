@@ -107,7 +107,9 @@ export function buildAkariScoreInputs(
         turretTakedowns: opt(r?.turretTakedowns ?? c?.turretTakedowns),
         objectiveSteals: sumOpt(r?.objectivesStolen, c?.epicMonsterSteals),
         hadAfkTeammate: typeof c?.hadAfkTeammate === 'number' ? c.hadAfkTeammate > 0 : null,
-        gameEndedInSurrender: r?.gameEndedInSurrender === true
+        gameEndedInSurrender: r?.gameEndedInSurrender === true,
+        firstBloodKill: r?.firstBloodKill === true,
+        largestKillingSpree: opt(r?.largestKillingSpree)
       }
     })
     return { inputs, earlySurrender }
@@ -128,7 +130,9 @@ export function buildAkariScoreInputs(
       controlWardsPlaced: opt(s?.visionWardsBoughtInGame),
       wardTakedowns: opt(s?.wardsKilled),
       turretTakedowns: opt(s?.turretKills),
-      gameEndedInSurrender: s?.gameEndedInSurrender === true
+      gameEndedInSurrender: s?.gameEndedInSurrender === true,
+      firstBloodKill: s?.firstBloodKill === true,
+      largestKillingSpree: opt(s?.largestKillingSpree)
     }
   })
   return { inputs, earlySurrender }

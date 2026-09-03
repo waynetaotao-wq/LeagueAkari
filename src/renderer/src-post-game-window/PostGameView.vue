@@ -18,39 +18,50 @@
     </div>
 
     <template v-else-if="view">
-      <!-- 头部：本局英雄 + 游戏 ID + 胜负 -->
+      <!-- 头图：本局英雄原画 + 本人信息 + 胜负 -->
       <section class="pg-hero" :class="view.me.win ? 'pg-hero-win' : 'pg-hero-loss'">
-        <div class="pg-hero-main">
-          <ChampionIcon :champion-id="view.me.championId" class="pg-hero-champ" round />
-          <div class="min-w-0">
-            <div class="pg-hero-name" :title="view.me.name">{{ view.me.name }}</div>
-            <div class="pg-hero-sub">{{ view.me.championName }} · {{ view.me.positionText }}</div>
-          </div>
-          <div class="pg-result" :class="view.me.win ? 'pg-result-win' : 'pg-result-loss'">
-            {{ view.me.win ? '胜' : '负' }}
-          </div>
-        </div>
-        <div class="pg-hero-stats">
-          <div class="pg-stat">
-            <div class="pg-stat-value">{{ view.durationText }}</div>
-            <div class="pg-stat-label">本局时长</div>
-          </div>
-          <div class="pg-stat">
-            <div class="pg-stat-value" :class="ratingClass(view.me.rating)">
-              {{ formatAkariRating(view.me.rating) }}
-              <span v-for="chip of view.me.chips" :key="chip.text" class="pg-tag" :class="chip.class">
-                {{ chip.text }}
-              </span>
+        <div v-if="view.me.splashUrl" class="pg-hero-bg" :style="{ backgroundImage: `url(${view.me.splashUrl})` }" />
+        <div class="pg-hero-shade" />
+        <div class="pg-hero-content">
+          <div class="pg-hero-main">
+            <div class="pg-hero-avatar" :class="view.me.win ? 'ring-win' : 'ring-loss'">
+              <ChampionIcon :champion-id="view.me.championId" class="pg-hero-champ" round />
             </div>
-            <div class="pg-stat-label">对局评分</div>
-          </div>
-          <div class="pg-stat">
-            <div class="pg-stat-value">
-              {{ view.me.kills }}<span class="pg-sep">/</span
-              ><span class="text-red-300">{{ view.me.deaths }}</span
-              ><span class="pg-sep">/</span>{{ view.me.assists }}
+            <div class="min-w-0 flex-1">
+              <div class="pg-hero-name" :title="view.me.name">{{ view.me.name }}</div>
+              <div class="pg-hero-sub">
+                {{ view.me.championName }}<template v-if="view.me.positionText"> · {{ view.me.positionText }}</template>
+                <template v-if="view.queueText"> · {{ view.queueText }}</template>
+              </div>
+              <div class="pg-chips mt-1.5">
+                <span v-for="chip of view.me.chips" :key="chip.text" class="pg-tag" :class="chip.class">{{ chip.text }}</span>
+                <AchievementIcon v-for="a of view.me.achievements" :key="a.key" :achievement="a" />
+              </div>
             </div>
-            <div class="pg-stat-label">K / D / A</div>
+            <div class="pg-result" :class="view.me.win ? 'pg-result-win' : 'pg-result-loss'">
+              <span class="pg-result-text">{{ view.me.win ? '胜' : '负' }}</span>
+            </div>
+          </div>
+
+          <div class="pg-hero-stats">
+            <div class="pg-stat">
+              <div class="pg-stat-value">{{ view.durationText }}</div>
+              <div class="pg-stat-label">本局时长</div>
+            </div>
+            <div class="pg-stat pg-stat-main">
+              <div class="pg-stat-value pg-stat-rating" :class="ratingClass(view.me.rating)">
+                {{ formatAkariRating(view.me.rating) }}
+              </div>
+              <div class="pg-stat-label">对局评分</div>
+            </div>
+            <div class="pg-stat">
+              <div class="pg-stat-value">
+                {{ view.me.kills }}<span class="pg-sep">/</span
+                ><span class="text-red-300">{{ view.me.deaths }}</span
+                ><span class="pg-sep">/</span>{{ view.me.assists }}
+              </div>
+              <div class="pg-stat-label">K / D / A</div>
+            </div>
           </div>
         </div>
       </section>
@@ -58,13 +69,12 @@
       <!-- 双方列表 -->
       <section class="pg-teams">
         <div v-for="team of view.teams" :key="team.key" class="pg-team">
-          <div class="pg-team-title" :class="team.win ? 'text-emerald-300' : 'text-red-300'">
-            {{ team.isMine ? '我方' : '敌方' }} · {{ team.win ? '胜利' : '失败' }}
-          </div>
-          <div class="pg-row pg-row-head">
-            <span class="pg-col-name">玩家</span>
-            <span class="pg-col-kda">K/D/A</span>
-            <span class="pg-col-rating">评分</span>
+          <div class="pg-team-head">
+            <span class="pg-team-title" :class="team.win ? 'text-emerald-300' : 'text-red-300'">
+              {{ team.isMine ? '我方' : '敌方' }} · {{ team.win ? '胜利' : '失败' }}
+            </span>
+            <span class="pg-team-kda">{{ team.kills }} / {{ team.deaths }} / {{ team.assists }}</span>
+            <span class="pg-col-head-rating">评分</span>
           </div>
           <div
             v-for="row of team.rows"
@@ -72,32 +82,35 @@
             class="pg-row"
             :class="{ 'pg-row-me': row.isMe }"
           >
-            <span class="pg-col-name">
-              <ChampionIcon :champion-id="row.championId" class="pg-row-champ" round />
-              <span class="pg-row-name" :title="row.name">{{ row.name }}</span>
-              <span class="pg-row-pos">{{ row.positionText }}</span>
-            </span>
+            <ChampionIcon :champion-id="row.championId" class="pg-row-champ" round />
+            <div class="pg-row-body">
+              <div class="pg-row-line1">
+                <span class="pg-row-name" :title="row.name">{{ row.name }}</span>
+                <span v-if="row.positionText" class="pg-row-pos">{{ row.positionText }}</span>
+              </div>
+              <div class="pg-row-line2">
+                <span v-for="chip of row.chips" :key="chip.text" class="pg-tag" :class="chip.class">{{ chip.text }}</span>
+                <AchievementIcon v-for="a of row.achievements" :key="a.key" :achievement="a" />
+              </div>
+            </div>
             <span class="pg-col-kda">{{ row.kills }}/{{ row.deaths }}/{{ row.assists }}</span>
-            <span class="pg-col-rating">
-              <span :class="ratingClass(row.rating)">{{ formatAkariRating(row.rating) }}</span>
-              <span v-for="chip of row.chips" :key="chip.text" class="pg-tag" :class="chip.class">
-                {{ chip.text }}
-              </span>
-            </span>
+            <span class="pg-col-rating" :class="ratingClass(row.rating)">{{ formatAkariRating(row.rating) }}</span>
           </div>
         </div>
       </section>
 
       <footer class="pg-footer">
         <span class="pg-footnote">{{ view.footnote }}</span>
-        <NButton class="no-drag" size="tiny" secondary @click="winop('hide')">关闭</NButton>
+        <NButton class="no-drag" size="small" secondary @click="winop('hide')">关闭</NButton>
       </footer>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import AchievementIcon from '@renderer-shared/components/match-card/widgets/AchievementIcon.vue'
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
+import { computeAkariAchievements } from '@renderer-shared/components/match-card/utils/akari-achievements'
 import {
   AKARI_GAME_TAG_LABELS,
   type AkariGameTag,
@@ -143,6 +156,23 @@ const POSITION_TEXT: Record<AkariScorePosition, string> = {
   BOTTOM: '下路',
   UTILITY: '辅助',
   UNKNOWN: ''
+}
+const QUEUE_TEXT: Record<number, string> = {
+  420: '单双排',
+  440: '灵活组排',
+  400: '匹配',
+  430: '匹配',
+  490: '快速匹配',
+  450: '极地大乱斗',
+  1700: '斗魂竞技场'
+}
+const TAG_CLASS: Record<AkariGameTag, string> = {
+  carry: 'pg-tag-sky',
+  stomp: 'pg-tag-teal',
+  lying: 'pg-tag-lime',
+  effort: 'pg-tag-violet',
+  blame: 'pg-tag-orange',
+  afk: 'pg-tag-gray'
 }
 
 const state = reactive<{
@@ -251,14 +281,6 @@ function ratingClass(r: number) {
   return 'text-red-300'
 }
 
-const TAG_CLASS: Record<AkariGameTag, string> = {
-  carry: 'pg-tag-sky',
-  stomp: 'pg-tag-teal',
-  lying: 'pg-tag-lime',
-  effort: 'pg-tag-violet',
-  blame: 'pg-tag-orange',
-  afk: 'pg-tag-gray'
-}
 function chipsOf(s: AkariScore | undefined) {
   const out: Array<{ text: string; class: string }> = []
   if (!s) return out
@@ -278,6 +300,7 @@ const view = computed(() => {
     const participants = toParticipants(summary, basicInfo)
     const { inputs, earlySurrender } = buildAkariScoreInputs(summary, participants)
     const scores = computeAkariScores(inputs, basicInfo.gameDuration, { earlySurrender })
+    const achievements = computeAkariAchievements(inputs, basicInfo.gameDuration)
     const me = participants.find((p) => p.puuid === myPuuid)
     if (!me) return null
 
@@ -287,7 +310,6 @@ const view = computed(() => {
 
     const rowOf = (p: (typeof participants)[number]) => {
       const s = scores.byPuuid.get(p.puuid)
-      const chips = chipsOf(s)
       return {
         puuid: p.puuid,
         isMe: p.puuid === myPuuid,
@@ -298,7 +320,8 @@ const view = computed(() => {
         assists: p.assists,
         rating: s?.rating ?? 0,
         positionText: s ? POSITION_TEXT[s.position] : '',
-        chips,
+        chips: chipsOf(s),
+        achievements: achievements.get(p.puuid) ?? [],
         win: p.win
       }
     }
@@ -308,19 +331,32 @@ const view = computed(() => {
       .map((key) => {
         const members = participants.filter((p) => p.teamIdentifier === key)
         const rows = members.map(rowOf).sort((a, b) => b.rating - a.rating)
-        return { key, isMine: key === me.teamIdentifier, win: members[0]?.win ?? false, rows }
+        return {
+          key,
+          isMine: key === me.teamIdentifier,
+          win: members[0]?.win ?? false,
+          kills: members.reduce((s, p) => s + p.kills, 0),
+          deaths: members.reduce((s, p) => s + p.deaths, 0),
+          assists: members.reduce((s, p) => s + p.assists, 0),
+          rows
+        }
       })
       .sort((a, b) => Number(b.isMine) - Number(a.isMine))
 
     const myRow = rowOf(me)
+    const splashUrl = resources.assets.resolve(
+      `/lol-game-data/assets/v1/champion-splashes/${me.championId}/${me.championId * 1000}.jpg`
+    )
     const footnote = scores.skipped
       ? '本局为提前投降/重开，不计评分'
       : `对局评分：分路加权 · 局内相对 · 详情见战绩页 · ${basicInfo.dataSource === 'sgp' ? '数据源 SGP' : '数据源 LCU'}`
     return {
       durationText,
+      queueText: QUEUE_TEXT[basicInfo.queueId] ?? '',
       me: {
         ...myRow,
-        championName: resources.champions.name(me.championId)
+        championName: resources.champions.name(me.championId),
+        splashUrl
       },
       teams,
       footnote
@@ -346,7 +382,7 @@ const view = computed(() => {
   align-items: center;
   gap: 8px;
   height: 36px;
-  padding: 0 10px 0 12px;
+  padding: 0 10px 0 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   -webkit-app-region: drag;
 }
@@ -356,6 +392,7 @@ const view = computed(() => {
 .pg-title {
   font-weight: 700;
   font-size: 13px;
+  letter-spacing: 0.5px;
 }
 .pg-weights {
   font-size: 10px;
@@ -375,124 +412,205 @@ const view = computed(() => {
 .pg-hint {
   color: rgba(255, 255, 255, 0.55);
 }
+
+/* 头图 */
 .pg-hero {
-  padding: 12px 14px 10px;
+  position: relative;
+  height: 232px;
+  overflow: hidden;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-.pg-hero-win {
-  background: linear-gradient(180deg, rgba(16, 185, 129, 0.16), transparent);
+.pg-hero-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 20%;
+  filter: saturate(0.9);
+  transform: scale(1.04);
 }
-.pg-hero-loss {
-  background: linear-gradient(180deg, rgba(239, 68, 68, 0.16), transparent);
+.pg-hero-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(20, 20, 22, 0.35) 0%, rgba(20, 20, 22, 0.72) 55%, rgba(20, 20, 22, 0.96) 100%),
+    linear-gradient(90deg, rgba(20, 20, 22, 0.55) 0%, rgba(20, 20, 22, 0) 60%);
+}
+.pg-hero-win .pg-hero-shade {
+  box-shadow: inset 0 -2px 0 rgba(16, 185, 129, 0.6);
+}
+.pg-hero-loss .pg-hero-shade {
+  box-shadow: inset 0 -2px 0 rgba(239, 68, 68, 0.55);
+}
+.pg-hero-content {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 18px 14px;
 }
 .pg-hero-main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+}
+.pg-hero-avatar {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  padding: 3px;
+  flex-shrink: 0;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.ring-win {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b 60%, #b45309);
+}
+.ring-loss {
+  background: linear-gradient(135deg, #9ca3af, #6b7280 60%, #374151);
 }
 .pg-hero-champ {
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
+  width: 62px;
+  height: 62px;
 }
 .pg-hero-name {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 .pg-hero-sub {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 2px;
 }
 .pg-result {
-  margin-left: auto;
-  width: 36px;
-  height: 36px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 16px;
   border: 2px solid currentColor;
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.45);
+  flex-shrink: 0;
+}
+.pg-result-text {
+  font-weight: 900;
+  font-size: 22px;
 }
 .pg-result-win {
   color: #fbbf24;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.22), rgba(251, 191, 36, 0.04) 70%);
 }
 .pg-result-loss {
-  color: #9ca3af;
+  color: #cbd5e1;
+  background: radial-gradient(circle, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.04) 70%);
 }
 .pg-hero-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  margin-top: 12px;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  align-items: end;
   text-align: center;
 }
 .pg-stat-value {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
+  line-height: 1.1;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+.pg-stat-rating {
+  font-size: 30px;
 }
 .pg-stat-label {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 4px;
+  letter-spacing: 1px;
 }
 .pg-sep {
   color: rgba(255, 255, 255, 0.35);
-  margin: 0 1px;
+  margin: 0 2px;
 }
+.pg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+/* 列表 */
 .pg-teams {
   flex: 1;
   overflow: auto;
-  padding: 6px 10px;
+  padding: 8px 12px 4px;
 }
 .pg-team {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+}
+.pg-team-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px;
 }
 .pg-team-title {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 4px 2px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.pg-team-kda {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+.pg-col-head-rating {
+  margin-left: auto;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  width: 52px;
+  text-align: right;
 }
 .pg-row {
   display: flex;
   align-items: center;
-  height: 28px;
+  gap: 8px;
+  height: 42px;
   padding: 0 6px;
-  border-radius: 4px;
-}
-.pg-row-head {
-  height: 20px;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.45);
+  border-radius: 6px;
+  border-left: 3px solid transparent;
 }
 .pg-row-me {
   background: rgba(255, 255, 255, 0.07);
+  border-left-color: #fbbf24;
 }
-.pg-col-name {
+.pg-row-champ {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+.pg-row-body {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
 }
-.pg-row-champ {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
+.pg-row-line1 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
 }
 .pg-row-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12px;
 }
 .pg-row-me .pg-row-name {
   font-weight: 700;
@@ -502,65 +620,77 @@ const view = computed(() => {
   color: rgba(255, 255, 255, 0.4);
   flex-shrink: 0;
 }
+.pg-row-line2 {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  overflow: hidden;
+}
 .pg-col-kda {
   width: 64px;
   text-align: center;
   font-variant-numeric: tabular-nums;
   color: rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
 }
 .pg-col-rating {
-  width: 82px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  font-weight: 700;
+  width: 52px;
+  text-align: right;
+  font-weight: 800;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
+
+/* 芯片 */
 .pg-tag {
   font-size: 9px;
-  line-height: 14px;
-  padding: 0 4px;
+  line-height: 15px;
+  padding: 0 5px;
   border-radius: 3px;
   font-weight: 700;
+  white-space: nowrap;
 }
 .pg-tag-mvp {
-  background: rgba(245, 158, 11, 0.25);
-  color: #fcd34d;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.45), rgba(245, 158, 11, 0.2));
+  color: #fde68a;
 }
 .pg-tag-svp {
-  background: rgba(14, 165, 233, 0.25);
-  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.3);
+  color: #bae6fd;
 }
 .pg-tag-sky {
-  background: rgba(14, 165, 233, 0.25);
+  background: rgba(14, 165, 233, 0.22);
   color: #7dd3fc;
 }
 .pg-tag-teal {
-  background: rgba(20, 184, 166, 0.25);
+  background: rgba(20, 184, 166, 0.22);
   color: #5eead4;
 }
 .pg-tag-lime {
-  background: rgba(132, 204, 22, 0.25);
+  background: rgba(132, 204, 22, 0.22);
   color: #bef264;
 }
 .pg-tag-violet {
-  background: rgba(139, 92, 246, 0.25);
+  background: rgba(139, 92, 246, 0.22);
   color: #c4b5fd;
 }
 .pg-tag-orange {
-  background: rgba(249, 115, 22, 0.25);
+  background: rgba(249, 115, 22, 0.22);
   color: #fdba74;
 }
 .pg-tag-gray {
-  background: rgba(156, 163, 175, 0.25);
+  background: rgba(156, 163, 175, 0.22);
   color: #d1d5db;
 }
+
+/* 底部 */
 .pg-footer {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .pg-footnote {

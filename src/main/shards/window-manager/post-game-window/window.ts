@@ -20,10 +20,10 @@ export class AkariPostGameWindow extends BaseAkariWindow<PostGameWindowState, Po
   static readonly NAMESPACE_SUFFIX = 'post-game-window'
   static readonly HTML_ENTRY = 'post-game-window.html'
   static readonly TITLE = 'League Akari - 赛后小结'
-  static readonly BASE_WIDTH = 420
-  static readonly BASE_HEIGHT = 640
-  static readonly MIN_WIDTH = 360
-  static readonly MIN_HEIGHT = 520
+  static readonly BASE_WIDTH = 500
+  static readonly BASE_HEIGHT = 780
+  static readonly MIN_WIDTH = 500
+  static readonly MIN_HEIGHT = 780
   static readonly SCREEN_MARGIN = 16
 
   private _autoCloseTimer: NodeJS.Timeout | null = null

@@ -67,6 +67,9 @@ export interface AkariScoreInput {
   hadAfkTeammate?: boolean | null
   /** 本局以投降结束（用于碾压局判定） */
   gameEndedInSurrender?: boolean | null
+  /** 成就用：一血、最大连杀 */
+  firstBloodKill?: boolean | null
+  largestKillingSpree?: number | null
 }
 
 export type AkariMetricKey =
@@ -537,7 +540,9 @@ export function computeAkariMetrics(
     // 生存：死亡份额与坐牢时长份额各半（无坐牢数据时只用死亡份额）；份额=平均 → 1.0，0 死 → 上限
     const deathBlend =
       d.timeDeadShare !== null ? 0.5 * d.deathShare + 0.5 * d.timeDeadShare : d.deathShare
-    metrics.survival = clamp((1 - deathBlend) / (1 - share), 0, AKARI_METRIC_CAP)
+    // 单人队伍（1v1 练习/自定义）时 1 − share = 0，避免 0/0 → NaN
+    metrics.survival =
+      1 - share > 0 ? clamp((1 - deathBlend) / (1 - share), 0, AKARI_METRIC_CAP) : 1
     // 经济 / 补刀：对线口径（只与同位置对手比；无对手时全场均值）
     metrics.gold = ratio(d.gpm, pairExpected(d, (x) => x.gpm, gameMean.gpm))
     metrics.cs = ratio(d.cspm, pairExpected(d, (x) => x.cspm, gameMean.cspm))
@@ -623,6 +628,7 @@ export function rateAkariSample(sample: AkariMetricSample, weightsTable = getAka
   }
   composite = weightSum > 0 ? composite / weightSum : 1
   composite += sample.bonus
+  if (!Number.isFinite(composite)) composite = 1
   const rating = clamp(5 + 5 * Math.tanh(AKARI_SCORE_ALPHA * (composite - 1)), 0, 10)
   return Math.round(rating * 10) / 10
 }
@@ -715,6 +721,8 @@ function assignGameTags(
     list.push(d)
     teams.set(d.teamIdentifier, list)
   }
+  // 练习工具 / 1v1 自定义等小规模对局不打标签（碾压/躺赢等概念在这里没有意义）
+  if ([...teams.values()].some((list) => list.length < 3)) return
   const teamKills = new Map<string, number>()
   const teamGold = new Map<string, number>()
   for (const [key, list] of teams) {
