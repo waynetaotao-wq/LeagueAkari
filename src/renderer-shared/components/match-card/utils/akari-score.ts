@@ -102,6 +102,8 @@ export interface AkariScore {
   badge: 'MVP' | 'SVP' | null
   /** 对局标签（WeGame 式，规则见 assignGameTags） */
   tag: AkariGameTag | null
+  /** 本局全场名次（1 = 最高分；同分按参团再按输出） */
+  rank: number
 }
 
 /** 本局某玩家的相对指标样本（校准拟合与评分共用） */
@@ -285,31 +287,35 @@ export const AKARI_METRIC_LABELS: Record<AkariMetricKey, string> = {
   efficiency: '效率'
 }
 
-/** 分路权重（可调区；代码内自动归一化，改动无需手工配平） */
+/**
+ * 分路权重（可调区；代码内自动归一化，改动无需手工配平）。
+ * 2026-09-03 用 7 局顶尖对局对照 OP.GG 调整：参团 +.05、生存 +.04、补刀 −.04、经济 −.03、效率 −.02
+ * （排名一致性 0.816 → 0.872）。
+ */
 export const AKARI_POSITION_WEIGHTS: Record<AkariScorePosition, Record<AkariMetricKey, number>> = {
   TOP: {
-    damage: 0.18, tank: 0.16, support: 0.02, kp: 0.09, survival: 0.14, gold: 0.1,
-    cs: 0.08, vision: 0.03, cc: 0.05, objective: 0.06, lane: 0.06, efficiency: 0.03
+    damage: 0.18, tank: 0.16, support: 0.02, kp: 0.14, survival: 0.18, gold: 0.07,
+    cs: 0.04, vision: 0.03, cc: 0.05, objective: 0.06, lane: 0.06, efficiency: 0.01
   },
   JUNGLE: {
-    damage: 0.13, tank: 0.1, support: 0.02, kp: 0.2, survival: 0.13, gold: 0.09,
-    cs: 0.05, vision: 0.07, cc: 0.05, objective: 0.12, lane: 0, efficiency: 0.04
+    damage: 0.13, tank: 0.1, support: 0.02, kp: 0.25, survival: 0.17, gold: 0.06,
+    cs: 0.01, vision: 0.07, cc: 0.05, objective: 0.12, lane: 0, efficiency: 0.02
   },
   MIDDLE: {
-    damage: 0.22, tank: 0.03, support: 0.02, kp: 0.14, survival: 0.14, gold: 0.11,
-    cs: 0.1, vision: 0.04, cc: 0.05, objective: 0.05, lane: 0.07, efficiency: 0.03
+    damage: 0.22, tank: 0.03, support: 0.02, kp: 0.19, survival: 0.18, gold: 0.08,
+    cs: 0.06, vision: 0.04, cc: 0.05, objective: 0.05, lane: 0.07, efficiency: 0.01
   },
   BOTTOM: {
-    damage: 0.24, tank: 0.02, support: 0.02, kp: 0.11, survival: 0.14, gold: 0.12,
-    cs: 0.11, vision: 0.03, cc: 0.02, objective: 0.08, lane: 0.07, efficiency: 0.04
+    damage: 0.24, tank: 0.02, support: 0.02, kp: 0.16, survival: 0.18, gold: 0.09,
+    cs: 0.07, vision: 0.03, cc: 0.02, objective: 0.08, lane: 0.07, efficiency: 0.02
   },
   UTILITY: {
-    damage: 0.07, tank: 0.1, support: 0.18, kp: 0.2, survival: 0.12, gold: 0.03,
-    cs: 0.01, vision: 0.16, cc: 0.11, objective: 0.02, lane: 0, efficiency: 0
+    damage: 0.067, tank: 0.095, support: 0.171, kp: 0.239, survival: 0.152, gold: 0,
+    cs: 0, vision: 0.152, cc: 0.105, objective: 0.019, lane: 0, efficiency: 0
   },
   UNKNOWN: {
-    damage: 0.18, tank: 0.09, support: 0.05, kp: 0.14, survival: 0.14, gold: 0.1,
-    cs: 0.08, vision: 0.06, cc: 0.05, objective: 0.06, lane: 0.03, efficiency: 0.02
+    damage: 0.18, tank: 0.09, support: 0.05, kp: 0.19, survival: 0.18, gold: 0.07,
+    cs: 0.04, vision: 0.06, cc: 0.05, objective: 0.06, lane: 0.03, efficiency: 0
   }
 }
 
@@ -427,6 +433,7 @@ interface Derived {
  */
 export const AKARI_DEFAULT_SHARE_SCOPE: 'game' | 'team' = 'game'
 export const AKARI_DEFAULT_PAIR_BLEND = 0.25
+export const AKARI_DEFAULT_SURVIVAL_CURVE: 'linear' | 'inverse' = 'inverse'
 
 export interface AkariMetricOptions {
   earlySurrender?: boolean
@@ -438,6 +445,11 @@ export interface AkariMetricOptions {
   shareScope?: 'game' | 'team'
   /** 输出/坦度/支援/参团/目标等指标里"同位置对手均值"所占比例（0 = 只用位置基线；默认 0.25） */
   pairBlend?: number
+  /**
+   * 生存曲线：'linear' = (1−份额)/(1−平均)，0 死封顶 1.25、动态范围窄；
+   * 'inverse' = 1/(0.5+0.5·死亡倍数)，0 死 2.0、平均 1.0、两倍 0.67、三倍 0.5（默认）
+   */
+  survivalCurve?: 'linear' | 'inverse'
 }
 
 export function computeAkariMetrics(
@@ -449,6 +461,7 @@ export function computeAkariMetrics(
   const mode: AkariScoreMode = options.mode ?? 'sr'
   const shareScope = options.shareScope ?? AKARI_DEFAULT_SHARE_SCOPE
   const pairBlend = options.pairBlend ?? AKARI_DEFAULT_PAIR_BLEND
+  const survivalCurve = options.survivalCurve ?? AKARI_DEFAULT_SURVIVAL_CURVE
   const minutes = num(gameDurationSeconds) / 60
   if (participants.length < 2 || minutes <= 0) return []
 
@@ -693,12 +706,18 @@ export function computeAkariMetrics(
       )
     }
     metrics.kp = ratio(d.kp, exp((x) => x.kp, baseline ? baseline.kp * gameMean.kp : null, gameMean.kp))
-    // 生存：死亡份额与坐牢时长份额各半（无坐牢数据时只用死亡份额）；份额=平均 → 1.0，0 死 → 上限
+    // 生存：死亡份额与坐牢时长份额各半（无坐牢数据时只用死亡份额）；份额=平均 → 1.0
     const deathBlend =
       d.timeDeadShare !== null ? 0.5 * d.deathShare + 0.5 * d.timeDeadShare : d.deathShare
-    // 单人队伍（1v1 练习/自定义）时 1 − share = 0，避免 0/0 → NaN
-    metrics.survival =
-      1 - share > 0 ? clamp((1 - deathBlend) / (1 - share), 0, AKARI_METRIC_CAP) : 1
+    if (survivalCurve === 'inverse') {
+      // 死亡倍数 r = 份额/平均份额；1/(0.5+0.5r)：0 死 2.0、平均 1.0、两倍 0.67、三倍 0.5
+      const r = share > 0 ? deathBlend / share : 1
+      metrics.survival = clamp(1 / (0.5 + 0.5 * r), 0, AKARI_METRIC_CAP)
+    } else {
+      // 单人队伍（1v1 练习/自定义）时 1 − share = 0，避免 0/0 → NaN
+      metrics.survival =
+        1 - share > 0 ? clamp((1 - deathBlend) / (1 - share), 0, AKARI_METRIC_CAP) : 1
+    }
     // 经济 / 补刀：对线口径（只与同位置对手比；无对手时全场均值）
     metrics.gold = ratio(d.gpm, pairExpected(d, (x) => x.gpm, gameMean.gpm))
     metrics.cs = ratio(d.cspm, pairExpected(d, (x) => x.cspm, gameMean.cspm))
@@ -808,7 +827,8 @@ export function computeAkariScores(
   const samples = computeAkariMetrics(participants, gameDurationSeconds, {
     mode: options.mode,
     shareScope: options.shareScope,
-    pairBlend: options.pairBlend
+    pairBlend: options.pairBlend,
+    survivalCurve: options.survivalCurve
   })
   if (samples.length === 0) return empty()
 
@@ -824,9 +844,23 @@ export function computeAkariScores(
       isCarryLoss: false,
       afkTeammate: sample.afkTeammate,
       badge: null,
-      tag: null
+      tag: null,
+      rank: 0
     })
   }
+  // 全场名次
+  const ordered = [...samples].sort((a, b) => {
+    const ra = scores.get(a.puuid)!.rating
+    const rb = scores.get(b.puuid)!.rating
+    if (rb !== ra) return rb - ra
+    const ka = a.metrics.kp ?? 0
+    const kb = b.metrics.kp ?? 0
+    if (kb !== ka) return kb - ka
+    return (b.metrics.damage ?? 0) - (a.metrics.damage ?? 0)
+  })
+  ordered.forEach((s, i) => {
+    scores.get(s.puuid)!.rank = i + 1
+  })
 
   // MVP：全场最高；SVP：败方最高（若其同时是全场最高则只记 MVP）；尽力局：输且 ≥ 阈值
   let mvpPuuid: string | null = null

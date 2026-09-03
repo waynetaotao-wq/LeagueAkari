@@ -109,6 +109,15 @@ const chips = computed(() => {
   const s = props.score
   if (!s) return []
   const out: Array<{ text: string; class: string }> = []
+  if (s.rank > 0 && s.badge !== 'MVP') {
+    out.push({
+      text: `第${s.rank}名`,
+      class:
+        s.rank <= 3
+          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
+          : 'bg-black/10 text-black/60 dark:bg-white/10 dark:text-white/60'
+    })
+  }
   if (s.badge === 'MVP') out.push({ text: 'MVP', class: 'bg-amber-500/20 text-amber-700 dark:text-amber-300' })
   if (s.badge === 'SVP') out.push({ text: 'SVP', class: 'bg-sky-500/20 text-sky-700 dark:text-sky-300' })
   if (s.tag) out.push({ text: AKARI_GAME_TAG_LABELS[s.tag], class: TAG_CLASS[s.tag] })

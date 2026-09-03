@@ -33,7 +33,12 @@
               </span>
             </div>
             <div class="min-w-0 flex-1">
-              <div class="pg-hero-name" :title="view.me.name">{{ view.me.name }}</div>
+              <div class="pg-hero-name" :title="view.me.name">
+                {{ view.me.name }}
+                <span v-if="view.me.rank" class="pg-rank pg-rank-hero" :class="{ 'pg-rank-top': view.me.rank <= 3 }"
+                  >第{{ view.me.rank }}名</span
+                >
+              </div>
               <div class="pg-hero-sub">
                 {{ view.me.championName }}<template v-if="view.me.positionText"> · {{ view.me.positionText }}</template>
                 <template v-if="view.queueText"> · {{ view.queueText }}</template>
@@ -96,6 +101,7 @@
             <div class="pg-row-body">
               <div class="pg-row-line1">
                 <span class="pg-row-name" :title="row.name">{{ row.name }}</span>
+                <span v-if="row.rank" class="pg-rank" :class="{ 'pg-rank-top': row.rank <= 3 }">第{{ row.rank }}名</span>
                 <span v-if="row.positionText" class="pg-row-pos">{{ row.positionText }}</span>
               </div>
               <div class="pg-row-line2">
@@ -333,6 +339,7 @@ const view = computed(() => {
         rating: s?.rating ?? 0,
         positionText: s ? POSITION_TEXT[s.position] : '',
         badge: s?.badge ?? null,
+        rank: s?.rank ?? 0,
         chips: chipsOf(s),
         achievements: achievements.get(p.puuid) ?? [],
         win: p.win
@@ -662,6 +669,27 @@ const view = computed(() => {
 }
 .pg-row-me .pg-row-name {
   font-weight: 700;
+}
+.pg-rank {
+  flex-shrink: 0;
+  font-size: 9px;
+  line-height: 14px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 700;
+}
+.pg-rank-top {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fde68a;
+}
+.pg-rank-hero {
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 6px;
+  vertical-align: middle;
+  margin-left: 6px;
 }
 .pg-row-pos {
   font-size: 10px;

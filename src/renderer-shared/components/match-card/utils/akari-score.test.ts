@@ -394,3 +394,12 @@ describe('score mode routing (sr / aram / mayhem / other)', () => {
     expect(diff).toBe(true)
   })
 })
+
+describe('game rank', () => {
+  it('assigns 1..N by rating with MVP at rank 1 and unique ranks', () => {
+    const result = computeAkariScores(realGame(), DURATION)
+    const ranks = [...result.byPuuid.values()].map((s) => s.rank).sort((a, b) => a - b)
+    expect(ranks).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(result.byPuuid.get(result.mvpPuuid!)!.rank).toBe(1)
+  })
+})
