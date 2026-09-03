@@ -71,7 +71,8 @@ describe('Akari score', () => {
     expect(result.mvpPuuid).toBe('iubethy')
     const mvp = result.byPuuid.get('iubethy')!
     expect(mvp.isMvp).toBe(true)
-    expect(mvp.rating).toBeGreaterThanOrEqual(8)
+    // 位置归一后碾压级表现约 7.5+（显示 ≈ 12.5+）
+    expect(mvp.rating).toBeGreaterThanOrEqual(7.5)
     for (const s of result.byPuuid.values()) {
       expect(s.rating).toBeGreaterThanOrEqual(0)
       expect(s.rating).toBeLessThanOrEqual(10)
@@ -108,10 +109,11 @@ describe('Akari score', () => {
 
   it('rewards vision and cc for supports once that data exists', () => {
     const withoutVision = computeAkariScores(realGame(), DURATION)
+    // 位置归一口径下，辅助要在"对面辅助 + 位置常态"两条基准上都占优才算视野好
     const game = realGame().map((p) => ({
       ...p,
-      visionScore: p.position === 'UTILITY' ? 60 : 20,
-      timeCCingOthers: p.position === 'UTILITY' ? 90 : 25
+      visionScore: p.puuid === 'hideonpsy' ? 95 : p.position === 'UTILITY' ? 40 : 20,
+      timeCCingOthers: p.puuid === 'hideonpsy' ? 120 : p.position === 'UTILITY' ? 60 : 25
     }))
     const withVision = computeAkariScores(game, DURATION)
     expect(withVision.byPuuid.get('hideonpsy')!.rating).toBeGreaterThan(
@@ -179,11 +181,11 @@ describe('Akari score', () => {
   it('folds objective damage and epic takedowns into one objective metric (v2)', () => {
     const game = realGame().map((p) => ({
       ...p,
-      damageDealtToObjectives: p.position === 'JUNGLE' ? 30000 : 8000,
-      epicTakedowns: p.position === 'JUNGLE' ? 4 : 1
+      damageDealtToObjectives: p.puuid === 'bumma' ? 30000 : p.position === 'JUNGLE' ? 12000 : 8000,
+      epicTakedowns: p.puuid === 'bumma' ? 4 : p.position === 'JUNGLE' ? 2 : 1
     }))
     const result = computeAkariScores(game, DURATION)
-    expect(result.byPuuid.get('bumma')!.metrics.objective).toBeGreaterThan(1.5)
+    expect(result.byPuuid.get('bumma')!.metrics.objective).toBeGreaterThan(1.4)
     expect(result.byPuuid.get('zed')!.metrics.objective).toBeLessThan(1)
   })
 

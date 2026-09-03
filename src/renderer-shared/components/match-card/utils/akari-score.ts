@@ -242,6 +242,23 @@ export const AKARI_POSITION_WEIGHTS: Record<AkariScorePosition, Record<AkariMetr
   }
 }
 
+/**
+ * 位置基线（可调区）：各位置在一局里的典型份额 / 相对全场均值的典型倍率。
+ * 份额类（damage/tank/support/objective 的队伍份额）为绝对份额（五人之和≈1）；
+ * 倍率类（kp/vision/cc）为相对全场均值的倍数（五位置均值≈1）。
+ * 与"同位置对手均值"各取一半构成期望，既消除位置红利，也不因对手过菜而虚高。
+ */
+export const AKARI_POSITION_BASELINES: Record<
+  Exclude<AkariScorePosition, 'UNKNOWN'>,
+  { dmgShare: number; tankShare: number; supportShare: number; objectiveShare: number; kp: number; vision: number; cc: number }
+> = {
+  TOP: { dmgShare: 0.2, tankShare: 0.27, supportShare: 0.1, objectiveShare: 0.22, kp: 0.75, vision: 0.7, cc: 1.15 },
+  JUNGLE: { dmgShare: 0.17, tankShare: 0.22, supportShare: 0.1, objectiveShare: 0.25, kp: 1.15, vision: 1.0, cc: 1.0 },
+  MIDDLE: { dmgShare: 0.24, tankShare: 0.17, supportShare: 0.08, objectiveShare: 0.18, kp: 0.95, vision: 0.7, cc: 0.8 },
+  BOTTOM: { dmgShare: 0.27, tankShare: 0.15, supportShare: 0.07, objectiveShare: 0.25, kp: 1.0, vision: 0.65, cc: 0.45 },
+  UTILITY: { dmgShare: 0.12, tankShare: 0.19, supportShare: 0.65, objectiveShare: 0.1, kp: 1.35, vision: 2.4, cc: 1.7 }
+}
+
 const METRIC_KEYS: AkariMetricKey[] = [
   'damage', 'tank', 'support', 'kp', 'survival', 'gold',
   'cs', 'vision', 'cc', 'objective', 'lane', 'efficiency'
@@ -488,36 +505,84 @@ export function computeAkariMetrics(
   const samples: AkariMetricSample[] = []
   for (const d of derived) {
     const share = 1 / d.size
+    // 位置归一（核心）：每项指标的期望都取"我与对面同位置者的均值"——辅助的参团/视野/控制/治疗、
+    // 上单的承伤、AD 的伤害份额，天生就高或低，与全场均值比会产生巨大的位置红利/惩罚
+    // （实测：平平无奇的一局辅助能拿 16.6）。同位置对手缺失（位置未知/双方阵容不对称）时退回全场口径。
+    const baseline = d.position === 'UNKNOWN' ? null : AKARI_POSITION_BASELINES[d.position]
+    /**
+     * 期望 = 同位置对手均值 与 位置基线期望 各半；缺对手时只用基线；位置未知时退回全场口径。
+     * @param pick 取值函数（对位均值用）
+     * @param baselineExpected 该位置的基线期望（份额或 倍率×全场均值）
+     * @param fallback 位置未知时的期望
+     */
+    const exp = (pick: (x: Derived) => number, baselineExpected: number | null, fallback: number) => {
+      const c = counterpart(d)
+      const pair = c ? (pick(d) + pick(c)) / 2 : null
+      if (pair !== null && baselineExpected !== null) return (pair + baselineExpected) / 2
+      if (baselineExpected !== null) return baselineExpected
+      return pair ?? fallback
+    }
     const metrics: Partial<Record<AkariMetricKey, number>> = {}
-    metrics.damage = ratio(d.dmgShare, share)
-    if (tankAvailable) metrics.tank = ratio(d.tankShare, share)
-    if (d.supportShare !== null) metrics.support = ratio(d.supportShare, share)
-    metrics.kp = ratio(d.kp, gameMean.kp)
+    metrics.damage = ratio(d.dmgShare, exp((x) => x.dmgShare, baseline?.dmgShare ?? null, share))
+    if (tankAvailable) {
+      metrics.tank = ratio(d.tankShare, exp((x) => x.tankShare, baseline?.tankShare ?? null, share))
+    }
+    if (d.supportShare !== null) {
+      metrics.support = ratio(
+        d.supportShare,
+        exp((x) => x.supportShare ?? 0, baseline?.supportShare ?? null, share)
+      )
+    }
+    metrics.kp = ratio(d.kp, exp((x) => x.kp, baseline ? baseline.kp * gameMean.kp : null, gameMean.kp))
     // 生存：死亡份额与坐牢时长份额各半（无坐牢数据时只用死亡份额）；份额=平均 → 1.0，0 死 → 上限
     const deathBlend =
       d.timeDeadShare !== null ? 0.5 * d.deathShare + 0.5 * d.timeDeadShare : d.deathShare
     metrics.survival = clamp((1 - deathBlend) / (1 - share), 0, AKARI_METRIC_CAP)
+    // 经济 / 补刀：对线口径（只与同位置对手比；无对手时全场均值）
     metrics.gold = ratio(d.gpm, pairExpected(d, (x) => x.gpm, gameMean.gpm))
     metrics.cs = ratio(d.cspm, pairExpected(d, (x) => x.cspm, gameMean.cspm))
     if (visionAvailable) {
       // 视野 = 视野分 0.7 + 视野质量（控制守卫+排眼）0.3（有数据时）
-      const scorePart = ratio(d.vspm, gameMean.vspm)
+      const vBase = baseline ? baseline.vision : null
+      const scorePart = ratio(d.vspm, exp((x) => x.vspm, vBase !== null ? vBase * gameMean.vspm : null, gameMean.vspm))
       metrics.vision =
         d.visionQualityPm !== null
-          ? 0.7 * scorePart + 0.3 * ratio(d.visionQualityPm, gameMean.visionQualityPm)
+          ? 0.7 * scorePart +
+            0.3 *
+              ratio(
+                d.visionQualityPm,
+                exp(
+                  (x) => x.visionQualityPm ?? 0,
+                  vBase !== null ? vBase * gameMean.visionQualityPm : null,
+                  gameMean.visionQualityPm
+                )
+              )
           : scorePart
     }
     if (ccAvailable) {
       // 控制 = 控制时长 0.6 + 定身次数 0.4（有数据时）
-      const timePart = ratio(d.ccpm, gameMean.ccpm)
+      const cBase = baseline ? baseline.cc : null
+      const timePart = ratio(d.ccpm, exp((x) => x.ccpm, cBase !== null ? cBase * gameMean.ccpm : null, gameMean.ccpm))
       metrics.cc =
-        d.immobPm !== null ? 0.6 * timePart + 0.4 * ratio(d.immobPm, gameMean.immobPm) : timePart
+        d.immobPm !== null
+          ? 0.6 * timePart +
+            0.4 *
+              ratio(
+                d.immobPm,
+                exp((x) => x.immobPm ?? 0, cBase !== null ? cBase * gameMean.immobPm : null, gameMean.immobPm)
+              )
+          : timePart
     }
     if (d.objectiveDmgShare !== null) {
       // 目标 = 对目标伤害 0.5 + 史诗野怪参与 0.3 + 推进压制（镀层/推塔）0.2，缺项按可用部分归一
-      const parts: Array<[number, number]> = [[0.5, ratio(d.objectiveDmgShare, share)]]
-      if (d.epicShare !== null) parts.push([0.3, ratio(d.epicShare, share)])
-      if (d.pressureShare !== null) parts.push([0.2, ratio(d.pressureShare, share)])
+      const oBase = baseline?.objectiveShare ?? null
+      const parts: Array<[number, number]> = [
+        [0.5, ratio(d.objectiveDmgShare, exp((x) => x.objectiveDmgShare ?? 0, oBase, share))]
+      ]
+      if (d.epicShare !== null) parts.push([0.3, ratio(d.epicShare, exp((x) => x.epicShare ?? 0, oBase, share))])
+      if (d.pressureShare !== null) {
+        parts.push([0.2, ratio(d.pressureShare, exp((x) => x.pressureShare ?? 0, oBase, share))])
+      }
       const wsum = parts.reduce((a, [w]) => a + w, 0)
       metrics.objective = parts.reduce((a, [w, v]) => a + (w / wsum) * v, 0)
     }
