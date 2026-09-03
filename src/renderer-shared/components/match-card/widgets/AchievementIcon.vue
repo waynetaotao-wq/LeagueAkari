@@ -1,8 +1,16 @@
 <template>
-  <span class="ach" :class="achievement.className" :title="achievement.label">
-    <NIcon class="ach-icon" :component="icon" />
-    <span v-if="achievement.count" class="ach-count">{{ achievement.count }}</span>
-  </span>
+  <NTooltip :delay="150" placement="top">
+    <template #trigger>
+      <span class="ach" :class="achievement.className">
+        <NIcon class="ach-icon" :component="icon" />
+        <span v-if="achievement.count" class="ach-count">{{ achievement.count }}</span>
+      </span>
+    </template>
+    <div class="text-xs">
+      <div class="font-bold">{{ achievement.nickname }}</div>
+      <div class="text-[11px] opacity-80">{{ achievement.description }}</div>
+    </div>
+  </NTooltip>
 </template>
 
 <script setup lang="ts">
@@ -23,7 +31,7 @@ import {
   Snowflake,
   Tint
 } from '@vicons/fa'
-import { NIcon } from 'naive-ui'
+import { NIcon, NTooltip } from 'naive-ui'
 import { type Component, computed } from 'vue'
 
 import type { AkariAchievement, AkariAchievementKey } from '../utils/akari-achievements'

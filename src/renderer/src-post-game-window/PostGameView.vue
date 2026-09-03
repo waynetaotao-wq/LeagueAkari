@@ -24,8 +24,13 @@
         <div class="pg-hero-shade" />
         <div class="pg-hero-content">
           <div class="pg-hero-main">
-            <div class="pg-hero-avatar" :class="view.me.win ? 'ring-win' : 'ring-loss'">
-              <ChampionIcon :champion-id="view.me.championId" class="pg-hero-champ" round />
+            <div class="pg-avatar-wrap">
+              <div class="pg-hero-avatar" :class="view.me.win ? 'ring-win' : 'ring-loss'">
+                <ChampionIcon :champion-id="view.me.championId" class="pg-hero-champ" round />
+              </div>
+              <span v-if="view.me.badge" class="pg-badge pg-badge-lg" :class="`pg-badge-${view.me.badge.toLowerCase()}`">
+                {{ view.me.badge }}
+              </span>
             </div>
             <div class="min-w-0 flex-1">
               <div class="pg-hero-name" :title="view.me.name">{{ view.me.name }}</div>
@@ -82,7 +87,12 @@
             class="pg-row"
             :class="{ 'pg-row-me': row.isMe }"
           >
-            <ChampionIcon :champion-id="row.championId" class="pg-row-champ" round />
+            <div class="pg-avatar-wrap">
+              <ChampionIcon :champion-id="row.championId" class="pg-row-champ" round />
+              <span v-if="row.badge" class="pg-badge" :class="`pg-badge-${row.badge.toLowerCase()}`">
+                {{ row.badge }}
+              </span>
+            </div>
             <div class="pg-row-body">
               <div class="pg-row-line1">
                 <span class="pg-row-name" :title="row.name">{{ row.name }}</span>
@@ -283,11 +293,10 @@ function ratingClass(r: number) {
   return 'text-red-300'
 }
 
+/** 名字下方只放对局标签；MVP/SVP 改为贴在头像底部的标牌（WeGame 式） */
 function chipsOf(s: AkariScore | undefined) {
   const out: Array<{ text: string; class: string }> = []
   if (!s) return out
-  if (s.badge === 'MVP') out.push({ text: 'MVP', class: 'pg-tag-mvp' })
-  if (s.badge === 'SVP') out.push({ text: 'SVP', class: 'pg-tag-svp' })
   if (s.tag) out.push({ text: AKARI_GAME_TAG_LABELS[s.tag], class: TAG_CLASS[s.tag] })
   return out
 }
@@ -323,6 +332,7 @@ const view = computed(() => {
         assists: p.assists,
         rating: s?.rating ?? 0,
         positionText: s ? POSITION_TEXT[s.position] : '',
+        badge: s?.badge ?? null,
         chips: chipsOf(s),
         achievements: achievements.get(p.puuid) ?? [],
         win: p.win
@@ -456,6 +466,41 @@ const view = computed(() => {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+.pg-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.pg-badge {
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  transform: translateX(-50%);
+  padding: 0 4px;
+  height: 11px;
+  line-height: 11px;
+  border-radius: 3px;
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: 0.3px;
+  box-shadow: 0 0 0 2px #141416;
+  white-space: nowrap;
+}
+.pg-badge-lg {
+  bottom: -2px;
+  height: 15px;
+  line-height: 15px;
+  padding: 0 7px;
+  font-size: 10px;
+  border-radius: 4px;
+}
+.pg-badge-mvp {
+  background: linear-gradient(180deg, #fde047, #f59e0b);
+  color: #1c1917;
+}
+.pg-badge-svp {
+  background: linear-gradient(180deg, #e2e8f0, #94a3b8);
+  color: #0f172a;
 }
 .pg-hero-avatar {
   width: 68px;
@@ -591,8 +636,8 @@ const view = computed(() => {
   border-left-color: #fbbf24;
 }
 .pg-row-champ {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
 }
 .pg-row-body {
@@ -654,14 +699,6 @@ const view = computed(() => {
   border-radius: 3px;
   font-weight: 700;
   white-space: nowrap;
-}
-.pg-tag-mvp {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.45), rgba(245, 158, 11, 0.2));
-  color: #fde68a;
-}
-.pg-tag-svp {
-  background: rgba(14, 165, 233, 0.3);
-  color: #bae6fd;
 }
 .pg-tag-sky {
   background: rgba(14, 165, 233, 0.22);
