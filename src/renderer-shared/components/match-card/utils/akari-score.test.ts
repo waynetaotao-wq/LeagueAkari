@@ -348,3 +348,20 @@ describe('carry rule (≥ 11.0, lead over team third by 1.25 internal ≈ 2.5 di
     expect([...result.byPuuid.values()].some((s) => s.tag === 'carry')).toBe(false)
   })
 })
+
+describe('ARAM mode', () => {
+  it('skips position inference and applies the ARAM weight table', () => {
+    const game = realGame().map((p) => ({ ...p, position: null, neutralMinionsKilled: 0, cs: 60 + Math.round(Math.random() * 10) }))
+    const aram = computeAkariScores(game, 18 * 60, { mode: 'aram' })
+    expect(aram.byPuuid.size).toBe(10)
+    for (const s of aram.byPuuid.values()) {
+      expect(s.position).toBe('UNKNOWN')
+      expect(Number.isFinite(s.rating)).toBe(true)
+    }
+    // 峡谷口径会把补刀最少者推断为辅助；大乱斗口径不做推断
+    const sr = computeAkariScores(game, 18 * 60, { mode: 'sr' })
+    expect([...sr.byPuuid.values()].some((s) => s.position === 'UTILITY')).toBe(true)
+    expect([...aram.byPuuid.values()].some((s) => s.position === 'UTILITY')).toBe(false)
+    expect(aram.mvpPuuid).not.toBeNull()
+  })
+})

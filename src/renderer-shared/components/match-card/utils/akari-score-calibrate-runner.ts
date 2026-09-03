@@ -72,7 +72,10 @@ export async function collectCalibrationSamples(
         }
         const participants = toParticipants(summary, basicInfo)
         const { inputs, earlySurrender } = buildAkariScoreInputs(summary, participants)
-        const gameSamples = computeAkariMetrics(inputs, basicInfo.gameDuration, { earlySurrender })
+        const gameSamples = computeAkariMetrics(inputs, basicInfo.gameDuration, {
+          earlySurrender,
+          mode: 'sr'
+        })
         if (gameSamples.length === 0) {
           skipped++
           continue

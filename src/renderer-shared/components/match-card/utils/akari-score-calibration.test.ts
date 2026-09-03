@@ -38,6 +38,7 @@ function synth(
       puuid: `${position}-${i}`,
       teamIdentifier: i % 2 ? 'A' : 'B',
       position,
+      mode: 'sr',
       win: z > 0,
       metrics,
       bonus: 0,

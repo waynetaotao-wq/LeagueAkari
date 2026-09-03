@@ -106,7 +106,10 @@ export function provideMatchCard(props: {
       toValue(props.summary),
       participants.value
     )
-    return computeAkariScores(inputs, basicInfo.value.gameDuration, { earlySurrender })
+    return computeAkariScores(inputs, basicInfo.value.gameDuration, {
+      earlySurrender,
+      mode: basicInfo.value.gameMode === 'ARAM' ? 'aram' : 'sr'
+    })
   })
 
   const draftOptions = computed<DraftOptions>(() => {

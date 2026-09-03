@@ -109,6 +109,8 @@ export interface AkariMetricSample {
   puuid: string
   teamIdentifier: string
   position: AkariScorePosition
+  /** 峡谷 / 大乱斗（决定用分路权重还是大乱斗权重） */
+  mode: AkariScoreMode
   win: boolean
   metrics: Partial<Record<AkariMetricKey, number>>
   bonus: number
@@ -120,6 +122,18 @@ export interface AkariMetricSample {
 }
 
 export type AkariPositionWeights = Record<AkariScorePosition, Record<AkariMetricKey, number>>
+
+/** 对局模式：峡谷（分路）/ 大乱斗（无分路，含海克斯大乱斗） */
+export type AkariScoreMode = 'sr' | 'aram'
+
+/**
+ * 大乱斗专用权重（可调区）：没有分路与对线，补刀 / 视野 / 对线几乎不构成差异，
+ * 团战输出、参团、生存、坦度与支援才是主体。
+ */
+export const AKARI_ARAM_WEIGHTS: Record<AkariMetricKey, number> = {
+  damage: 0.26, tank: 0.13, support: 0.08, kp: 0.17, survival: 0.15, gold: 0.05,
+  cs: 0.01, vision: 0.01, cc: 0.07, objective: 0.04, lane: 0, efficiency: 0.03
+}
 
 // 权重覆盖（由"用我的战绩校准"写入；null = 使用内置先验）
 let activeWeightsOverride: AkariPositionWeights | null = null
@@ -356,9 +370,10 @@ interface Derived {
 export function computeAkariMetrics(
   participants: AkariScoreInput[],
   gameDurationSeconds: number,
-  options: { earlySurrender?: boolean } = {}
+  options: { earlySurrender?: boolean; mode?: AkariScoreMode } = {}
 ): AkariMetricSample[] {
   if (options.earlySurrender) return []
+  const mode: AkariScoreMode = options.mode ?? 'sr'
   const minutes = num(gameDurationSeconds) / 60
   if (participants.length < 2 || minutes <= 0) return []
 
@@ -370,9 +385,14 @@ export function computeAkariMetrics(
   }
   if (teams.size !== 2) return []
 
+  // 大乱斗：没有分路，不做位置推断（否则补刀最少者会被误当成辅助套上辅助权重），全员 UNKNOWN
   const positionByPuuid = new Map<string, AkariScorePosition>()
   for (const team of teams.values()) {
-    for (const [puuid, position] of inferPositions(team)) positionByPuuid.set(puuid, position)
+    if (mode === 'aram') {
+      for (const p of team) positionByPuuid.set(p.puuid, 'UNKNOWN')
+    } else {
+      for (const [puuid, position] of inferPositions(team)) positionByPuuid.set(puuid, position)
+    }
   }
 
   // 全局可用性：某项原始数据整局缺失/全 0 → 该项不参与，权重归一到其余项
@@ -602,6 +622,7 @@ export function computeAkariMetrics(
       puuid: d.puuid,
       teamIdentifier: d.teamIdentifier,
       position: d.position,
+      mode,
       win: d.win,
       metrics,
       bonus: d.bonus,
@@ -617,7 +638,10 @@ export function computeAkariMetrics(
 
 /** 用当前权重把相对指标样本折算为 0–10 评分 */
 export function rateAkariSample(sample: AkariMetricSample, weightsTable = getAkariPositionWeights()) {
-  const weights = weightsTable[sample.position] ?? AKARI_POSITION_WEIGHTS.UNKNOWN
+  const weights =
+    sample.mode === 'aram'
+      ? AKARI_ARAM_WEIGHTS
+      : (weightsTable[sample.position] ?? AKARI_POSITION_WEIGHTS.UNKNOWN)
   let weightSum = 0
   let composite = 0
   for (const key of METRIC_KEYS) {
@@ -639,7 +663,7 @@ export function rateAkariSample(sample: AkariMetricSample, weightsTable = getAka
 export function computeAkariScores(
   participants: AkariScoreInput[],
   gameDurationSeconds: number,
-  options: { earlySurrender?: boolean } = {}
+  options: { earlySurrender?: boolean; mode?: AkariScoreMode } = {}
 ): AkariScoreResult {
   const empty = (skipped: AkariScoreResult['skipped'] = null): AkariScoreResult => ({
     byPuuid: new Map(),
@@ -648,7 +672,7 @@ export function computeAkariScores(
     skipped
   })
   if (options.earlySurrender) return empty('early-surrender')
-  const samples = computeAkariMetrics(participants, gameDurationSeconds)
+  const samples = computeAkariMetrics(participants, gameDurationSeconds, { mode: options.mode })
   if (samples.length === 0) return empty()
 
   const scores = new Map<string, AkariScore>()

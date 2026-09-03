@@ -299,7 +299,10 @@ const view = computed(() => {
     if (!basicInfo.isTwoTeam) return null
     const participants = toParticipants(summary, basicInfo)
     const { inputs, earlySurrender } = buildAkariScoreInputs(summary, participants)
-    const scores = computeAkariScores(inputs, basicInfo.gameDuration, { earlySurrender })
+    const scores = computeAkariScores(inputs, basicInfo.gameDuration, {
+      earlySurrender,
+      mode: basicInfo.gameMode === 'ARAM' ? 'aram' : 'sr'
+    })
     const achievements = computeAkariAchievements(inputs, basicInfo.gameDuration)
     const me = participants.find((p) => p.puuid === myPuuid)
     if (!me) return null
