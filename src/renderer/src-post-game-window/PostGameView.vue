@@ -116,8 +116,10 @@ import {
   type AkariGameTag,
   type AkariScore,
   type AkariScorePosition,
+  AKARI_SCORE_MODE_LABELS,
   computeAkariScores,
-  formatAkariRating
+  formatAkariRating,
+  resolveAkariScoreMode
 } from '@renderer-shared/components/match-card/utils/akari-score'
 import { parseStoredCalibration } from '@renderer-shared/components/match-card/utils/akari-score-calibration'
 import { buildAkariScoreInputs } from '@renderer-shared/components/match-card/utils/akari-score-input'
@@ -296,13 +298,11 @@ const view = computed(() => {
   if (!summary || !myPuuid) return null
   try {
     const basicInfo = toBasicInfo(summary)
-    if (!basicInfo.isTwoTeam) return null
+    const mode = resolveAkariScoreMode(basicInfo)
+    if (!basicInfo.isTwoTeam || !mode) return null
     const participants = toParticipants(summary, basicInfo)
     const { inputs, earlySurrender } = buildAkariScoreInputs(summary, participants)
-    const scores = computeAkariScores(inputs, basicInfo.gameDuration, {
-      earlySurrender,
-      mode: basicInfo.gameMode === 'ARAM' ? 'aram' : 'sr'
-    })
+    const scores = computeAkariScores(inputs, basicInfo.gameDuration, { earlySurrender, mode })
     const achievements = computeAkariAchievements(inputs, basicInfo.gameDuration)
     const me = participants.find((p) => p.puuid === myPuuid)
     if (!me) return null
@@ -352,7 +352,7 @@ const view = computed(() => {
     )
     const footnote = scores.skipped
       ? '本局为提前投降/重开，不计评分'
-      : `对局评分：分路加权 · 局内相对 · 详情见战绩页 · ${basicInfo.dataSource === 'sgp' ? '数据源 SGP' : '数据源 LCU'}`
+      : `对局评分 · ${AKARI_SCORE_MODE_LABELS[mode]}口径 · 详情见战绩页 · ${basicInfo.dataSource === 'sgp' ? '数据源 SGP' : '数据源 LCU'}`
     return {
       durationText,
       queueText: QUEUE_TEXT[basicInfo.queueId] ?? '',

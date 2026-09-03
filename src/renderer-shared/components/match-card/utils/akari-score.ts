@@ -123,8 +123,36 @@ export interface AkariMetricSample {
 
 export type AkariPositionWeights = Record<AkariScorePosition, Record<AkariMetricKey, number>>
 
-/** 对局模式：峡谷（分路）/ 大乱斗（无分路，含海克斯大乱斗） */
-export type AkariScoreMode = 'sr' | 'aram'
+/**
+ * 评分口径（四条路各走各的，由 resolveAkariScoreMode 统一分流）：
+ *  - sr：召唤师峡谷（分路推断 + 分路权重 + 位置基线 + 对位比较）
+ *  - aram：极地大乱斗（不推断位置，大乱斗权重）
+ *  - mayhem：海克斯/符文大乱斗（gameMode = KIWI；不推断位置，海克斯专用权重）
+ *  - other：其它两队模式（极限闪击、克隆、无限火力等；不推断位置，用大乱斗权重兜底）
+ */
+export type AkariScoreMode = 'sr' | 'aram' | 'mayhem' | 'other'
+
+/** 由战绩基本信息判定口径；斗魂竞技场（CHERRY，四队）返回 null = 不评分 */
+export function resolveAkariScoreMode(info: {
+  gameMode: string | null | undefined
+  mapId?: number | null
+}): AkariScoreMode | null {
+  const gameMode = String(info.gameMode ?? '').toUpperCase()
+  if (gameMode === 'CHERRY') return null
+  if (gameMode === 'KIWI') return 'mayhem'
+  if (gameMode === 'ARAM') return 'aram'
+  if (gameMode === 'CLASSIC') return 'sr'
+  // 训练模式 / 无限火力 / 克隆等：在召唤师峡谷（mapId 11）上打的按峡谷口径，否则按通用口径
+  if (info.mapId === 11) return 'sr'
+  return 'other'
+}
+
+export const AKARI_SCORE_MODE_LABELS: Record<AkariScoreMode, string> = {
+  sr: '召唤师峡谷',
+  aram: '极地大乱斗',
+  mayhem: '海克斯大乱斗',
+  other: '其它模式'
+}
 
 /**
  * 大乱斗专用权重（可调区）：没有分路与对线，补刀 / 视野 / 对线几乎不构成差异，
@@ -133,6 +161,32 @@ export type AkariScoreMode = 'sr' | 'aram'
 export const AKARI_ARAM_WEIGHTS: Record<AkariMetricKey, number> = {
   damage: 0.26, tank: 0.13, support: 0.08, kp: 0.17, survival: 0.15, gold: 0.05,
   cs: 0.01, vision: 0.01, cc: 0.07, objective: 0.04, lane: 0, efficiency: 0.03
+}
+
+/**
+ * 海克斯大乱斗专用权重（可调区）：强化会把伤害/治疗成倍放大，因此伤害与支援的权重
+ * 相对普通大乱斗压低，参团与生存抬高；补刀/视野/对线不计。
+ */
+export const AKARI_MAYHEM_WEIGHTS: Record<AkariMetricKey, number> = {
+  damage: 0.22, tank: 0.14, support: 0.07, kp: 0.21, survival: 0.18, gold: 0.04,
+  cs: 0, vision: 0, cc: 0.08, objective: 0.04, lane: 0, efficiency: 0.02
+}
+
+/** 各口径的权重表入口：sr 走分路权重（含校准覆盖），其余各用自己的固定表 */
+export function weightsForSample(
+  sample: { mode: AkariScoreMode; position: AkariScorePosition },
+  weightsTable = getAkariPositionWeights()
+): Record<AkariMetricKey, number> {
+  switch (sample.mode) {
+    case 'aram':
+      return AKARI_ARAM_WEIGHTS
+    case 'mayhem':
+      return AKARI_MAYHEM_WEIGHTS
+    case 'other':
+      return AKARI_ARAM_WEIGHTS
+    default:
+      return weightsTable[sample.position] ?? AKARI_POSITION_WEIGHTS.UNKNOWN
+  }
 }
 
 // 权重覆盖（由"用我的战绩校准"写入；null = 使用内置先验）
@@ -388,10 +442,10 @@ export function computeAkariMetrics(
   // 大乱斗：没有分路，不做位置推断（否则补刀最少者会被误当成辅助套上辅助权重），全员 UNKNOWN
   const positionByPuuid = new Map<string, AkariScorePosition>()
   for (const team of teams.values()) {
-    if (mode === 'aram') {
-      for (const p of team) positionByPuuid.set(p.puuid, 'UNKNOWN')
-    } else {
+    if (mode === 'sr') {
       for (const [puuid, position] of inferPositions(team)) positionByPuuid.set(puuid, position)
+    } else {
+      for (const p of team) positionByPuuid.set(p.puuid, 'UNKNOWN')
     }
   }
 
@@ -638,10 +692,7 @@ export function computeAkariMetrics(
 
 /** 用当前权重把相对指标样本折算为 0–10 评分 */
 export function rateAkariSample(sample: AkariMetricSample, weightsTable = getAkariPositionWeights()) {
-  const weights =
-    sample.mode === 'aram'
-      ? AKARI_ARAM_WEIGHTS
-      : (weightsTable[sample.position] ?? AKARI_POSITION_WEIGHTS.UNKNOWN)
+  const weights = weightsForSample(sample, weightsTable)
   let weightSum = 0
   let composite = 0
   for (const key of METRIC_KEYS) {

@@ -16,7 +16,11 @@ import {
   toValue
 } from 'vue'
 
-import { type AkariScoreResult, computeAkariScores } from './utils/akari-score'
+import {
+  type AkariScoreResult,
+  computeAkariScores,
+  resolveAkariScoreMode
+} from './utils/akari-score'
 import { buildAkariScoreInputs } from './utils/akari-score-input'
 
 export type MatchCardContext = {
@@ -99,17 +103,15 @@ export function provideMatchCard(props: {
   // [lolps] 对局评分只在本局 10 人内比较，摘要数据即可计算，折叠态就能显示；
   // v2 从原始摘要补充免伤 / 坐牢 / 治疗护盾 / 目标 / 对线领先等字段（SGP 全、LCU 部分）
   const akariScores = computed<AkariScoreResult>(() => {
-    if (!basicInfo.value.isTwoTeam) {
+    const mode = resolveAkariScoreMode(basicInfo.value)
+    if (!basicInfo.value.isTwoTeam || !mode) {
       return { byPuuid: new Map(), mvpPuuid: null, svpPuuid: null, skipped: null }
     }
     const { inputs, earlySurrender } = buildAkariScoreInputs(
       toValue(props.summary),
       participants.value
     )
-    return computeAkariScores(inputs, basicInfo.value.gameDuration, {
-      earlySurrender,
-      mode: basicInfo.value.gameMode === 'ARAM' ? 'aram' : 'sr'
-    })
+    return computeAkariScores(inputs, basicInfo.value.gameDuration, { earlySurrender, mode })
   })
 
   const draftOptions = computed<DraftOptions>(() => {

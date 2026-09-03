@@ -349,19 +349,48 @@ describe('carry rule (≥ 11.0, lead over team third by 1.25 internal ≈ 2.5 di
   })
 })
 
-describe('ARAM mode', () => {
-  it('skips position inference and applies the ARAM weight table', () => {
-    const game = realGame().map((p) => ({ ...p, position: null, neutralMinionsKilled: 0, cs: 60 + Math.round(Math.random() * 10) }))
-    const aram = computeAkariScores(game, 18 * 60, { mode: 'aram' })
-    expect(aram.byPuuid.size).toBe(10)
-    for (const s of aram.byPuuid.values()) {
-      expect(s.position).toBe('UNKNOWN')
-      expect(Number.isFinite(s.rating)).toBe(true)
+describe('score mode routing (sr / aram / mayhem / other)', () => {
+  it('resolves modes from gameMode and never confuses mayhem (KIWI) with aram or sr', async () => {
+    const { resolveAkariScoreMode } = await import('./akari-score')
+    expect(resolveAkariScoreMode({ gameMode: 'CLASSIC', mapId: 11 })).toBe('sr')
+    expect(resolveAkariScoreMode({ gameMode: 'ARAM', mapId: 12 })).toBe('aram')
+    expect(resolveAkariScoreMode({ gameMode: 'KIWI', mapId: 12 })).toBe('mayhem')
+    expect(resolveAkariScoreMode({ gameMode: 'CHERRY', mapId: 30 })).toBeNull()
+    expect(resolveAkariScoreMode({ gameMode: 'URF', mapId: 11 })).toBe('sr')
+    expect(resolveAkariScoreMode({ gameMode: 'PRACTICETOOL', mapId: 11 })).toBe('sr')
+    expect(resolveAkariScoreMode({ gameMode: 'NEXUSBLITZ', mapId: 21 })).toBe('other')
+    expect(resolveAkariScoreMode({ gameMode: null, mapId: null })).toBe('other')
+  })
+
+  it('uses each mode\'s own weight table and skips position inference outside sr', async () => {
+    const { AKARI_ARAM_WEIGHTS, AKARI_MAYHEM_WEIGHTS, AKARI_POSITION_WEIGHTS, weightsForSample } =
+      await import('./akari-score')
+    expect(weightsForSample({ mode: 'sr', position: 'TOP' })).toBe(AKARI_POSITION_WEIGHTS.TOP)
+    expect(weightsForSample({ mode: 'aram', position: 'UNKNOWN' })).toBe(AKARI_ARAM_WEIGHTS)
+    expect(weightsForSample({ mode: 'mayhem', position: 'UNKNOWN' })).toBe(AKARI_MAYHEM_WEIGHTS)
+    expect(weightsForSample({ mode: 'other', position: 'UNKNOWN' })).toBe(AKARI_ARAM_WEIGHTS)
+    expect(AKARI_MAYHEM_WEIGHTS).not.toBe(AKARI_ARAM_WEIGHTS)
+
+    const game = realGame().map((p) => ({ ...p, position: null, neutralMinionsKilled: 0, cs: 60 }))
+    for (const mode of ['aram', 'mayhem', 'other'] as const) {
+      const r = computeAkariScores(game, 18 * 60, { mode })
+      expect(r.byPuuid.size).toBe(10)
+      for (const s of r.byPuuid.values()) {
+        expect(s.position).toBe('UNKNOWN')
+        expect(Number.isFinite(s.rating)).toBe(true)
+      }
     }
-    // 峡谷口径会把补刀最少者推断为辅助；大乱斗口径不做推断
     const sr = computeAkariScores(game, 18 * 60, { mode: 'sr' })
-    expect([...sr.byPuuid.values()].some((s) => s.position === 'UTILITY')).toBe(true)
-    expect([...aram.byPuuid.values()].some((s) => s.position === 'UTILITY')).toBe(false)
-    expect(aram.mvpPuuid).not.toBeNull()
+    expect([...sr.byPuuid.values()].some((s) => s.position !== 'UNKNOWN')).toBe(true)
+  })
+
+  it('mayhem and aram ratings differ for the same raw stats (separate tables really apply)', () => {
+    const game = realGame().map((p) => ({ ...p, position: null, neutralMinionsKilled: 0 }))
+    const aram = computeAkariScores(game, 18 * 60, { mode: 'aram' })
+    const mayhem = computeAkariScores(game, 18 * 60, { mode: 'mayhem' })
+    const diff = [...aram.byPuuid.keys()].some(
+      (k) => aram.byPuuid.get(k)!.rating !== mayhem.byPuuid.get(k)!.rating
+    )
+    expect(diff).toBe(true)
   })
 })
