@@ -24,11 +24,28 @@
         @dry-run-ongoing-game="(draft) => emit('dryRunOngoingGame', draft)"
       />
     </Transition>
+    <ReviewStudioEntry
+      v-if="
+        renderState === 'materialized' &&
+        isExpanded &&
+        !hidden &&
+        reviewServerId &&
+        puuid &&
+        canReview
+      "
+      class="mt-2"
+      compact
+      :puuid="puuid"
+      :sgp-server-id="reviewServerId"
+      :game-id="summary.gameId"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import MatchCard from '@renderer-shared/components/match-card/MatchCard.vue'
+import ReviewStudioEntry from '@renderer-shared/components/review-studio/ReviewStudioEntry.vue'
+import { REVIEW_ALLOWED_QUEUES } from '@renderer-shared/components/review-studio/analysis'
 import { MATCH_CARD_COLLAPSED_HEIGHT_PX } from '@renderer-shared/components/match-card/constants'
 import type {
   MatchCardEmits,
@@ -36,8 +53,18 @@ import type {
   MatchCardProps
 } from '@renderer-shared/components/match-card/types'
 import { useTimeoutFn } from '@vueuse/core'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import {
+  computed,
+  inject,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useTemplateRef,
+  watch
+} from 'vue'
 
+import { PlayerTabContextKey } from '../../context'
 import { MATCH_HISTORY_CARD_RECYCLE_DELAY_MS } from './constants'
 import type { MatchHistoryCardOptimizationMode } from './types'
 import { useMatchHistoryCardViewport } from './viewport'
@@ -67,6 +94,17 @@ const isExpanded = defineModel<boolean>('isExpanded', {
 
 const wrapperEl = useTemplateRef('wrapperEl')
 const viewport = useMatchHistoryCardViewport()
+const playerTabContext = inject(PlayerTabContextKey, null)
+const reviewServerId = computed(() => playerTabContext?.sgpServerId.value ?? '')
+const canReview = computed(() => {
+  const game = summary.source === 'sgp' ? summary.data.json : summary.data
+  return (
+    game.gameMode === 'CLASSIC' &&
+    game.mapId === 11 &&
+    (REVIEW_ALLOWED_QUEUES as readonly number[]).includes(game.queueId) &&
+    game.gameDuration >= 300
+  )
+})
 
 const renderState = ref<'placeholder' | 'materialized'>('placeholder')
 const isNearViewport = ref(false)

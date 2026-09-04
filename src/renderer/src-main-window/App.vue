@@ -13,6 +13,7 @@
       @navigate-to-setting="handleSettingsSearchNavigate"
     />
     <MainWindowCloseConfirmModal />
+    <ReviewStudioHost />
 
     <SetupInAppScope />
     <MainWindowBackground />
@@ -43,6 +44,7 @@
 </template>
 
 <script setup lang="ts">
+import ReviewStudioHost from '@renderer-shared/components/review-studio/ReviewStudioHost.vue'
 import { useInstance } from '@renderer-shared/shards'
 import {
   useAkariNavigation,

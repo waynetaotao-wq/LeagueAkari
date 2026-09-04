@@ -156,6 +156,13 @@
         </div>
       </section>
 
+      <PostGameReviewEntry
+        v-if="state.summary && state.gameId"
+        :summary="state.summary"
+        :puuid="view.me.puuid"
+        :sgp-server-id="sgps.availability.sgpServerId"
+      />
+
       <footer class="pg-footer">
         <span class="pg-footnote">{{ view.footnote }}</span>
         <NButton class="no-drag" size="small" secondary @click="winop('hide')">关闭</NButton>
@@ -165,6 +172,7 @@
 </template>
 
 <script setup lang="ts">
+import PostGameReviewEntry from '@renderer-shared/components/review-studio/PostGameReviewEntry.vue'
 import AchievementIcon from '@renderer-shared/components/match-card/widgets/AchievementIcon.vue'
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { computeAkariAchievements } from '@renderer-shared/components/match-card/utils/akari-achievements'
