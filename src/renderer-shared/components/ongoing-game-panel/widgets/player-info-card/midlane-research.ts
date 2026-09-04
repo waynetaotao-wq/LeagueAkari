@@ -2,12 +2,12 @@
  * [lolps] 中单研究（Midlane Research）—— 核心逻辑（自包含，可单测）
  *
  * 对局界面对敌我中单自动展示：该玩家当前英雄的
- *   ① 首次单杀等级分布（1-3 / 4-5 / 6当级 / 7-8 / 9+ 五桶，不限对手）
- *   ② 首次游走时间分布（0-5 / 5-8 / 8-11 / 11+ 分钟四桶）与去向（偏上 / 偏下 / 入侵野区）
+ *   ① 前 14 分钟首次单杀等级分布（1-3 / 4-5 / 6当级 / 7-8 / 9+，不限对手）
+ *   ② 前 14 分钟首次游走时间分布与去向（上 / 下路）
  *
- * 数据全走 SGP：列表按「版本梯队」凑样本（当前版本 → 上一版 → 上上版，最多三层、
- * 凑满 500 封顶，不足如实）；深度分析取其中最近 DEEP_GAMES 场逐局拉时间线。
- * 首次游走用「分钟级坐标帧 + 击杀/助攻事件精确坐标」双信号，取更早者。
+ * 数据全走 SGP：列表按最近玩过的三个版本凑本人该英雄的中路完整 5v5 样本；
+ * 最多 500 场，深度分析取其中最近 DEEP_GAMES 场。失败不计入统计分母。
+ * 游走以本人坐标帧为证；击杀事件须有附近本人坐标佐证，不能用远程助攻推定到场。
  */
 
 // ==================================================================
@@ -42,12 +42,11 @@ async function acquireLane(): Promise<void> {
     return
   }
   await new Promise<void>((resolve) => laneWaiters.push(resolve))
-  laneInFlight++
 }
 function releaseLane(): void {
-  laneInFlight--
   const next = laneWaiters.shift()
   if (next) next()
+  else laneInFlight--
 }
 
 /** 经典模式队列 */
@@ -92,8 +91,11 @@ export interface MidLiteGame {
   win: boolean
   gameVersion: string
   gameCreation: number
+  gameDuration: number
   selfPid: number
   teamId: number
+  /** 从摘要参与者派生，不假定 participantId 的数值区间代表队伍 */
+  participantTeams: Record<number, number>
   /** 敌方中单 participantId（用于 10 分钟对线差；缺位置数据时 null） */
   enemyMidPid?: number | null
 }
@@ -118,7 +120,10 @@ export interface MidMapPoint {
 }
 
 export interface MidDeepResult {
+  /** 有效时间线样本；所有场均指标只以此为分母 */
   deepGames: number
+  /** 完成请求的时间线数量（有效 + 失败） */
+  attemptedGames: number
   firstKillGames: number
   firstKillBuckets: number[]
   roamGames: number
@@ -189,8 +194,23 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export function normalizeTimeline(raw: any): { frames: any[] } | null {
   const frames = raw?.frames ?? raw?.json?.frames ?? raw?.data?.frames ?? raw?.info?.frames
-  if (!Array.isArray(frames)) return null
-  return { frames }
+  if (
+    !Array.isArray(frames) ||
+    frames.length === 0 ||
+    frames.some(
+      (f) => !f || !isFiniteNumber(f.timestamp) || f.timestamp < 0 || !Array.isArray(f.events)
+    )
+  )
+    return null
+  return { frames: [...frames].sort((a, b) => a.timestamp - b.timestamp) }
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function hasPosition(value: any): value is { x: number; y: number } {
+  return isFiniteNumber(value?.x) && isFiniteNumber(value?.y) && value.x >= 0 && value.y >= 0
 }
 
 // ==================================================================
@@ -200,28 +220,59 @@ export function normalizeTimeline(raw: any): { frames: any[] } | null {
 /** SGP 列表元素 → 该英雄的轻量对局；非目标（模式/英雄不符）返回 null */
 export function extractMidLite(raw: any, puuid: string, championId: number): MidLiteGame | null {
   const g = raw?.json ?? raw
-  if (!g || g.gameMode !== 'CLASSIC') return null
+  if (!g || g.gameMode !== 'CLASSIC' || g.mapId !== 11) return null
   if (typeof g.queueId !== 'number' || !CLASSIC_QUEUES.has(g.queueId)) return null
-  const parts: any[] = Array.isArray(g.participants) ? g.participants : []
-  const self = parts.find((p) => p?.puuid === puuid)
-  if (!self || self.championId !== championId) return null
-  const enemyMid = parts.find(
-    (p) => p && p.teamId !== self.teamId && String(p.teamPosition ?? '').toUpperCase() === 'MIDDLE'
+  if (
+    !isFiniteNumber(g.gameId) ||
+    g.gameId <= 0 ||
+    !isFiniteNumber(g.gameDuration) ||
+    g.gameDuration < 300
   )
+    return null
+  if (String(g.endOfGameResult ?? '').startsWith('Abort_')) return null
+  const parts: any[] = Array.isArray(g.participants) ? g.participants : []
+  if (
+    parts.length !== 10 ||
+    parts.some(
+      (p) =>
+        !p ||
+        !Number.isInteger(p.participantId) ||
+        p.participantId <= 0 ||
+        p.gameEndedInEarlySurrender === true
+    ) ||
+    new Set(parts.map((p) => p.participantId)).size !== 10 ||
+    parts.filter((p) => p.teamId === 100).length !== 5 ||
+    parts.filter((p) => p.teamId === 200).length !== 5
+  )
+    return null
+  const self = parts.find((p) => p?.puuid === puuid)
+  if (
+    !self ||
+    self.championId !== championId ||
+    String(self.teamPosition ?? '').toUpperCase() !== 'MIDDLE'
+  )
+    return null
+  const enemyMids = parts.filter(
+    (p) => p.teamId !== self.teamId && String(p.teamPosition ?? '').toUpperCase() === 'MIDDLE'
+  )
+  const creation = g.gameCreation ?? g.gameStartTimestamp
+  if (!isFiniteNumber(creation) || creation <= 0) return null
   return {
     gameId: g.gameId,
     win: self.win === true,
     gameVersion: shortVersion(g.gameVersion),
-    gameCreation: g.gameCreation ?? g.gameStartTimestamp ?? 0,
+    gameCreation: creation,
+    gameDuration: g.gameDuration,
     selfPid: self.participantId,
     teamId: self.teamId,
-    enemyMidPid: typeof enemyMid?.participantId === 'number' ? enemyMid.participantId : null
+    participantTeams: Object.fromEntries(parts.map((p) => [p.participantId, p.teamId])),
+    enemyMidPid: enemyMids.length === 1 ? enemyMids[0].participantId : null
   }
 }
 
 /**
  * 版本梯队收集：时间倒序翻列表，只收目标英雄；
- * 版本集 = 遇到的前 MAX_VERSIONS 个不同版本（当前 + 往前两版），
+ * 版本集 = 该玩家最近玩过的前 MAX_VERSIONS 个不同版本，
  * 更旧版本一旦出现立即停；累计满 TARGET_GAMES 或翻页到上限也停。
  */
 export async function collectVersionLadder(
@@ -244,14 +295,11 @@ export async function collectVersionLadder(
   const pageSize = 20
 
   outer: for (let i = 0; i < maxPages; i++) {
-    if (signal?.aborted) break
-    let page: any[] = []
-    try {
-      const res = await getPage(i * pageSize, pageSize)
-      page = Array.isArray(res?.games) ? res.games : []
-    } catch {
-      break
-    }
+    signal?.throwIfAborted()
+    const res = await getPage(i * pageSize, pageSize)
+    signal?.throwIfAborted()
+    if (!Array.isArray(res?.games)) throw new Error('中单战绩列表格式异常')
+    const page: any[] = res.games
     let fresh = 0
     for (const raw of page) {
       const g = raw?.json ?? raw
@@ -288,9 +336,8 @@ export async function collectVersionLadder(
     if (i === maxPages - 1) truncated = true
   }
 
-  const slices = versionOrder
-    .map((v) => sliceMap.get(v))
-    .filter((x): x is VersionSlice => !!x)
+  const slices = versionOrder.map((v) => sliceMap.get(v)).filter((x): x is VersionSlice => !!x)
+  signal?.throwIfAborted()
   return { games, slices, truncated }
 }
 
@@ -298,18 +345,47 @@ export async function collectVersionLadder(
 // ================== 第二步：深度分析（时间线） =====================
 // ==================================================================
 
-function levelAt(frames: any[], pid: number, timestamp: number): number {
-  let level = 1
+function levelAt(frames: any[], pid: number, timestamp: number, killEvent: any): number | null {
+  let level: number | null = null
+  let knownAt = -1
   for (const frame of frames) {
-    if (frame.timestamp > timestamp) break
     const pf = frame.participantFrames?.[String(pid)]
-    if (pf && typeof pf.level === 'number') level = pf.level
+    if (
+      frame.timestamp < timestamp &&
+      frame.timestamp >= knownAt &&
+      isFiniteNumber(pf?.level) &&
+      pf.level >= 1
+    ) {
+      level = pf.level
+      knownAt = frame.timestamp
+    }
+  }
+  // 同一时间戳内保留事件顺序：击杀之后获得经验的升级不能倒算到这次击杀。
+  const events = frames.flatMap((f) => f.events ?? []).sort((a, b) => a.timestamp - b.timestamp)
+  for (const ev of events) {
+    if (ev === killEvent) break
+    if (
+      ev?.type === 'LEVEL_UP' &&
+      ev.participantId === pid &&
+      isFiniteNumber(ev.timestamp) &&
+      ev.timestamp <= timestamp &&
+      ev.timestamp >= knownAt &&
+      isFiniteNumber(ev.level) &&
+      ev.level >= 1
+    ) {
+      level = ev.level
+      knownAt = ev.timestamp
+    }
   }
   return level
 }
 
 export const EARLY_MS = 14 * 60_000
-const LANE_DIFF_MINUTE = 10
+const LANE_DIFF_MS = 10 * 60_000
+/** 允许分钟快照的毫秒漂移，不把缺失整帧的长间隔合并。 */
+const MAX_FRAME_GAP_MS = 90_000
+const EVENT_POSITION_WINDOW_MS = 60_000
+const EVENT_POSITION_DISTANCE = 3000
 
 /** 官方同款三分区（任何坐标归到 top/mid/bot 之一，用于热力图与分区权重） */
 export function classifyMapZone3(x: number, y: number): 'top' | 'mid' | 'bot' {
@@ -344,23 +420,56 @@ export interface MidOneTimelineV2 {
 }
 
 /**
- * 单局 v2：地图点位 + 游走片段（从严）+ 10 分钟对线差 + 单杀/被单杀 + 前期参团。
- * 游走片段：连续处于同一走廊的分钟帧合并为一段；走廊内参与的击杀若不在任何帧段 ±60s 内，
- * 单独成段；成功 = 段内（±90s）有本人参与的击杀。
+ * 单局前 14 分钟：连续本人坐标帧组成游走片段；击杀位置不是参与者坐标，
+ * 只有最近一分钟内的本人快照在同走廊且相距不超过 3000 地图单位时才作游走佐证。
  */
 export function analyzeOneTimelineV2(
   tl: { frames: any[] },
   selfPid: number,
   teamId: number,
-  enemyMidPid?: number | null
+  enemyMidPid?: number | null,
+  participantTeams: Record<number, number> = {}
 ): MidOneTimelineV2 {
-  const frames = tl.frames ?? []
+  const frames = [...(tl.frames ?? [])].sort((a, b) => a.timestamp - b.timestamp)
   const minutePositions: MidMapPoint[] = []
   const killPoints: MidMapPoint[] = []
   const zoneFrames = { top: 0, mid: 0, bot: 0 }
-  const corridorFrames: Array<{ ms: number; dir: 'top' | 'bot' }> = []
+  const corridorFrames: Array<{ ms: number; dir: 'top' | 'bot'; index: number }> = []
   const corridorKills: Array<{ ms: number; dir: 'top' | 'bot' }> = []
+  const selfFrames = frames.flatMap((frame) => {
+    const pf = frame.participantFrames?.[String(selfPid)]
+    if (
+      !isFiniteNumber(frame.timestamp) ||
+      frame.timestamp < 0 ||
+      frame.timestamp > EARLY_MS ||
+      !hasPosition(pf?.position)
+    )
+      return []
+    return [
+      {
+        ms: frame.timestamp,
+        pos: pf.position,
+        usable:
+          !(isFiniteNumber(pf.championStats?.health) && pf.championStats.health <= 0) &&
+          classifyPoint(pf.position.x, pf.position.y, teamId) !== 'base'
+      }
+    ]
+  })
+  const hasNearbySelf = (ms: number, pos: { x: number; y: number }, dir: 'top' | 'bot') => {
+    const closestDelta = Math.min(...selfFrames.map((f) => Math.abs(f.ms - ms)))
+    return (
+      closestDelta <= EVENT_POSITION_WINDOW_MS &&
+      selfFrames.some(
+        (f) =>
+          Math.abs(f.ms - ms) === closestDelta &&
+          f.usable &&
+          classifyLaneCorridor(f.pos.x, f.pos.y) === dir &&
+          Math.hypot(f.pos.x - pos.x, f.pos.y - pos.y) <= EVENT_POSITION_DISTANCE
+      )
+    )
+  }
   let laneDiff10: { cs: number; gold: number } | null = null
+  let laneDiffDelta = Infinity
   let soloKills = 0
   let soloDeaths = 0
   let earlyTakedowns = 0
@@ -368,69 +477,123 @@ export function analyzeOneTimelineV2(
 
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i]
-    const ts = frame.timestamp ?? i * 60_000
-    const minute = Math.round(ts / 60_000)
-    if (minute >= 2 && minute <= 14) {
-      const pf = frame.participantFrames?.[String(selfPid)]
-      const pos = pf?.position
-      if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
-        const lane = classifyMapZone3(pos.x, pos.y)
-        minutePositions.push({ x: pos.x, y: pos.y, lane })
-        zoneFrames[lane]++
-        const corridor = classifyLaneCorridor(pos.x, pos.y)
-        if (corridor) corridorFrames.push({ ms: ts, dir: corridor })
-      }
+    const ts = frame.timestamp
+    if (!isFiniteNumber(ts)) continue
+    const me = frame.participantFrames?.[String(selfPid)]
+    const pos = me?.position
+    const usable =
+      hasPosition(pos) &&
+      !(isFiniteNumber(me.championStats?.health) && me.championStats.health <= 0) &&
+      classifyPoint(pos.x, pos.y, teamId) !== 'base'
+    if (usable && ts >= 2 * 60_000 && ts <= EARLY_MS) {
+      const lane = classifyMapZone3(pos.x, pos.y)
+      minutePositions.push({ x: pos.x, y: pos.y, lane })
+      zoneFrames[lane]++
     }
-    if (minute === LANE_DIFF_MINUTE && enemyMidPid != null) {
-      const me = frame.participantFrames?.[String(selfPid)]
+    if (usable && ts >= ROAM_START_MS && ts <= EARLY_MS) {
+      const corridor = classifyLaneCorridor(pos.x, pos.y)
+      if (corridor) corridorFrames.push({ ms: ts, dir: corridor, index: i })
+    }
+    // 仅接受 10:00 前后 5 秒的最近快照；不能把较早结束的比赛末帧凑作 10 分钟。
+    const delta = Math.abs(ts - LANE_DIFF_MS)
+    if (delta <= 5_000 && delta < laneDiffDelta && enemyMidPid != null) {
       const op = frame.participantFrames?.[String(enemyMidPid)]
-      if (me && op) {
-        const cs = (n: any) => (typeof n === 'number' && Number.isFinite(n) ? n : 0)
+      if (
+        me &&
+        op &&
+        [
+          me.minionsKilled,
+          me.jungleMinionsKilled,
+          me.totalGold,
+          op.minionsKilled,
+          op.jungleMinionsKilled,
+          op.totalGold
+        ].every(isFiniteNumber)
+      ) {
         laneDiff10 = {
-          cs: cs(me.minionsKilled) + cs(me.jungleMinionsKilled) - cs(op.minionsKilled) - cs(op.jungleMinionsKilled),
-          gold: cs(me.totalGold) - cs(op.totalGold)
+          cs: me.minionsKilled + me.jungleMinionsKilled - op.minionsKilled - op.jungleMinionsKilled,
+          gold: me.totalGold - op.totalGold
         }
+        laneDiffDelta = delta
       }
     }
     for (const ev of (frame.events ?? []) as any[]) {
-      if (!ev || ev.type !== 'CHAMPION_KILL') continue
-      const evTs = ev.timestamp ?? 0
-      if (evTs > EARLY_MS) continue
-      const assists: number[] = Array.isArray(ev.assistingParticipantIds) ? ev.assistingParticipantIds : []
+      if (
+        !ev ||
+        ev.type !== 'CHAMPION_KILL' ||
+        !isFiniteNumber(ev.timestamp) ||
+        ev.timestamp < 0 ||
+        ev.timestamp > EARLY_MS
+      )
+        continue
+      const evTs = ev.timestamp
+      const assistsKnown = Array.isArray(ev.assistingParticipantIds)
+      const assists: number[] = assistsKnown ? ev.assistingParticipantIds : []
       const involved = ev.killerId === selfPid || assists.includes(selfPid)
-      const pos = ev.position
-      const hasPos = pos && typeof pos.x === 'number' && typeof pos.y === 'number'
-      // 队伍击杀：击杀者属于本队（用 pid 段判断：1–5 为 100 队，6–10 为 200 队）
-      const killerTeam = ev.killerId >= 1 && ev.killerId <= 5 ? 100 : ev.killerId >= 6 ? 200 : 0
-      if (killerTeam === teamId) earlyTeamKills++
+      const eventPos = ev.position
+      if (participantTeams[ev.killerId] === teamId) earlyTeamKills++
       if (involved) {
         earlyTakedowns++
-        if (hasPos) {
-          killPoints.push({ x: pos.x, y: pos.y, lane: classifyMapZone3(pos.x, pos.y) })
-          const corridor = classifyLaneCorridor(pos.x, pos.y)
-          if (corridor && evTs >= ROAM_START_MS) corridorKills.push({ ms: evTs, dir: corridor })
+        if (hasPosition(eventPos)) {
+          // 参与点只表示击杀事件发生地，可能包含远程支援。
+          killPoints.push({
+            x: eventPos.x,
+            y: eventPos.y,
+            lane: classifyMapZone3(eventPos.x, eventPos.y)
+          })
+          const corridor = classifyLaneCorridor(eventPos.x, eventPos.y)
+          if (corridor && evTs >= ROAM_START_MS && hasNearbySelf(evTs, eventPos, corridor)) {
+            corridorKills.push({ ms: evTs, dir: corridor })
+          }
         }
-        if (ev.killerId === selfPid && assists.length === 0) soloKills++
+        if (ev.killerId === selfPid && assistsKnown && assists.length === 0) soloKills++
       }
-      if (ev.victimId === selfPid && assists.length === 0 && ev.killerId >= 1) {
-        // 被单杀：只算在中路带内被单杀（对线失误），排除被抓与游走被反
-        if (hasPos && classifyMapZone3(pos.x, pos.y) === 'mid') soloDeaths++
+      if (ev.victimId === selfPid && assistsKnown && assists.length === 0 && ev.killerId >= 1) {
+        if (hasPosition(eventPos) && classifyPoint(eventPos.x, eventPos.y, teamId) === 'mid')
+          soloDeaths++
       }
     }
   }
 
-  // 走廊帧合并为片段
-  const episodes: Array<{ startMs: number; endMs: number; dir: 'top' | 'bot'; success: boolean }> = []
+  const episodes: Array<{
+    startMs: number
+    endMs: number
+    lastFrameIndex: number
+    dir: 'top' | 'bot'
+    success: boolean
+  }> = []
   for (const f of corridorFrames) {
-    if (f.ms < ROAM_START_MS) continue
     const last = episodes[episodes.length - 1]
-    if (last && last.dir === f.dir && f.ms - last.endMs <= 60_000) last.endMs = f.ms
-    else episodes.push({ startMs: f.ms, endMs: f.ms, dir: f.dir, success: false })
+    if (
+      last &&
+      last.dir === f.dir &&
+      last.lastFrameIndex === f.index - 1 &&
+      f.ms - last.endMs <= MAX_FRAME_GAP_MS
+    ) {
+      last.endMs = f.ms
+      last.lastFrameIndex = f.index
+    } else {
+      episodes.push({
+        startMs: f.ms,
+        endMs: f.ms,
+        lastFrameIndex: f.index,
+        dir: f.dir,
+        success: false
+      })
+    }
   }
-  for (const k of corridorKills) {
-    const hit = episodes.find((e) => e.dir === k.dir && k.ms >= e.startMs - 90_000 && k.ms <= e.endMs + 90_000)
-    if (hit) hit.success = true
-    else episodes.push({ startMs: k.ms, endMs: k.ms, dir: k.dir, success: true })
+  for (const k of corridorKills.sort((a, b) => a.ms - b.ms)) {
+    const distance = (e: (typeof episodes)[number]) => Math.max(e.startMs - k.ms, k.ms - e.endMs, 0)
+    const hit = episodes
+      .filter((e) => e.dir === k.dir && distance(e) <= 90_000)
+      .sort((a, b) => distance(a) - distance(b))[0]
+    if (hit) {
+      hit.success = true
+      hit.startMs = Math.min(hit.startMs, k.ms)
+      hit.endMs = Math.max(hit.endMs, k.ms)
+    } else {
+      episodes.push({ startMs: k.ms, endMs: k.ms, lastFrameIndex: -1, dir: k.dir, success: true })
+    }
   }
   episodes.sort((a, b) => a.startMs - b.startMs)
 
@@ -447,74 +610,70 @@ export function analyzeOneTimelineV2(
   }
 }
 
-/** 单局：首次单杀（不限对手）等级 + 首次游走（帧/事件双信号取早）时间与方向 */
+/** 首次单杀与游走均限定前 14 分钟；升级事件比上一分钟的等级快照更精确。 */
 export function analyzeOneTimeline(
   tl: { frames: any[] },
   selfPid: number,
-  teamId: number
+  teamId: number,
+  analyzed?: MidOneTimelineV2
 ): {
-  firstSoloKill: { level: number } | null
+  firstSoloKill: { level: number | null } | null
   firstRoam: { timeMs: number; dir: RoamDir } | null
 } {
   const frames = tl.frames ?? []
-  let firstSoloKill: { level: number } | null = null
-  let roamByFrame: { timeMs: number; dir: RoamDir } | null = null
-  let roamByEvent: { timeMs: number; dir: RoamDir } | null = null
-
-  for (const frame of frames) {
-    // 帧信号：分钟级坐标快照
-    if (!roamByFrame && frame.timestamp >= ROAM_START_MS) {
-      const pf = frame.participantFrames?.[String(selfPid)]
-      const pos = pf?.position
-      if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
-        const zone = classifyPoint(pos.x, pos.y, teamId)
-        if (zone !== 'mid' && zone !== 'base') {
-          roamByFrame = { timeMs: frame.timestamp, dir: zone }
-        }
-      }
-    }
-
-    for (const ev of (frame.events ?? []) as any[]) {
-      if (!ev || ev.type !== 'CHAMPION_KILL') continue
-      const ts = ev.timestamp ?? 0
-      // 首次单杀（不限对手）
-      if (
-        !firstSoloKill &&
+  const firstKill = frames
+    .flatMap((f) => f.events ?? [])
+    .filter(
+      (ev) =>
+        ev?.type === 'CHAMPION_KILL' &&
+        isFiniteNumber(ev.timestamp) &&
+        ev.timestamp >= 0 &&
+        ev.timestamp <= EARLY_MS &&
         ev.killerId === selfPid &&
-        (ev.assistingParticipantIds?.length ?? 0) === 0
-      ) {
-        firstSoloKill = { level: levelAt(frames, selfPid, ts) }
-      }
-      // 事件信号：他参与击杀（主杀或助攻）且位置在中路带之外
-      if (!roamByEvent && ts >= ROAM_START_MS) {
-        const involved =
-          ev.killerId === selfPid ||
-          (Array.isArray(ev.assistingParticipantIds) &&
-            ev.assistingParticipantIds.includes(selfPid))
-        const pos = ev.position
-        if (involved && pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
-          const zone = classifyPoint(pos.x, pos.y, teamId)
-          if (zone !== 'mid' && zone !== 'base') {
-            roamByEvent = { timeMs: ts, dir: zone }
-          }
-        }
-      }
+        Array.isArray(ev.assistingParticipantIds) &&
+        ev.assistingParticipantIds.length === 0
+    )
+    .sort((a, b) => a.timestamp - b.timestamp)[0]
+  const first = (analyzed ?? analyzeOneTimelineV2(tl, selfPid, teamId)).roamEpisodes[0]
+  return {
+    firstSoloKill: firstKill
+      ? { level: levelAt(frames, selfPid, firstKill.timestamp, firstKill) }
+      : null,
+    firstRoam: first ? { timeMs: first.startMs, dir: first.dir } : null
+  }
+}
+
+/** 空/中断/缺本人数据的时间线不能充当一次零表现；检查研究窗口已覆盖。 */
+function hasUsableTimeline(tl: { frames: any[] }, game: MidLiteGame): boolean {
+  const endMs = Math.min(game.gameDuration * 1000, EARLY_MS)
+  const windowFrames = tl.frames.filter((f) => f.timestamp <= endMs + MAX_FRAME_GAP_MS)
+  if (windowFrames.length < 2 || windowFrames[0].timestamp > 60_000) return false
+  let previous = windowFrames[0].timestamp
+  let covered = false
+  let hasEarlyPosition = false
+  for (const frame of windowFrames) {
+    // SGP 的 participantFrame.position 为必需字段。缺一帧本人坐标就不能把这一场
+    // 当作完整观察窗口；死亡/基地有合法坐标，是否计入地图由上层按健康值另行判断。
+    if (
+      frame.timestamp - previous > MAX_FRAME_GAP_MS ||
+      !hasPosition(frame.participantFrames?.[String(game.selfPid)]?.position)
+    )
+      return false
+    previous = frame.timestamp
+    if (frame.timestamp >= 2 * 60_000 && frame.timestamp <= endMs) hasEarlyPosition = true
+    if (frame.timestamp + 1000 >= endMs) {
+      covered = true
+      break
     }
   }
-
-  let firstRoam: { timeMs: number; dir: RoamDir } | null = null
-  if (roamByFrame && roamByEvent) {
-    firstRoam = roamByEvent.timeMs <= roamByFrame.timeMs ? roamByEvent : roamByFrame
-  } else {
-    firstRoam = roamByEvent ?? roamByFrame
-  }
-  return { firstSoloKill, firstRoam }
+  return covered && hasEarlyPosition
 }
 
 /** 对最近 DEEP_GAMES 场逐局补时间线并聚合两大指标 */
 export function emptyDeepResult(): MidDeepResult {
   return {
     deepGames: 0,
+    attemptedGames: 0,
     firstKillGames: 0,
     firstKillBuckets: LEVEL_BUCKETS.map(() => 0),
     roamGames: 0,
@@ -546,6 +705,7 @@ export async function analyzeDeep(
   onProgress?: (done: number, total: number) => void,
   signal?: AbortSignal
 ): Promise<MidDeepResult> {
+  signal?.throwIfAborted()
   const deep = [...games]
     .sort((a, b) => b.gameCreation - a.gameCreation)
     .slice(0, opts?.deepGames ?? DEEP_GAMES)
@@ -557,6 +717,7 @@ export async function analyzeDeep(
   let roamGames = 0
   let timelineFailures = 0
   let done = 0
+  let validGames = 0
   // v2 聚合
   const minutePositions: MidMapPoint[] = []
   const killPoints: MidMapPoint[] = []
@@ -575,7 +736,8 @@ export async function analyzeDeep(
   let earlyTeamKills = 0
 
   const snapshot = (): MidDeepResult => ({
-    deepGames: done,
+    deepGames: validGames,
+    attemptedGames: done,
     firstKillGames,
     firstKillBuckets: [...firstKillBuckets],
     roamGames,
@@ -611,20 +773,29 @@ export async function analyzeDeep(
       const g = deep[idx]
       await acquireLane()
       try {
+        if (signal?.aborted) return
         const raw = await getTimeline(g.gameId)
+        if (signal?.aborted) return
         const tl = normalizeTimeline(raw)
-        if (tl) {
-          const one = analyzeOneTimeline(tl, g.selfPid, g.teamId)
+        if (tl && hasUsableTimeline(tl, g)) {
+          const v2 = analyzeOneTimelineV2(
+            tl,
+            g.selfPid,
+            g.teamId,
+            g.enemyMidPid,
+            g.participantTeams
+          )
+          const one = analyzeOneTimeline(tl, g.selfPid, g.teamId, v2)
           if (one.firstSoloKill) {
             firstKillGames++
-            firstKillBuckets[levelBucketIndex(one.firstSoloKill.level)]++
+            if (one.firstSoloKill.level !== null)
+              firstKillBuckets[levelBucketIndex(one.firstSoloKill.level)]++
           }
           if (one.firstRoam) {
             roamGames++
             roamTimeBuckets[roamTimeBucketIndex(one.firstRoam.timeMs)]++
             roamDirs[one.firstRoam.dir]++
           }
-          const v2 = analyzeOneTimelineV2(tl, g.selfPid, g.teamId, g.enemyMidPid)
           minutePositions.push(...v2.minutePositions)
           killPoints.push(...v2.killPoints)
           zoneFrames.top += v2.zoneFrames.top
@@ -646,10 +817,12 @@ export async function analyzeDeep(
           soloDeaths += v2.soloDeaths
           earlyTakedowns += v2.earlyTakedowns
           earlyTeamKills += v2.earlyTeamKills
+          validGames++
         } else {
           timelineFailures++
         }
       } catch {
+        if (signal?.aborted) return
         timelineFailures++
       } finally {
         releaseLane()
@@ -665,5 +838,6 @@ export async function analyzeDeep(
   const lanes = Math.max(1, Math.min(DEEP_CONCURRENCY, deep.length))
   await Promise.all(Array.from({ length: lanes }, () => worker()))
 
+  signal?.throwIfAborted()
   return snapshot()
 }

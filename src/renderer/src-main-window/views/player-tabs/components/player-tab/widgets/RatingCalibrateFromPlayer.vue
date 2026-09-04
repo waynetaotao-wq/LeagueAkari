@@ -22,8 +22,8 @@
       </NButton>
     </div>
     <div class="mt-1 text-[10px] leading-4 text-black/45 dark:text-white/40">
-      用这位玩家最近 400 场峡谷对局（每局 10 人）拟合"对局评分"的分路权重。
-      拿高分段玩家（例如王者）校准，等于按顶尖对局里真正决定胜负的标准来打分；结果全局生效。
+      用这位玩家最近 400 场峡谷对局调整分路权重；达到 60 场后留出部分对局验证。
+      校准学习的是数据与胜负的相关性，不等同于个人贡献或“高手标准”；结果全局生效。
     </div>
   </div>
 </template>
@@ -49,10 +49,11 @@ const sgpUsable = computed(() => sgps.availability.serversSupported.matchHistory
 
 const statusText = computed(() => {
   const c = parseStoredCalibration(mrs.settings.calibration)
-  if (!c) return '当前使用内置权重'
+  if (!c) return mrs.settings.calibration ? '校准记录需更新，暂用内置权重' : '当前使用内置权重'
   const who = c.sourceName ? `基于 ${c.sourceName}` : '已校准'
   const same = c.sourcePuuid === puuid.value ? '（就是此玩家）' : ''
-  return `${who} ${c.games} 场${same}`
+  const validation = c.validation ? ` · 留出 ${c.validation.games} 场验证` : ' · 尚未独立验证'
+  return `${who} ${c.trainingGames} 场拟合${same}${validation}`
 })
 
 function start() {

@@ -102,7 +102,7 @@ export interface AkariScore {
   badge: 'MVP' | 'SVP' | null
   /** 对局标签（WeGame 式，规则见 assignGameTags） */
   tag: AkariGameTag | null
-  /** 本局全场名次（1 = 最高分；同分按参团再按输出） */
+  /** 本局全场名次（1 = 最高分；同分按参团、输出、puuid） */
   rank: number
 }
 
@@ -161,8 +161,18 @@ export const AKARI_SCORE_MODE_LABELS: Record<AkariScoreMode, string> = {
  * 团战输出、参团、生存、坦度与支援才是主体。
  */
 export const AKARI_ARAM_WEIGHTS: Record<AkariMetricKey, number> = {
-  damage: 0.26, tank: 0.13, support: 0.08, kp: 0.17, survival: 0.15, gold: 0.05,
-  cs: 0.01, vision: 0.01, cc: 0.07, objective: 0.04, lane: 0, efficiency: 0.03
+  damage: 0.26,
+  tank: 0.13,
+  support: 0.08,
+  kp: 0.17,
+  survival: 0.15,
+  gold: 0.05,
+  cs: 0.01,
+  vision: 0.01,
+  cc: 0.07,
+  objective: 0.04,
+  lane: 0,
+  efficiency: 0.03
 }
 
 /**
@@ -170,8 +180,18 @@ export const AKARI_ARAM_WEIGHTS: Record<AkariMetricKey, number> = {
  * 相对普通大乱斗压低，参团与生存抬高；补刀/视野/对线不计。
  */
 export const AKARI_MAYHEM_WEIGHTS: Record<AkariMetricKey, number> = {
-  damage: 0.22, tank: 0.14, support: 0.07, kp: 0.21, survival: 0.18, gold: 0.04,
-  cs: 0, vision: 0, cc: 0.08, objective: 0.04, lane: 0, efficiency: 0.02
+  damage: 0.22,
+  tank: 0.14,
+  support: 0.07,
+  kp: 0.21,
+  survival: 0.18,
+  gold: 0.04,
+  cs: 0,
+  vision: 0,
+  cc: 0.08,
+  objective: 0.04,
+  lane: 0,
+  efficiency: 0.02
 }
 
 /** 各口径的权重表入口：sr 走分路权重（含校准覆盖），其余各用自己的固定表 */
@@ -222,7 +242,11 @@ export const AKARI_RATING_DISPLAY_CENTER = 7.5
 const DISPLAY_SLOPE = (AKARI_RATING_DISPLAY_MAX - AKARI_RATING_DISPLAY_CENTER) / 5
 
 export function toDisplayRating(rating: number): number {
-  return clamp(AKARI_RATING_DISPLAY_CENTER + (rating - 5) * DISPLAY_SLOPE, 0, AKARI_RATING_DISPLAY_MAX)
+  return clamp(
+    AKARI_RATING_DISPLAY_CENTER + (rating - 5) * DISPLAY_SLOPE,
+    0,
+    AKARI_RATING_DISPLAY_MAX
+  )
 }
 export function fromDisplayRating(display: number): number {
   return 5 + (display - AKARI_RATING_DISPLAY_CENTER) / DISPLAY_SLOPE
@@ -294,28 +318,88 @@ export const AKARI_METRIC_LABELS: Record<AkariMetricKey, string> = {
  */
 export const AKARI_POSITION_WEIGHTS: Record<AkariScorePosition, Record<AkariMetricKey, number>> = {
   TOP: {
-    damage: 0.18, tank: 0.16, support: 0.02, kp: 0.14, survival: 0.18, gold: 0.07,
-    cs: 0.04, vision: 0.03, cc: 0.05, objective: 0.06, lane: 0.06, efficiency: 0.01
+    damage: 0.18,
+    tank: 0.16,
+    support: 0.02,
+    kp: 0.14,
+    survival: 0.18,
+    gold: 0.07,
+    cs: 0.04,
+    vision: 0.03,
+    cc: 0.05,
+    objective: 0.06,
+    lane: 0.06,
+    efficiency: 0.01
   },
   JUNGLE: {
-    damage: 0.13, tank: 0.1, support: 0.02, kp: 0.25, survival: 0.17, gold: 0.06,
-    cs: 0.01, vision: 0.07, cc: 0.05, objective: 0.12, lane: 0, efficiency: 0.02
+    damage: 0.13,
+    tank: 0.1,
+    support: 0.02,
+    kp: 0.25,
+    survival: 0.17,
+    gold: 0.06,
+    cs: 0.01,
+    vision: 0.07,
+    cc: 0.05,
+    objective: 0.12,
+    lane: 0,
+    efficiency: 0.02
   },
   MIDDLE: {
-    damage: 0.22, tank: 0.03, support: 0.02, kp: 0.19, survival: 0.18, gold: 0.08,
-    cs: 0.06, vision: 0.04, cc: 0.05, objective: 0.05, lane: 0.07, efficiency: 0.01
+    damage: 0.22,
+    tank: 0.03,
+    support: 0.02,
+    kp: 0.19,
+    survival: 0.18,
+    gold: 0.08,
+    cs: 0.06,
+    vision: 0.04,
+    cc: 0.05,
+    objective: 0.05,
+    lane: 0.07,
+    efficiency: 0.01
   },
   BOTTOM: {
-    damage: 0.24, tank: 0.02, support: 0.02, kp: 0.16, survival: 0.18, gold: 0.09,
-    cs: 0.07, vision: 0.03, cc: 0.02, objective: 0.08, lane: 0.07, efficiency: 0.02
+    damage: 0.24,
+    tank: 0.02,
+    support: 0.02,
+    kp: 0.16,
+    survival: 0.18,
+    gold: 0.09,
+    cs: 0.07,
+    vision: 0.03,
+    cc: 0.02,
+    objective: 0.08,
+    lane: 0.07,
+    efficiency: 0.02
   },
   UTILITY: {
-    damage: 0.067, tank: 0.095, support: 0.171, kp: 0.239, survival: 0.152, gold: 0,
-    cs: 0, vision: 0.152, cc: 0.105, objective: 0.019, lane: 0, efficiency: 0
+    damage: 0.067,
+    tank: 0.095,
+    support: 0.171,
+    kp: 0.239,
+    survival: 0.152,
+    gold: 0,
+    cs: 0,
+    vision: 0.152,
+    cc: 0.105,
+    objective: 0.019,
+    lane: 0,
+    efficiency: 0
   },
   UNKNOWN: {
-    damage: 0.18, tank: 0.09, support: 0.05, kp: 0.19, survival: 0.18, gold: 0.07,
-    cs: 0.04, vision: 0.06, cc: 0.05, objective: 0.06, lane: 0.03, efficiency: 0
+    damage: 0.18,
+    tank: 0.09,
+    support: 0.05,
+    kp: 0.19,
+    survival: 0.18,
+    gold: 0.07,
+    cs: 0.04,
+    vision: 0.06,
+    cc: 0.05,
+    objective: 0.06,
+    lane: 0.03,
+    efficiency: 0
   }
 }
 
@@ -327,18 +411,76 @@ export const AKARI_POSITION_WEIGHTS: Record<AkariScorePosition, Record<AkariMetr
  */
 export const AKARI_POSITION_BASELINES: Record<
   Exclude<AkariScorePosition, 'UNKNOWN'>,
-  { dmgShare: number; tankShare: number; supportShare: number; objectiveShare: number; kp: number; vision: number; cc: number }
+  {
+    dmgShare: number
+    tankShare: number
+    supportShare: number
+    objectiveShare: number
+    kp: number
+    vision: number
+    cc: number
+  }
 > = {
-  TOP: { dmgShare: 0.2, tankShare: 0.27, supportShare: 0.1, objectiveShare: 0.22, kp: 0.75, vision: 0.7, cc: 1.15 },
-  JUNGLE: { dmgShare: 0.17, tankShare: 0.22, supportShare: 0.1, objectiveShare: 0.25, kp: 1.15, vision: 1.0, cc: 1.0 },
-  MIDDLE: { dmgShare: 0.24, tankShare: 0.17, supportShare: 0.08, objectiveShare: 0.18, kp: 0.95, vision: 0.7, cc: 0.8 },
-  BOTTOM: { dmgShare: 0.27, tankShare: 0.15, supportShare: 0.07, objectiveShare: 0.25, kp: 1.0, vision: 0.65, cc: 0.45 },
-  UTILITY: { dmgShare: 0.12, tankShare: 0.19, supportShare: 0.65, objectiveShare: 0.1, kp: 1.35, vision: 2.4, cc: 1.7 }
+  TOP: {
+    dmgShare: 0.2,
+    tankShare: 0.27,
+    supportShare: 0.1,
+    objectiveShare: 0.22,
+    kp: 0.75,
+    vision: 0.7,
+    cc: 1.15
+  },
+  JUNGLE: {
+    dmgShare: 0.17,
+    tankShare: 0.22,
+    supportShare: 0.1,
+    objectiveShare: 0.25,
+    kp: 1.15,
+    vision: 1.0,
+    cc: 1.0
+  },
+  MIDDLE: {
+    dmgShare: 0.24,
+    tankShare: 0.17,
+    supportShare: 0.08,
+    objectiveShare: 0.18,
+    kp: 0.95,
+    vision: 0.7,
+    cc: 0.8
+  },
+  BOTTOM: {
+    dmgShare: 0.27,
+    tankShare: 0.15,
+    supportShare: 0.07,
+    objectiveShare: 0.25,
+    kp: 1.0,
+    vision: 0.65,
+    cc: 0.45
+  },
+  UTILITY: {
+    dmgShare: 0.12,
+    tankShare: 0.19,
+    supportShare: 0.65,
+    objectiveShare: 0.1,
+    kp: 1.35,
+    vision: 2.4,
+    cc: 1.7
+  }
 }
 
 const METRIC_KEYS: AkariMetricKey[] = [
-  'damage', 'tank', 'support', 'kp', 'survival', 'gold',
-  'cs', 'vision', 'cc', 'objective', 'lane', 'efficiency'
+  'damage',
+  'tank',
+  'support',
+  'kp',
+  'survival',
+  'gold',
+  'cs',
+  'vision',
+  'cc',
+  'objective',
+  'lane',
+  'efficiency'
 ]
 
 function clamp(value: number, min: number, max: number) {
@@ -370,26 +512,33 @@ export function normalizePosition(position: string | null | undefined): AkariSco
 }
 
 /**
- * 位置缺失（LCU 摘要）时的推断：每队野怪击杀最多者为打野，其余中补刀最少且视野最高者为辅助；
- * 剩下三人无法区分上/中/下，统一用通用权重。
+ * 保留已知位置，只从未知者中补充尚未占用的打野/辅助位置：野怪击杀最多者为打野，
+ * 其余中补刀最少、同补刀时视野最高者为辅助；无法区分的上/中/下继续用通用权重。
  */
 function inferPositions(team: AkariScoreInput[]): Map<string, AkariScorePosition> {
   const out = new Map<string, AkariScorePosition>()
-  const known = team.filter((p) => normalizePosition(p.position) !== 'UNKNOWN')
-  if (team.length !== 5 || known.length === team.length) {
-    for (const p of team) out.set(p.puuid, normalizePosition(p.position))
-    return out
-  }
-  const byJungle = [...team].sort((a, b) => b.neutralMinionsKilled - a.neutralMinionsKilled)
-  const jungle = byJungle[0].neutralMinionsKilled >= 20 ? byJungle[0] : null
-  const rest = team.filter((p) => p !== jungle)
-  const support = [...rest].sort((a, b) => a.cs - b.cs || b.visionScore - a.visionScore)[0]
-  for (const p of team) {
-    if (p === jungle) out.set(p.puuid, 'JUNGLE')
-    else if (p === support) out.set(p.puuid, 'UTILITY')
-    else out.set(p.puuid, 'UNKNOWN')
+  for (const p of team) out.set(p.puuid, normalizePosition(p.position))
+  if (team.length !== 5) return out
+  const unknown = team.filter((p) => out.get(p.puuid) === 'UNKNOWN')
+  const assigned = new Set(out.values())
+  const byJungle = [...unknown].sort(
+    (a, b) => b.neutralMinionsKilled - a.neutralMinionsKilled || comparePuuid(a, b)
+  )
+  const jungle =
+    !assigned.has('JUNGLE') && (byJungle[0]?.neutralMinionsKilled ?? 0) >= 20 ? byJungle[0] : null
+  if (jungle) out.set(jungle.puuid, 'JUNGLE')
+  if (!assigned.has('UTILITY')) {
+    const support = unknown
+      .filter((p) => p !== jungle)
+      .sort((a, b) => a.cs - b.cs || b.visionScore - a.visionScore || comparePuuid(a, b))[0]
+    if (support) out.set(support.puuid, 'UTILITY')
   }
   return out
+}
+
+/** 不依赖系统语言或上游参与者顺序的最终同分规则。 */
+function comparePuuid(a: { puuid: string }, b: { puuid: string }): number {
+  return a.puuid < b.puuid ? -1 : a.puuid > b.puuid ? 1 : 0
 }
 
 interface Derived {
@@ -465,6 +614,8 @@ export function computeAkariMetrics(
   const minutes = num(gameDurationSeconds) / 60
   if (participants.length < 2 || minutes <= 0) return []
 
+  // 固定累计顺序，避免浮点求和误差让完全相同的输入在重排后改变同分名次。
+  participants = [...participants].sort(comparePuuid)
   const teams = new Map<string, AkariScoreInput[]>()
   for (const p of participants) {
     const list = teams.get(p.teamIdentifier) ?? []
@@ -489,41 +640,67 @@ export function computeAkariMetrics(
       const v = pick(p)
       return has(v) && v !== 0
     })
-  const supportViaTeammates = anyPresent((p) => num(p.healsOnTeammates) + num(p.shieldsOnTeammates))
-  const supportViaEffective = !supportViaTeammates && anyPresent((p) => p.effectiveHealAndShielding)
+  // 份额依赖完整的比较总量。局部缺失时不能把未知值计为 0，否则会抬高其他人份额；
+  // 对该子项整局退化到基础数据，不推算缺失者贡献。明确的 0 仍是有效数据。
+  const complete = (pick: (p: AkariScoreInput) => number | null | undefined) =>
+    participants.every((p) => has(pick(p)))
+  const completeNonzero = (pick: (p: AkariScoreInput) => number | null | undefined) =>
+    complete(pick) && anyPresent(pick)
+  const healsAvailable = completeNonzero((p) => p.healsOnTeammates)
+  const shieldsAvailable = completeNonzero((p) => p.shieldsOnTeammates)
+  const supportViaTeammates = healsAvailable || shieldsAvailable
+  const supportViaEffective =
+    !supportViaTeammates && completeNonzero((p) => p.effectiveHealAndShielding)
+  const teammateSupport = (p: AkariScoreInput) =>
+    (healsAvailable ? num(p.healsOnTeammates) : 0) +
+    (shieldsAvailable ? num(p.shieldsOnTeammates) : 0)
   const supportAvailable = supportViaTeammates || supportViaEffective
-  const objectiveViaObjectives = anyPresent((p) => p.damageDealtToObjectives)
+  const objectiveViaObjectives = completeNonzero((p) => p.damageDealtToObjectives)
   const objectiveViaTowers = !objectiveViaObjectives && anyPresent((p) => p.totalDamageToTowers)
   const objectiveAvailable = objectiveViaObjectives || objectiveViaTowers
-  const epicAvailable = anyPresent((p) => p.epicTakedowns)
-  const timeDeadAvailable = participants.some((p) => has(p.totalTimeSpentDead))
+  const epicAvailable = completeNonzero((p) => p.epicTakedowns)
+  const timeDeadAvailable = complete((p) => p.totalTimeSpentDead)
   const laneAvailable = participants.some(
     (p) => has(p.maxCsAdvantageOnLaneOpponent) || has(p.maxLevelLeadLaneOpponent)
   )
   const visionAvailable = anyPresent((p) => p.visionScore)
   const ccAvailable = anyPresent((p) => p.timeCCingOthers)
-  const tankAvailable = anyPresent((p) => num(p.totalDamageTaken) + num(p.damageSelfMitigated))
+  const mitigationAvailable = complete((p) => p.damageSelfMitigated)
+  const tankValue = (p: AkariScoreInput) =>
+    num(p.totalDamageTaken) + (mitigationAvailable ? num(p.damageSelfMitigated) : 0)
+  const tankAvailable = anyPresent(tankValue)
   const efficiencyAvailable = anyPresent((p) => p.goldEarned)
-  const visionQualityAvailable = anyPresent((p) => num(p.controlWardsPlaced) + num(p.wardTakedowns))
-  const immobAvailable = anyPresent((p) => p.immobilizations)
-  const pressureAvailable = anyPresent((p) => num(p.turretPlatesTaken) + num(p.turretTakedowns))
+  const controlWardsAvailable = completeNonzero((p) => p.controlWardsPlaced)
+  const wardTakedownsAvailable = completeNonzero((p) => p.wardTakedowns)
+  const visionQualityAvailable = controlWardsAvailable || wardTakedownsAvailable
+  const visionQualityValue = (p: AkariScoreInput) =>
+    (controlWardsAvailable ? num(p.controlWardsPlaced) : 0) +
+    (wardTakedownsAvailable ? num(p.wardTakedowns) : 0)
+  const immobAvailable = completeNonzero((p) => p.immobilizations)
+  const platesAvailable = completeNonzero((p) => p.turretPlatesTaken)
+  const turretsAvailable = completeNonzero((p) => p.turretTakedowns)
+  const pressureAvailable = platesAvailable || turretsAvailable
+  const pressureValue = (p: AkariScoreInput) =>
+    (platesAvailable ? num(p.turretPlatesTaken) : 0) +
+    (turretsAvailable ? num(p.turretTakedowns) : 0)
 
   // 全场总量（'game' 口径：每人份额 = 值 / (全场总量 / 队数)，全场平均仍为 1/size，
   // 但打得多的队整体 >1/size、打得少的队整体 <1/size——胜负效应来自真实表现，不是加分）
   const teamCount = teams.size
-  const gsum = (pick: (p: AkariScoreInput) => number) => participants.reduce((s, p) => s + pick(p), 0)
+  const gsum = (pick: (p: AkariScoreInput) => number) =>
+    participants.reduce((s, p) => s + pick(p), 0)
   const gameKills = gsum((p) => num(p.kills))
   const gameDeaths = gsum((p) => num(p.deaths))
   const gameDmg = gsum((p) => num(p.totalDamageDealtToChampions))
   const gameSupport = supportViaTeammates
-    ? gsum((p) => num(p.healsOnTeammates) + num(p.shieldsOnTeammates))
+    ? gsum(teammateSupport)
     : gsum((p) => num(p.effectiveHealAndShielding))
   const gameObjective = objectiveViaObjectives
     ? gsum((p) => num(p.damageDealtToObjectives))
     : gsum((p) => num(p.totalDamageToTowers))
   const gameEpic = gsum((p) => num(p.epicTakedowns))
   const gameTimeDead = gsum((p) => num(p.totalTimeSpentDead))
-  const gamePressure = gsum((p) => num(p.turretPlatesTaken) + num(p.turretTakedowns))
+  const gamePressure = gsum(pressureValue)
 
   const derived: Derived[] = []
   for (const team of teams.values()) {
@@ -532,16 +709,16 @@ export function computeAkariMetrics(
     const teamKills = sum((p) => num(p.kills))
     const teamDeaths = sum((p) => num(p.deaths))
     const teamDmg = sum((p) => num(p.totalDamageDealtToChampions))
-    const teamTank = sum((p) => num(p.totalDamageTaken) + num(p.damageSelfMitigated))
+    const teamTank = sum(tankValue)
     const teamSupport = supportViaTeammates
-      ? sum((p) => num(p.healsOnTeammates) + num(p.shieldsOnTeammates))
+      ? sum(teammateSupport)
       : sum((p) => num(p.effectiveHealAndShielding))
     const teamObjective = objectiveViaObjectives
       ? sum((p) => num(p.damageDealtToObjectives))
       : sum((p) => num(p.totalDamageToTowers))
     const teamEpic = sum((p) => num(p.epicTakedowns))
     const teamTimeDead = sum((p) => num(p.totalTimeSpentDead))
-    const teamPressure = sum((p) => num(p.turretPlatesTaken) + num(p.turretTakedowns))
+    const teamPressure = sum(pressureValue)
     const share = (value: number, total: number) => (total > 0 ? value / total : 1 / size)
     /** 按口径选择分母：全场总量/队数 或 本队总量 */
     const scoped = (value: number, teamTotal: number, gameTotal: number) =>
@@ -560,13 +737,16 @@ export function computeAkariMetrics(
       const solo = clamp(num(p.soloKills), 0, 5) * 0.02
       const steals = clamp(num(p.objectiveSteals) * 0.05, 0, 0.1)
       const supportValue = supportViaTeammates
-        ? num(p.healsOnTeammates) + num(p.shieldsOnTeammates)
+        ? teammateSupport(p)
         : num(p.effectiveHealAndShielding)
       const objectiveValue = objectiveViaObjectives
         ? num(p.damageDealtToObjectives)
         : num(p.totalDamageToTowers)
       let lane: number | null = null
-      if (laneAvailable && (has(p.maxCsAdvantageOnLaneOpponent) || has(p.maxLevelLeadLaneOpponent))) {
+      if (
+        laneAvailable &&
+        (has(p.maxCsAdvantageOnLaneOpponent) || has(p.maxLevelLeadLaneOpponent))
+      ) {
         lane =
           1 +
           clamp(num(p.maxCsAdvantageOnLaneOpponent) / 40, -0.6, 0.6) +
@@ -580,7 +760,7 @@ export function computeAkariMetrics(
         size,
         dmgShare: scoped(num(p.totalDamageDealtToChampions), teamDmg, gameDmg),
         // 坦度保持本队口径：输方被动承伤天然更多，按全场算会奖励送死
-        tankShare: share(num(p.totalDamageTaken) + num(p.damageSelfMitigated), teamTank),
+        tankShare: share(tankValue(p), teamTank),
         supportShare: supportAvailable ? scoped(supportValue, teamSupport, gameSupport) : null,
         objectiveDmgShare: objectiveAvailable
           ? scoped(objectiveValue, teamObjective, gameObjective)
@@ -627,17 +807,15 @@ export function computeAkariMetrics(
         ccpm: num(p.timeCCingOthers) / minutes,
         efficiency: gold > 0 ? num(p.totalDamageDealtToChampions) / gold : null,
         lane,
-        visionQualityPm: visionQualityAvailable
-          ? (num(p.controlWardsPlaced) + num(p.wardTakedowns)) / minutes
-          : null,
+        visionQualityPm: visionQualityAvailable ? visionQualityValue(p) / minutes : null,
         immobPm: immobAvailable ? num(p.immobilizations) / minutes : null,
         pressureShare: pressureAvailable
           ? shareScope === 'game'
             ? gamePressure > 0
-              ? (num(p.turretPlatesTaken) + num(p.turretTakedowns)) / (gamePressure / teamCount)
+              ? pressureValue(p) / (gamePressure / teamCount)
               : null
             : teamPressure > 0
-              ? (num(p.turretPlatesTaken) + num(p.turretTakedowns)) / teamPressure
+              ? pressureValue(p) / teamPressure
               : null
           : null,
         bonus: clamp(multi + solo + steals, 0, 0.35),
@@ -685,7 +863,11 @@ export function computeAkariMetrics(
      * @param baselineExpected 该位置的基线期望（份额或 倍率×全场均值）
      * @param fallback 位置未知时的期望
      */
-    const exp = (pick: (x: Derived) => number, baselineExpected: number | null, fallback: number) => {
+    const exp = (
+      pick: (x: Derived) => number,
+      baselineExpected: number | null,
+      fallback: number
+    ) => {
       const c = counterpart(d)
       const pair = c ? (pick(d) + pick(c)) / 2 : null
       if (pair !== null && baselineExpected !== null) {
@@ -695,9 +877,15 @@ export function computeAkariMetrics(
       return pair ?? fallback
     }
     const metrics: Partial<Record<AkariMetricKey, number>> = {}
-    metrics.damage = ratio(d.dmgShare, exp((x) => x.dmgShare, baseline?.dmgShare ?? null, share))
+    metrics.damage = ratio(
+      d.dmgShare,
+      exp((x) => x.dmgShare, baseline?.dmgShare ?? null, share)
+    )
     if (tankAvailable) {
-      metrics.tank = ratio(d.tankShare, exp((x) => x.tankShare, baseline?.tankShare ?? null, share))
+      metrics.tank = ratio(
+        d.tankShare,
+        exp((x) => x.tankShare, baseline?.tankShare ?? null, share)
+      )
     }
     if (d.supportShare !== null) {
       metrics.support = ratio(
@@ -705,7 +893,10 @@ export function computeAkariMetrics(
         exp((x) => x.supportShare ?? 0, baseline?.supportShare ?? null, share)
       )
     }
-    metrics.kp = ratio(d.kp, exp((x) => x.kp, baseline ? baseline.kp * gameMean.kp : null, gameMean.kp))
+    metrics.kp = ratio(
+      d.kp,
+      exp((x) => x.kp, baseline ? baseline.kp * gameMean.kp : null, gameMean.kp)
+    )
     // 生存：死亡份额与坐牢时长份额各半（无坐牢数据时只用死亡份额）；份额=平均 → 1.0
     const deathBlend =
       d.timeDeadShare !== null ? 0.5 * d.deathShare + 0.5 * d.timeDeadShare : d.deathShare
@@ -719,12 +910,21 @@ export function computeAkariMetrics(
         1 - share > 0 ? clamp((1 - deathBlend) / (1 - share), 0, AKARI_METRIC_CAP) : 1
     }
     // 经济 / 补刀：对线口径（只与同位置对手比；无对手时全场均值）
-    metrics.gold = ratio(d.gpm, pairExpected(d, (x) => x.gpm, gameMean.gpm))
-    metrics.cs = ratio(d.cspm, pairExpected(d, (x) => x.cspm, gameMean.cspm))
+    metrics.gold = ratio(
+      d.gpm,
+      pairExpected(d, (x) => x.gpm, gameMean.gpm)
+    )
+    metrics.cs = ratio(
+      d.cspm,
+      pairExpected(d, (x) => x.cspm, gameMean.cspm)
+    )
     if (visionAvailable) {
       // 视野 = 视野分 0.7 + 视野质量（控制守卫+排眼）0.3（有数据时）
       const vBase = baseline ? baseline.vision : null
-      const scorePart = ratio(d.vspm, exp((x) => x.vspm, vBase !== null ? vBase * gameMean.vspm : null, gameMean.vspm))
+      const scorePart = ratio(
+        d.vspm,
+        exp((x) => x.vspm, vBase !== null ? vBase * gameMean.vspm : null, gameMean.vspm)
+      )
       metrics.vision =
         d.visionQualityPm !== null
           ? 0.7 * scorePart +
@@ -742,26 +942,53 @@ export function computeAkariMetrics(
     if (ccAvailable) {
       // 控制 = 控制时长 0.6 + 定身次数 0.4（有数据时）
       const cBase = baseline ? baseline.cc : null
-      const timePart = ratio(d.ccpm, exp((x) => x.ccpm, cBase !== null ? cBase * gameMean.ccpm : null, gameMean.ccpm))
+      const timePart = ratio(
+        d.ccpm,
+        exp((x) => x.ccpm, cBase !== null ? cBase * gameMean.ccpm : null, gameMean.ccpm)
+      )
       metrics.cc =
         d.immobPm !== null
           ? 0.6 * timePart +
             0.4 *
               ratio(
                 d.immobPm,
-                exp((x) => x.immobPm ?? 0, cBase !== null ? cBase * gameMean.immobPm : null, gameMean.immobPm)
+                exp(
+                  (x) => x.immobPm ?? 0,
+                  cBase !== null ? cBase * gameMean.immobPm : null,
+                  gameMean.immobPm
+                )
               )
           : timePart
     }
-    if (d.objectiveDmgShare !== null) {
+    if (d.objectiveDmgShare !== null || d.epicShare !== null || d.pressureShare !== null) {
       // 目标 = 对目标伤害 0.5 + 史诗野怪参与 0.3 + 推进压制（镀层/推塔）0.2，缺项按可用部分归一
       const oBase = baseline?.objectiveShare ?? null
-      const parts: Array<[number, number]> = [
-        [0.5, ratio(d.objectiveDmgShare, exp((x) => x.objectiveDmgShare ?? 0, oBase, share))]
-      ]
-      if (d.epicShare !== null) parts.push([0.3, ratio(d.epicShare, exp((x) => x.epicShare ?? 0, oBase, share))])
+      const parts: Array<[number, number]> = []
+      if (d.objectiveDmgShare !== null) {
+        parts.push([
+          0.5,
+          ratio(
+            d.objectiveDmgShare,
+            exp((x) => x.objectiveDmgShare ?? 0, oBase, share)
+          )
+        ])
+      }
+      if (d.epicShare !== null)
+        parts.push([
+          0.3,
+          ratio(
+            d.epicShare,
+            exp((x) => x.epicShare ?? 0, oBase, share)
+          )
+        ])
       if (d.pressureShare !== null) {
-        parts.push([0.2, ratio(d.pressureShare, exp((x) => x.pressureShare ?? 0, oBase, share))])
+        parts.push([
+          0.2,
+          ratio(
+            d.pressureShare,
+            exp((x) => x.pressureShare ?? 0, oBase, share)
+          )
+        ])
       }
       const wsum = parts.reduce((a, [w]) => a + w, 0)
       metrics.objective = parts.reduce((a, [w, v]) => a + (w / wsum) * v, 0)
@@ -792,7 +1019,10 @@ export function computeAkariMetrics(
 }
 
 /** 用当前权重把相对指标样本折算为 0–10 评分 */
-export function rateAkariSample(sample: AkariMetricSample, weightsTable = getAkariPositionWeights()) {
+export function rateAkariSample(
+  sample: AkariMetricSample,
+  weightsTable = getAkariPositionWeights()
+) {
   const weights = weightsForSample(sample, weightsTable)
   let weightSum = 0
   let composite = 0
@@ -815,7 +1045,8 @@ export function rateAkariSample(sample: AkariMetricSample, weightsTable = getAka
 export function computeAkariScores(
   participants: AkariScoreInput[],
   gameDurationSeconds: number,
-  options: AkariMetricOptions = {}
+  options: AkariMetricOptions = {},
+  weightsTable: AkariPositionWeights = getAkariPositionWeights()
 ): AkariScoreResult {
   const empty = (skipped: AkariScoreResult['skipped'] = null): AkariScoreResult => ({
     byPuuid: new Map(),
@@ -836,7 +1067,7 @@ export function computeAkariScores(
   for (const sample of samples) {
     scores.set(sample.puuid, {
       puuid: sample.puuid,
-      rating: rateAkariSample(sample),
+      rating: rateAkariSample(sample, weightsTable),
       metrics: sample.metrics,
       position: sample.position,
       isMvp: false,
@@ -856,31 +1087,15 @@ export function computeAkariScores(
     const ka = a.metrics.kp ?? 0
     const kb = b.metrics.kp ?? 0
     if (kb !== ka) return kb - ka
-    return (b.metrics.damage ?? 0) - (a.metrics.damage ?? 0)
+    return (b.metrics.damage ?? 0) - (a.metrics.damage ?? 0) || comparePuuid(a, b)
   })
   ordered.forEach((s, i) => {
     scores.get(s.puuid)!.rank = i + 1
   })
 
-  // MVP：全场最高；SVP：败方最高（若其同时是全场最高则只记 MVP）；尽力局：输且 ≥ 阈值
-  let mvpPuuid: string | null = null
-  let best = -1
-  for (const s of scores.values()) {
-    if (s.rating > best) {
-      best = s.rating
-      mvpPuuid = s.puuid
-    }
-  }
-  let svpPuuid: string | null = null
-  let bestLoser = -1
-  for (const d of samples) {
-    if (d.win) continue
-    const s = scores.get(d.puuid)!
-    if (s.rating > bestLoser) {
-      bestLoser = s.rating
-      svpPuuid = s.puuid
-    }
-  }
+  // 徽标与名次共用同一排序；保留 0.1 内部分契约，同分按参团、输出、puuid 决胜。
+  const mvpPuuid = ordered[0]?.puuid ?? null
+  let svpPuuid = ordered.find((d) => !d.win)?.puuid ?? null
   if (svpPuuid === mvpPuuid) svpPuuid = null
   for (const d of samples) {
     const s = scores.get(d.puuid)!
@@ -921,8 +1136,14 @@ function assignGameTags(
   const teamKills = new Map<string, number>()
   const teamGold = new Map<string, number>()
   for (const [key, list] of teams) {
-    teamKills.set(key, list.reduce((s, d) => s + d.kills, 0))
-    teamGold.set(key, list.reduce((s, d) => s + d.gold, 0))
+    teamKills.set(
+      key,
+      list.reduce((s, d) => s + d.kills, 0)
+    )
+    teamGold.set(
+      key,
+      list.reduce((s, d) => s + d.gold, 0)
+    )
   }
   const minutes = gameDurationSeconds / 60
 

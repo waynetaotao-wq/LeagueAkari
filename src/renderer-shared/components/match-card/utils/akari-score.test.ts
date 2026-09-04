@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest'
 import {
   AKARI_CARRY_LOSS_THRESHOLD,
   AKARI_POSITION_WEIGHTS,
+  type AkariPositionWeights,
   type AkariScoreInput,
+  computeAkariMetrics,
   computeAkariScores,
-  normalizePosition
+  normalizePosition,
+  setAkariPositionWeights
 } from './akari-score'
 
 /** 真实对局（2026-09-01 单双排 · 23:59 · 蓝队投降）的摘要数据；视野/控制/推塔摘要未含，置 0 */
@@ -96,7 +99,14 @@ describe('Akari score', () => {
   it('flags a carry loss when a loser scores above the threshold', () => {
     const game = realGame().map((p) =>
       p.puuid === 'zed'
-        ? { ...p, kills: 16, deaths: 3, assists: 6, totalDamageDealtToChampions: 42000, goldEarned: 16000 }
+        ? {
+            ...p,
+            kills: 16,
+            deaths: 3,
+            assists: 6,
+            totalDamageDealtToChampions: 42000,
+            goldEarned: 16000
+          }
         : p
     )
     const result = computeAkariScores(game, DURATION)
@@ -143,7 +153,9 @@ describe('Akari score', () => {
   it('credits mitigation to tanks (v2)', () => {
     const plain = computeAkariScores(realGame(), DURATION)
     const game = realGame().map((p) =>
-      p.puuid === 'iubethy' ? { ...p, damageSelfMitigated: 60000 } : { ...p, damageSelfMitigated: 8000 }
+      p.puuid === 'iubethy'
+        ? { ...p, damageSelfMitigated: 60000 }
+        : { ...p, damageSelfMitigated: 8000 }
     )
     const withMitigation = computeAkariScores(game, DURATION)
     expect(withMitigation.byPuuid.get('iubethy')!.metrics.tank).toBeGreaterThan(
@@ -173,7 +185,9 @@ describe('Akari score', () => {
     const costlyDeaths = realGame().map((p) =>
       p.puuid === 'zed' ? { ...p, totalTimeSpentDead: 400 } : { ...p, totalTimeSpentDead: 120 }
     )
-    expect(computeAkariScores(cheapDeaths, DURATION).byPuuid.get('zed')!.metrics.survival).toBeGreaterThan(
+    expect(
+      computeAkariScores(cheapDeaths, DURATION).byPuuid.get('zed')!.metrics.survival
+    ).toBeGreaterThan(
       computeAkariScores(costlyDeaths, DURATION).byPuuid.get('zed')!.metrics.survival!
     )
   })
@@ -239,7 +253,16 @@ describe('game tags (WeGame-style, strict rules)', () => {
     const blamed = [...base.byPuuid.values()].filter((s) => s.tag === 'blame')
     expect(blamed.length).toBeLessThanOrEqual(1)
     const boosted = realGame().map((p) =>
-      p.puuid === 'zed' ? { ...p, kills: 16, deaths: 3, assists: 6, totalDamageDealtToChampions: 42000, goldEarned: 16000 } : p
+      p.puuid === 'zed'
+        ? {
+            ...p,
+            kills: 16,
+            deaths: 3,
+            assists: 6,
+            totalDamageDealtToChampions: 42000,
+            goldEarned: 16000
+          }
+        : p
     )
     const r2 = computeAkariScores(boosted, DURATION)
     expect(r2.byPuuid.get('zed')!.tag).toBe('effort')
@@ -247,7 +270,9 @@ describe('game tags (WeGame-style, strict rules)', () => {
   })
 
   it('marks every member of a team with an AFK as afk, overriding other tags', () => {
-    const game = realGame().map((p) => (p.teamIdentifier === 'R' ? { ...p, hadAfkTeammate: true } : p))
+    const game = realGame().map((p) =>
+      p.teamIdentifier === 'R' ? { ...p, hadAfkTeammate: true } : p
+    )
     const result = computeAkariScores(game, DURATION)
     for (const id of ['iubethy', 'leoleeoh', 'donk666', 'biubiubiu', 'hideonpsy']) {
       expect(result.byPuuid.get(id)!.tag).toBe('afk')
@@ -257,7 +282,9 @@ describe('game tags (WeGame-style, strict rules)', () => {
 
   it('does not call a close win a stomp', () => {
     const close = realGame().map((p) =>
-      p.teamIdentifier === 'R' ? { ...p, kills: 5, deaths: 5, assists: 5 } : { ...p, kills: 5, deaths: 5, assists: 5 }
+      p.teamIdentifier === 'R'
+        ? { ...p, kills: 5, deaths: 5, assists: 5 }
+        : { ...p, kills: 5, deaths: 5, assists: 5 }
     )
     const result = computeAkariScores(close, DURATION)
     expect([...result.byPuuid.values()].some((s) => s.tag === 'stomp')).toBe(false)
@@ -286,8 +313,12 @@ describe('game tags: stricter stomp / blame rules', () => {
       goldEarned: p.teamIdentifier === 'R' ? Math.round(p.goldEarned * 1.3) : p.goldEarned
     }))
     const result = computeAkariScores(game, 40 * 60)
-    const winners = [...result.byPuuid.values()].filter((s) => ['leoleeoh', 'biubiubiu', 'hideonpsy'].includes(s.puuid))
-    expect(winners.every((s) => s.tag === 'stomp' || s.tag === 'carry' || s.tag === 'lying')).toBe(true)
+    const winners = [...result.byPuuid.values()].filter((s) =>
+      ['leoleeoh', 'biubiubiu', 'hideonpsy'].includes(s.puuid)
+    )
+    expect(winners.every((s) => s.tag === 'stomp' || s.tag === 'carry' || s.tag === 'lying')).toBe(
+      true
+    )
     expect(winners.some((s) => s.tag === 'stomp')).toBe(true)
   })
 
@@ -307,7 +338,15 @@ describe('game tags: stricter stomp / blame rules', () => {
   it('never blames anyone when the whole losing team collapsed', () => {
     const game = realGame().map((p) =>
       p.teamIdentifier === 'B'
-        ? { ...p, kills: 0, deaths: 9, assists: 1, totalDamageDealtToChampions: 4000, goldEarned: 5000, cs: 60 }
+        ? {
+            ...p,
+            kills: 0,
+            deaths: 9,
+            assists: 1,
+            totalDamageDealtToChampions: 4000,
+            goldEarned: 5000,
+            cs: 60
+          }
         : p
     )
     const result = computeAkariScores(game, DURATION)
@@ -319,7 +358,14 @@ describe('carry rule (≥ 11.0, lead over team third by 1.25 internal ≈ 2.5 di
   it('lets a duo carry both earn the tag while the third stays untagged', () => {
     const game = realGame().map((p) => {
       if (p.puuid === 'biubiubiu') {
-        return { ...p, kills: 12, deaths: 2, assists: 9, totalDamageDealtToChampions: 34000, goldEarned: 15500 }
+        return {
+          ...p,
+          kills: 12,
+          deaths: 2,
+          assists: 9,
+          totalDamageDealtToChampions: 34000,
+          goldEarned: 15500
+        }
       }
       return p
     })
@@ -362,7 +408,7 @@ describe('score mode routing (sr / aram / mayhem / other)', () => {
     expect(resolveAkariScoreMode({ gameMode: null, mapId: null })).toBe('other')
   })
 
-  it('uses each mode\'s own weight table and skips position inference outside sr', async () => {
+  it("uses each mode's own weight table and skips position inference outside sr", async () => {
     const { AKARI_ARAM_WEIGHTS, AKARI_MAYHEM_WEIGHTS, AKARI_POSITION_WEIGHTS, weightsForSample } =
       await import('./akari-score')
     expect(weightsForSample({ mode: 'sr', position: 'TOP' })).toBe(AKARI_POSITION_WEIGHTS.TOP)
@@ -401,5 +447,141 @@ describe('game rank', () => {
     const ranks = [...result.byPuuid.values()].map((s) => s.rank).sort((a, b) => a - b)
     expect(ranks).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expect(result.byPuuid.get(result.mvpPuuid!)!.rank).toBe(1)
+  })
+
+  it('uses the rank tie-break for MVP even when the input order is reversed', () => {
+    const game = realGame().map((p) =>
+      p.puuid === 'iubethy' ? { ...p, totalDamageDealtToChampions: 10100 } : p
+    )
+    const forward = computeAkariScores(game, DURATION)
+    const reversed = computeAkariScores([...game].reverse(), DURATION)
+    expect(forward.byPuuid.get('iubethy')!.rating).toBe(forward.byPuuid.get('hideonpsy')!.rating)
+    expect(forward.mvpPuuid).toBe('iubethy')
+    expect(reversed).toEqual(forward)
+    expect(reversed.byPuuid.get(reversed.mvpPuuid!)!.rank).toBe(1)
+  })
+
+  it('resolves identical scores, participation and damage by puuid for both MVP and SVP', () => {
+    const game = Array.from({ length: 10 }, (_, i) =>
+      player(
+        String.fromCharCode(97 + i),
+        i < 5 ? 'A' : 'B',
+        null,
+        i < 5,
+        [5, 5, 5],
+        20000,
+        20000,
+        10000,
+        150
+      )
+    )
+    const forward = computeAkariScores(game, DURATION, { mode: 'aram' })
+    const reversed = computeAkariScores([...game].reverse(), DURATION, { mode: 'aram' })
+    expect(forward.mvpPuuid).toBe('a')
+    expect(forward.svpPuuid).toBe('f')
+    expect(forward.byPuuid.get('a')!.rank).toBe(1)
+    expect(reversed).toEqual(forward)
+  })
+})
+
+describe('partial score data', () => {
+  it('preserves known positions when another participant has no position', () => {
+    const game = realGame().map((p) => (p.puuid === 'acidic' ? { ...p, position: null } : p))
+    const result = computeAkariScores(game, DURATION)
+    for (const p of game.filter((p) => p.position !== null)) {
+      expect(result.byPuuid.get(p.puuid)!.position).toBe(p.position)
+    }
+    expect(result.byPuuid.get('acidic')!.position).toBe('UNKNOWN')
+  })
+
+  it('fills only unknown positions and does not duplicate a known jungle or support', () => {
+    const knownRoles = realGame().map((p) =>
+      p.puuid === 'zed' ? { ...p, position: null, neutralMinionsKilled: 200, cs: 0 } : p
+    )
+    expect(computeAkariScores(knownRoles, DURATION).byPuuid.get('zed')!.position).toBe('UNKNOWN')
+
+    const missingJungle = realGame().map((p) =>
+      p.puuid === 'bumma'
+        ? { ...p, position: null }
+        : p.puuid === 'acidic'
+          ? { ...p, neutralMinionsKilled: 200 }
+          : p
+    )
+    const result = computeAkariScores(missingJungle, DURATION)
+    expect(result.byPuuid.get('bumma')!.position).toBe('JUNGLE')
+    expect(result.byPuuid.get('acidic')!.position).toBe('TOP')
+    expect(result.byPuuid.get('junimo')!.position).toBe('UTILITY')
+  })
+
+  it('falls back to deaths when time-dead totals are incomplete instead of rewarding missing time', () => {
+    const complete = realGame().map((p) => ({ ...p, totalTimeSpentDead: p.deaths * 30 }))
+    const partial = complete.map((p) =>
+      p.puuid === 'zed' ? { ...p, totalTimeSpentDead: undefined } : p
+    )
+    const withoutTimes = computeAkariScores(realGame(), DURATION)
+    const result = computeAkariScores(partial, DURATION)
+    expect(result).toEqual(withoutTimes)
+    expect(result.byPuuid.get('zed')!.rating).toBe(
+      computeAkariScores(complete, DURATION).byPuuid.get('zed')!.rating
+    )
+  })
+
+  it('drops incomplete optional submetrics without shrinking denominators or replacing unknowns by zero', () => {
+    const partial = realGame().map((p) => ({
+      ...p,
+      visionScore: 20,
+      timeCCingOthers: 30,
+      damageSelfMitigated: p.puuid === 'zed' ? undefined : 30000,
+      healsOnTeammates: p.puuid === 'zed' ? undefined : 1000,
+      shieldsOnTeammates: 0,
+      damageDealtToObjectives: p.puuid === 'zed' ? undefined : 10000,
+      epicTakedowns: p.puuid === 'zed' ? undefined : 2,
+      controlWardsPlaced: p.puuid === 'zed' ? undefined : 4,
+      wardTakedowns: 0,
+      immobilizations: p.puuid === 'zed' ? undefined : 8,
+      turretPlatesTaken: p.puuid === 'zed' ? undefined : 2,
+      turretTakedowns: 0
+    }))
+    const withoutExtras = realGame().map((p) => ({ ...p, visionScore: 20, timeCCingOthers: 30 }))
+    expect(computeAkariScores(partial, DURATION)).toEqual(
+      computeAkariScores(withoutExtras, DURATION)
+    )
+  })
+
+  it('keeps complete submetrics, accepts real zeroes, and uses objective participation without damage data', () => {
+    const game = realGame().map((p) => ({
+      ...p,
+      shieldsOnTeammates: p.puuid === 'hideonpsy' ? 6000 : 0,
+      healsOnTeammates: p.puuid === 'zed' ? undefined : 100,
+      epicTakedowns: p.puuid === 'bumma' ? 3 : 0
+    }))
+    const samples = computeAkariMetrics(game, DURATION)
+    expect(samples.find((p) => p.puuid === 'hideonpsy')!.metrics.support).toBeGreaterThan(1)
+    expect(samples.find((p) => p.puuid === 'zed')!.metrics.support).toBe(0)
+    expect(samples.find((p) => p.puuid === 'bumma')!.metrics.objective).toBeGreaterThan(1)
+    expect(samples.find((p) => p.puuid === 'zed')!.metrics.objective).toBe(0)
+  })
+})
+
+describe('explicit rating weights', () => {
+  it('produces the same result for the same data and explicit weights despite a changed global override', () => {
+    const game = realGame()
+    const custom = Object.fromEntries(
+      Object.entries(AKARI_POSITION_WEIGHTS).map(([position, weights]) => [
+        position,
+        { ...weights, damage: 1, survival: 0 }
+      ])
+    ) as AkariPositionWeights
+    const expected = computeAkariScores(game, DURATION, {}, AKARI_POSITION_WEIGHTS)
+    try {
+      setAkariPositionWeights(custom)
+      expect(computeAkariScores(game, DURATION, {}, AKARI_POSITION_WEIGHTS)).toEqual(expected)
+      expect(computeAkariScores(game, DURATION, {}, custom)).toEqual(
+        computeAkariScores(game, DURATION)
+      )
+      expect(computeAkariScores(game, DURATION, {}, custom)).not.toEqual(expected)
+    } finally {
+      setAkariPositionWeights(null)
+    }
   })
 })

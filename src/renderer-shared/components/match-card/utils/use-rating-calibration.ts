@@ -5,14 +5,14 @@ import { useSgpStore } from '@renderer-shared/shards/sgp/store'
 import { useMessage } from 'naive-ui'
 import { computed, onBeforeUnmount, ref } from 'vue'
 
-import { runCalibration } from './akari-score-calibrate-runner'
+import { runCalibration, throwIfCalibrationAborted } from './akari-score-calibrate-runner'
 
 export const RATING_CALIBRATION_GAMES = 400
 export const RATING_CALIBRATION_MIN_GAMES = 20
 
 /**
  * [lolps] 对局评分权重校准（可对任意玩家运行）：
- * 设置页用本人；战绩页可用当前查看的玩家（例如拿王者高手的对局校准）。
+ * 设置页用本人；战绩页可用当前查看的玩家，所学是这些对局的胜负相关性。
  */
 export function useRatingCalibration() {
   const sgp = useInstance(SgpRenderer)
@@ -34,7 +34,8 @@ export function useRatingCalibration() {
     calibrating.value = true
     progress.value = [0, RATING_CALIBRATION_GAMES]
     abort?.abort()
-    abort = new AbortController()
+    const controller = new AbortController()
+    abort = controller
     const serverId = target.sgpServerId || sgps.availability.sgpServerId
     try {
       const { stored, collected } = await runCalibration(
@@ -48,23 +49,31 @@ export function useRatingCalibration() {
             .then((r) => r.data),
         {
           games: RATING_CALIBRATION_GAMES,
-          onProgress: (done, total) => (progress.value = [done, total]),
-          signal: abort.signal,
+          onProgress: (done, total) => {
+            if (!controller.signal.aborted) progress.value = [done, total]
+          },
+          signal: controller.signal,
           source: { puuid: target.puuid, name: target.name }
         }
       )
+      throwIfCalibrationAborted(controller.signal)
       if (collected.games < RATING_CALIBRATION_MIN_GAMES) {
         message.warning(
           `可用的峡谷对局只有 ${collected.games} 场，样本太少，未保存（至少 ${RATING_CALIBRATION_MIN_GAMES} 场）`
         )
         return false
       }
-      await mr.saveCalibration(JSON.stringify(stored))
+      const json = JSON.stringify(stored)
+      throwIfCalibrationAborted(controller.signal)
+      await mr.saveCalibration(json)
+      if (controller.signal.aborted) return false
       message.success(
-        `已用 ${target.name ? `${target.name} 的` : ''}${collected.games} 场（${stored.totalSamples} 个样本）完成校准`
+        `已用 ${target.name ? `${target.name} 的` : ''}${stored.trainingGames} 场训练（${stored.totalSamples} 个样本）完成校准${stored.validation ? `，另 ${stored.validation.games} 场用于独立验证` : '，尚无独立验证'}`
       )
       return true
     } catch (error) {
+      if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError'))
+        return false
       message.error(`校准失败：${String(error)}`)
       return false
     } finally {

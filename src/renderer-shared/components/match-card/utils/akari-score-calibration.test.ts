@@ -4,11 +4,13 @@ import {
   AKARI_POSITION_WEIGHTS,
   type AkariMetricKey,
   type AkariMetricSample,
-  type AkariScorePosition
+  type AkariScorePosition,
+  rateAkariSample
 } from './akari-score'
 import {
   CALIBRATION_METRIC_KEYS,
   fitAkariWeights,
+  fitAkariWeightsWithValidation,
   parseStoredCalibration
 } from './akari-score-calibration'
 
@@ -63,7 +65,7 @@ describe('fitAkariWeights', () => {
     const bot = weights.BOTTOM
     expect(Object.entries(jg).sort((a, b) => b[1] - a[1])[0][0]).toBe('kp')
     expect(Object.entries(bot).sort((a, b) => b[1] - a[1])[0][0]).toBe('damage')
-    expect(report.JUNGLE.accuracy).toBeGreaterThan(0.75)
+    expect(report.JUNGLE.trainingAccuracy).toBeGreaterThan(0.75)
     expect(report.BOTTOM.samples).toBe(1200)
     for (const pos of ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY', 'UNKNOWN'] as const) {
       expect(Math.abs(sums(weights[pos]) - 1)).toBeLessThan(1e-6)
@@ -86,6 +88,7 @@ describe('fitAkariWeights', () => {
     const { weights, report } = fitAkariWeights(synth('MIDDLE', 500, 'gold'))
     expect(weights.UTILITY).toEqual(AKARI_POSITION_WEIGHTS.UTILITY)
     expect(report.UTILITY.samples).toBe(0)
+    expect(report.UTILITY.trainingAccuracy).toBeNull()
     for (const pos of Object.keys(weights) as AkariScorePosition[]) {
       for (const k of CALIBRATION_METRIC_KEYS) expect(weights[pos][k]).toBeGreaterThanOrEqual(0)
     }
@@ -106,17 +109,130 @@ describe('fitAkariWeights', () => {
 
   it('round-trips stored calibration and rejects malformed payloads', () => {
     const { weights, report, totalSamples } = fitAkariWeights(synth('TOP', 200, 'damage'))
-    const json = JSON.stringify({
-      version: 1,
+    const stored = {
+      version: 2,
       calibratedAt: 1,
       games: 20,
+      trainingGames: 20,
       totalSamples,
       weights,
-      report
-    })
+      report,
+      validation: null
+    }
+    const json = JSON.stringify(stored)
     expect(parseStoredCalibration(json)?.weights.TOP).toEqual(weights.TOP)
+    expect(parseStoredCalibration(JSON.stringify({ ...stored, version: 1 }))).toBeNull()
+    expect(parseStoredCalibration(JSON.stringify({ version: 2, weights }))).toBeNull()
+    expect(parseStoredCalibration(JSON.stringify({ ...stored, trainingGames: 21 }))).toBeNull()
+    expect(parseStoredCalibration(JSON.stringify({ ...stored, report: {} }))).toBeNull()
+    expect(parseStoredCalibration(JSON.stringify({ ...stored, totalSamples: -1 }))).toBeNull()
+    const zeroWeights = {
+      ...weights,
+      TOP: Object.fromEntries(CALIBRATION_METRIC_KEYS.map((key) => [key, 0]))
+    }
+    expect(parseStoredCalibration(JSON.stringify({ ...stored, weights: zeroWeights }))).toBeNull()
     expect(parseStoredCalibration('{"version":2}')).toBeNull()
     expect(parseStoredCalibration('not json')).toBeNull()
     expect(parseStoredCalibration(null)).toBeNull()
+  })
+
+  it('restores standardized coefficients to the raw ratio scale before weighting', () => {
+    const samples = synth('MIDDLE', 800, 'damage').map((sample, index) => {
+      const win = index % 2 === 0
+      const follows = index % 10 < 6
+      return {
+        ...sample,
+        win,
+        metrics: {
+          damage: win ? 1.01 : 0.99,
+          gold: (follows ? win : !win) ? 1.8 : 0.2
+        }
+      }
+    })
+    const original = fitAkariWeights(samples, AKARI_POSITION_WEIGHTS, {
+      shrinkage: 0
+    })
+    const rescaled = fitAkariWeights(
+      samples.map((sample) => ({
+        ...sample,
+        metrics: {
+          ...sample.metrics,
+          damage: 1 + (sample.metrics.damage - 1) / 100
+        }
+      })),
+      AKARI_POSITION_WEIGHTS,
+      { shrinkage: 0 }
+    )
+    const originalRatio = original.weights.MIDDLE.damage / original.weights.MIDDLE.gold
+    const rescaledRatio = rescaled.weights.MIDDLE.damage / rescaled.weights.MIDDLE.gold
+    expect(rescaledRatio / originalRatio).toBeCloseTo(100, 5)
+    expect(original.report.MIDDLE.trainingAccuracy).toBe(1)
+    for (let index = 0; index < samples.length; index += 2) {
+      expect(rateAkariSample(samples[index], original.weights)).toBeGreaterThan(
+        rateAkariSample(samples[index + 1], original.weights)
+      )
+    }
+  })
+})
+
+function pairedGames(count: number) {
+  const template = synth('MIDDLE', 1, 'damage')[0]
+  return Array.from({ length: count }, (_, index) => ({
+    gameId: index + 1,
+    samples: [true, false].map((win) => ({
+      ...template,
+      puuid: `${index}-${win}`,
+      teamIdentifier: win ? 'A' : 'B',
+      win,
+      metrics: {
+        ...Object.fromEntries(CALIBRATION_METRIC_KEYS.map((key) => [key, 1])),
+        damage: win ? 1.4 : 0.6
+      }
+    }))
+  }))
+}
+
+describe('held-out calibration validation', () => {
+  it('holds out complete games and evaluates the saved weights, including tied ratings', () => {
+    const games = pairedGames(60)
+    games[0].samples[1].metrics = { ...games[0].samples[0].metrics }
+    const result = fitAkariWeightsWithValidation(games)
+    expect(result.trainingGames).toBe(48)
+    expect(result.totalSamples).toBe(96)
+    expect(result.weights).toEqual(
+      fitAkariWeights(games.slice(12).flatMap((game) => game.samples)).weights
+    )
+    expect(result.validation?.games).toBe(12)
+    expect(result.validation?.comparisons).toBe(12)
+    expect(result.validation?.winnerHigherRate).toBeCloseTo(11.5 / 12)
+    const changedHoldout = games.map((game, index) =>
+      index < 12
+        ? {
+            ...game,
+            samples: game.samples.map((sample) => ({
+              ...sample,
+              win: !sample.win
+            }))
+          }
+        : game
+    )
+    const changed = fitAkariWeightsWithValidation(changedHoldout)
+    expect(changed.weights).toEqual(result.weights)
+    expect(changed.validation?.winnerHigherRate).toBeCloseTo(0.5 / 12)
+  })
+
+  it('groups repeated game ids before splitting and leaves scarce samples unvalidated', () => {
+    const games = pairedGames(60)
+    const fragments = [0, 1].flatMap((member) =>
+      games.map((game) => ({
+        gameId: game.gameId,
+        samples: [game.samples[member]]
+      }))
+    )
+    expect(fitAkariWeightsWithValidation(fragments)).toEqual(fitAkariWeightsWithValidation(games))
+    const small = fitAkariWeightsWithValidation(games.slice(0, 20))
+    expect(small.trainingGames).toBe(20)
+    expect(small.validation).toBeNull()
+    expect(small.totalSamples).toBe(40)
   })
 })

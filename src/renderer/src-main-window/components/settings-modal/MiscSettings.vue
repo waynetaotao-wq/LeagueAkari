@@ -69,7 +69,11 @@
                   <thead>
                     <tr class="text-[10px] text-black/60 dark:text-white/60">
                       <th class="text-left font-normal">指标</th>
-                      <th v-for="pos of calibrationView.positions" :key="pos.key" class="font-normal">
+                      <th
+                        v-for="pos of calibrationView.positions"
+                        :key="pos.key"
+                        class="font-normal"
+                      >
                         {{ pos.label }}
                       </th>
                     </tr>
@@ -274,15 +278,19 @@ const calibrationStatusText = computed(() => {
   const c = parsedCalibration.value
   const source = c?.sourceName ? `基于 ${c.sourceName} ` : '基于你 '
   const base = c
-    ? `${source}最近 ${c.games} 场（${c.totalSamples} 个玩家样本）拟合的权重 · ${new Date(c.calibratedAt).toLocaleString()}`
-    : '当前使用内置先验权重（未校准）'
+    ? `${source}${c.games} 场中 ${c.trainingGames} 场用于拟合（${c.totalSamples} 个训练样本） · ${new Date(c.calibratedAt).toLocaleString()}`
+    : mrs.settings.calibration
+      ? '校准记录需更新，当前使用内置权重，请重新校准'
+      : '当前使用内置权重（未校准）'
   const how =
-    '原理：拉取召唤师峡谷战绩，按位置用逻辑回归找出真正预测胜负的指标；样本少时向内置权重收缩。也可在任意玩家的战绩页用他的对局校准（例如王者高手）。'
+    '根据历史数据与胜负的相关性调整分路权重，样本少时更多保留内置权重。达到 60 场后，留出较新的约 20% 对局验证最终评分；验证对局不参与拟合。胜负相关性不等于个人贡献准确率。'
   const switched =
     c?.sourcePuuid && lcs.summoner.me?.puuid && c.sourcePuuid !== lcs.summoner.me.puuid
-      ? ' 当前登录账号与校准来源不同：权重反映的是来源账号所在分段的规律，换号仍可用；若段位差异大建议重新校准。'
+      ? ' 当前登录账号与校准来源不同；结果仍全局生效，但不保证适合当前账号、英雄或分段。'
       : ''
-  const avail = sgps.availability.serversSupported.matchHistory ? '' : ' 当前区服不支持 SGP 战绩，暂不可校准。'
+  const avail = sgps.availability.serversSupported.matchHistory
+    ? ''
+    : ' 当前区服不支持 SGP 战绩，暂不可校准。'
   return `${base}。${how}${switched}${avail}`
 })
 
@@ -306,11 +314,14 @@ const calibrationView = computed(() => {
     label: AKARI_METRIC_LABELS[key],
     cells: positions.map((p) => `${Math.round((weights[p.key]?.[key] ?? 0) * 100)}`)
   }))
-  const footnote = c
-    ? `样本内胜负预测准确率：${(['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'] as const)
-        .map((p) => `${POSITION_LABELS[p]} ${(c.report[p].accuracy * 100).toFixed(0)}%（${c.report[p].samples}）`)
-        .join(' · ')}`
-    : '内置先验权重；校准后此处显示拟合结果与准确率'
+  const validation = c?.validation
+  const footnote = validation
+    ? `留出 ${validation.games} 场，${validation.comparisons} 组同位置比较：胜方得分较高 ${(validation.winnerHigherRate * 100).toFixed(0)}%（内置权重 ${(validation.priorWinnerHigherRate * 100).toFixed(0)}%）。平分计半；这是未参与拟合对局上的胜负相关性，不是个人贡献准确率。`
+    : c
+      ? c.trainingGames < c.games
+        ? '已留出对局，但缺少可比较的双方分路，暂无独立验证结果。'
+        : '当前样本不足 60 场，尚未独立验证；不显示训练集准确率作为评分准确率。'
+      : '当前使用内置权重；校准后的验证结果只用于参考。'
   return { positions, rows, footnote }
 })
 

@@ -5,12 +5,26 @@ import {
   collectCalibrationSamples,
   runCalibration
 } from './akari-score-calibrate-runner'
+import { parseStoredCalibration } from './akari-score-calibration'
 
 const POSITIONS = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'] as const
 
 /** 最小可用的 SGP 摘要（满足 toBasicInfo / toParticipants / 提取层读取的字段） */
-function sgpGame(gameId: number, opts: { queueId?: number; duration?: number; earlySurrender?: boolean; blueWins?: boolean } = {}) {
-  const { queueId = 420, duration = 1800, earlySurrender = false, blueWins = gameId % 2 === 0 } = opts
+function sgpGame(
+  gameId: number,
+  opts: {
+    queueId?: number
+    duration?: number
+    earlySurrender?: boolean
+    blueWins?: boolean
+  } = {}
+) {
+  const {
+    queueId = 420,
+    duration = 1800,
+    earlySurrender = false,
+    blueWins = gameId % 2 === 0
+  } = opts
   const participants = [] as any[]
   let pid = 1
   for (const teamId of [100, 200]) {
@@ -60,16 +74,36 @@ function sgpGame(gameId: number, opts: { queueId?: number; duration?: number; ea
         timeCCingOthers: 25,
         turretTakedowns: 2,
         objectivesStolen: 0,
-        item0: 0, item1: 0, item2: 0, item3: 0, item4: 0, item5: 0, item6: 0,
+        item0: 0,
+        item1: 0,
+        item2: 0,
+        item3: 0,
+        item4: 0,
+        item5: 0,
+        item6: 0,
         roleBoundItem: 0,
-        spell1Id: 4, spell2Id: 14,
-        playerAugment1: 0, playerAugment2: 0, playerAugment3: 0, playerAugment4: 0, playerAugment5: 0, playerAugment6: 0,
-        allInPings: 0, assistMePings: 0, basicPings: 0,
+        spell1Id: 4,
+        spell2Id: 14,
+        playerAugment1: 0,
+        playerAugment2: 0,
+        playerAugment3: 0,
+        playerAugment4: 0,
+        playerAugment5: 0,
+        playerAugment6: 0,
+        allInPings: 0,
+        assistMePings: 0,
+        basicPings: 0,
         perks: { statPerks: { offense: 0, flex: 0, defense: 0 }, styles: [] },
         challenges: {
-          dragonTakedowns: 1, baronTakedowns: 0, riftHeraldTakedowns: 0,
-          maxCsAdvantageOnLaneOpponent: win ? 20 : -20, maxLevelLeadLaneOpponent: win ? 1 : 0,
-          controlWardsPlaced: 2, wardTakedowns: 3, enemyChampionImmobilizations: 10, turretPlatesTaken: 2
+          dragonTakedowns: 1,
+          baronTakedowns: 0,
+          riftHeraldTakedowns: 0,
+          maxCsAdvantageOnLaneOpponent: win ? 20 : -20,
+          maxLevelLeadLaneOpponent: win ? 1 : 0,
+          controlWardsPlaced: 2,
+          wardTakedowns: 3,
+          enemyChampionImmobilizations: 10,
+          turretPlatesTaken: 2
         }
       })
       pid++
@@ -94,6 +128,27 @@ function sgpGame(gameId: number, opts: { queueId?: number; duration?: number; ea
 }
 
 describe('calibration runner', () => {
+  it('rejects incomplete rosters and inconsistent map or mode instead of training on them', async () => {
+    const missingPlayer = sgpGame(101)
+    missingPlayer.json.participants.pop()
+    const wrongTeams = sgpGame(102)
+    wrongTeams.json.participants[0].teamId = 200
+    const wrongMap = sgpGame(103)
+    wrongMap.json.mapId = 12
+    const wrongMode = sgpGame(104)
+    wrongMode.json.gameMode = 'ARAM'
+    const aborted = sgpGame(105)
+    aborted.json.endOfGameResult = 'Abort_Unexpected'
+    const valid = sgpGame(106)
+    const collected = await collectCalibrationSamples(
+      async () => ({ games: [missingPlayer, wrongTeams, wrongMap, wrongMode, aborted, valid] }),
+      { games: 20 }
+    )
+    expect(collected.matches.map((game) => game.gameId)).toEqual([106])
+    expect(collected.samples).toHaveLength(10)
+    expect(collected.skipped).toBe(5)
+  })
+
   it('pages through history, filters queues / remakes / short games and dedupes', async () => {
     const pool = [
       sgpGame(1),
@@ -116,23 +171,36 @@ describe('calibration runner', () => {
       pageSize: 4,
       onProgress: (d) => progress.push(d)
     })
-    expect(calls).toEqual([[0, 4], [4, 4]])
+    expect(calls).toEqual([
+      [0, 4],
+      [4, 4]
+    ])
     expect(collected.games).toBe(3)
     expect(collected.skipped).toBe(3)
     expect(collected.samples.length).toBe(30)
+    expect(collected.matches.map((game) => game.gameId)).toEqual([1, 2, 6])
     expect(progress[progress.length - 1]).toBe(8)
   })
 
   it('stops on empty page and produces a stored calibration with fitted weights', async () => {
     const pool = Array.from({ length: 60 }, (_, i) => sgpGame(i + 1))
-    const getPage = async (start: number, count: number) => ({ games: pool.slice(start, start + count) })
-    const { stored, collected } = await runCalibration(getPage, { games: 200, pageSize: 20 })
+    const getPage = async (start: number, count: number) => ({
+      games: pool.slice(start, start + count)
+    })
+    const { stored, collected } = await runCalibration(getPage, {
+      games: 200,
+      pageSize: 20
+    })
     expect(collected.games).toBe(60)
-    expect(stored.version).toBe(1)
+    expect(stored.version).toBe(2)
     expect(stored.games).toBe(60)
-    expect(stored.totalSamples).toBe(600)
+    expect(stored.trainingGames).toBe(48)
+    expect(stored.totalSamples).toBe(480)
+    expect(stored.validation?.games).toBe(12)
+    expect(stored.validation?.comparisons).toBe(60)
+    expect(parseStoredCalibration(JSON.stringify(stored))).toEqual(stored)
     for (const pos of ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'] as const) {
-      expect(stored.report[pos].samples).toBe(120)
+      expect(stored.report[pos].samples).toBe(96)
       const sum = Object.values(stored.weights[pos]).reduce((s, w) => s + w, 0)
       expect(Math.abs(sum - 1)).toBeLessThan(1e-6)
     }
@@ -144,9 +212,54 @@ describe('calibration runner', () => {
     const getPage = async (start: number, count: number) => {
       pages++
       controller.abort()
-      return { games: Array.from({ length: count }, (_, i) => sgpGame(start + i + 1)) }
+      return {
+        games: Array.from({ length: count }, (_, i) => sgpGame(start + i + 1))
+      }
     }
-    await collectCalibrationSamples(getPage, { games: 100, pageSize: 20, signal: controller.signal })
+    await expect(
+      runCalibration(getPage, {
+        games: 100,
+        pageSize: 20,
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
     expect(pages).toBe(1)
+  })
+
+  it('rejects a cancelled run before requesting or returning saveable weights', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    let pages = 0
+    await expect(
+      runCalibration(
+        async () => {
+          pages++
+          return { games: [] }
+        },
+        { games: 400, signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(pages).toBe(0)
+  })
+
+  it('rejects network failure after a full page instead of saving partial calibration', async () => {
+    const failure = new Error('network outage')
+    await expect(
+      runCalibration(
+        async (start, count) => {
+          if (start > 0) throw failure
+          return {
+            games: Array.from({ length: count }, (_, index) => sgpGame(index + 1))
+          }
+        },
+        { games: 400 }
+      )
+    ).rejects.toBe(failure)
+  })
+
+  it('rejects an invalid response rather than treating it as the end of history', async () => {
+    await expect(
+      runCalibration(async () => ({ games: null as any }), { games: 400 })
+    ).rejects.toThrow('战绩数据格式异常')
   })
 })

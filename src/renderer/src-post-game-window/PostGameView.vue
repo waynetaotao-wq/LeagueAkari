@@ -4,7 +4,14 @@
     <header class="pg-header">
       <span class="pg-title">赛后小结</span>
       <span v-if="weightsNote" class="pg-weights">{{ weightsNote }}</span>
-      <NButton class="no-drag ml-auto" size="tiny" quaternary circle title="关闭" @click="winop('hide')">
+      <NButton
+        class="no-drag ml-auto"
+        size="tiny"
+        quaternary
+        circle
+        title="关闭"
+        @click="winop('hide')"
+      >
         <template #icon>
           <NIcon><CloseIcon /></NIcon>
         </template>
@@ -20,7 +27,11 @@
     <template v-else-if="view">
       <!-- 头图：本局英雄原画 + 本人信息 + 胜负 -->
       <section class="pg-hero" :class="view.me.win ? 'pg-hero-win' : 'pg-hero-loss'">
-        <div v-if="view.me.splashUrl" class="pg-hero-bg" :style="{ backgroundImage: `url(${view.me.splashUrl})` }" />
+        <div
+          v-if="view.me.splashUrl"
+          class="pg-hero-bg"
+          :style="{ backgroundImage: `url(${view.me.splashUrl})` }"
+        />
         <div class="pg-hero-shade" />
         <div class="pg-hero-content">
           <div class="pg-hero-main">
@@ -28,23 +39,37 @@
               <div class="pg-hero-avatar" :class="view.me.win ? 'ring-win' : 'ring-loss'">
                 <ChampionIcon :champion-id="view.me.championId" class="pg-hero-champ" round />
               </div>
-              <span v-if="view.me.badge" class="pg-badge pg-badge-lg" :class="`pg-badge-${view.me.badge.toLowerCase()}`">
+              <span
+                v-if="view.me.badge"
+                class="pg-badge pg-badge-lg"
+                :class="`pg-badge-${view.me.badge.toLowerCase()}`"
+              >
                 {{ view.me.badge }}
               </span>
             </div>
             <div class="min-w-0 flex-1">
               <div class="pg-hero-name" :title="view.me.name">
                 {{ view.me.name }}
-                <span v-if="view.me.rank" class="pg-rank pg-rank-hero" :class="{ 'pg-rank-top': view.me.rank <= 3 }"
+                <span
+                  v-if="view.me.rank"
+                  class="pg-rank pg-rank-hero"
+                  :class="{ 'pg-rank-top': view.me.rank <= 3 }"
                   >第{{ view.me.rank }}名</span
                 >
               </div>
               <div class="pg-hero-sub">
-                {{ view.me.championName }}<template v-if="view.me.positionText"> · {{ view.me.positionText }}</template>
+                {{ view.me.championName
+                }}<template v-if="view.me.positionText"> · {{ view.me.positionText }}</template>
                 <template v-if="view.queueText"> · {{ view.queueText }}</template>
               </div>
               <div class="pg-chips mt-1.5">
-                <span v-for="chip of view.me.chips" :key="chip.text" class="pg-tag" :class="chip.class">{{ chip.text }}</span>
+                <span
+                  v-for="chip of view.me.chips"
+                  :key="chip.text"
+                  class="pg-tag"
+                  :class="chip.class"
+                  >{{ chip.text }}</span
+                >
                 <AchievementIcon v-for="a of view.me.achievements" :key="a.key" :achievement="a" />
               </div>
             </div>
@@ -60,7 +85,7 @@
             </div>
             <div class="pg-stat pg-stat-main">
               <div class="pg-stat-value pg-stat-rating" :class="ratingClass(view.me.rating)">
-                {{ formatAkariRating(view.me.rating) }}
+                {{ ratingText(view.me.rating) }}
               </div>
               <div class="pg-stat-label">对局评分</div>
             </div>
@@ -83,7 +108,9 @@
             <span class="pg-team-title" :class="team.win ? 'text-emerald-300' : 'text-red-300'">
               {{ team.isMine ? '我方' : '敌方' }} · {{ team.win ? '胜利' : '失败' }}
             </span>
-            <span class="pg-team-kda">{{ team.kills }} / {{ team.deaths }} / {{ team.assists }}</span>
+            <span class="pg-team-kda"
+              >{{ team.kills }} / {{ team.deaths }} / {{ team.assists }}</span
+            >
             <span class="pg-col-head-rating">评分</span>
           </div>
           <div
@@ -94,23 +121,37 @@
           >
             <div class="pg-avatar-wrap">
               <ChampionIcon :champion-id="row.championId" class="pg-row-champ" round />
-              <span v-if="row.badge" class="pg-badge" :class="`pg-badge-${row.badge.toLowerCase()}`">
+              <span
+                v-if="row.badge"
+                class="pg-badge"
+                :class="`pg-badge-${row.badge.toLowerCase()}`"
+              >
                 {{ row.badge }}
               </span>
             </div>
             <div class="pg-row-body">
               <div class="pg-row-line1">
                 <span class="pg-row-name" :title="row.name">{{ row.name }}</span>
-                <span v-if="row.rank" class="pg-rank" :class="{ 'pg-rank-top': row.rank <= 3 }">第{{ row.rank }}名</span>
+                <span v-if="row.rank" class="pg-rank" :class="{ 'pg-rank-top': row.rank <= 3 }"
+                  >第{{ row.rank }}名</span
+                >
                 <span v-if="row.positionText" class="pg-row-pos">{{ row.positionText }}</span>
               </div>
               <div class="pg-row-line2">
-                <span v-for="chip of row.chips" :key="chip.text" class="pg-tag" :class="chip.class">{{ chip.text }}</span>
+                <span
+                  v-for="chip of row.chips"
+                  :key="chip.text"
+                  class="pg-tag"
+                  :class="chip.class"
+                  >{{ chip.text }}</span
+                >
                 <AchievementIcon v-for="a of row.achievements" :key="a.key" :achievement="a" />
               </div>
             </div>
             <span class="pg-col-kda">{{ row.kills }}/{{ row.deaths }}/{{ row.assists }}</span>
-            <span class="pg-col-rating" :class="ratingClass(row.rating)">{{ formatAkariRating(row.rating) }}</span>
+            <span class="pg-col-rating" :class="ratingClass(row.rating)">{{
+              ratingText(row.rating)
+            }}</span>
           </div>
         </div>
       </section>
@@ -129,6 +170,7 @@ import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { computeAkariAchievements } from '@renderer-shared/components/match-card/utils/akari-achievements'
 import {
   AKARI_GAME_TAG_LABELS,
+  AKARI_POSITION_WEIGHTS,
   type AkariGameTag,
   type AkariScore,
   type AkariScorePosition,
@@ -154,6 +196,8 @@ import type { LcuOrSgpGameSummary } from '@shared/data-adapter/wrapper'
 import { Close as CloseIcon } from '@vicons/ionicons5'
 import { NButton, NIcon, NSpin } from 'naive-ui'
 import { computed, onBeforeUnmount, reactive, watch } from 'vue'
+
+import { loadPostGameSummary } from './post-game-summary-loader'
 
 const NS = MAIN_SHARD_NAMESPACE_POST_GAME_WINDOW
 const ipc = useInstance(AkariIpcRenderer)
@@ -199,9 +243,10 @@ const state = reactive<{
   attempts: number
   summary: LcuOrSgpGameSummary | null
   error: string
-}>({ phase: 'idle', gameId: null, attempts: 0, summary: null, error: '' })
+  refreshingSgp: boolean
+}>({ phase: 'idle', gameId: null, attempts: 0, summary: null, error: '', refreshingSgp: false })
 
-let pollTimer: ReturnType<typeof setTimeout> | null = null
+let pollAbort: AbortController | null = null
 let seq = 0
 
 function winop(action: 'hide' | 'close') {
@@ -210,71 +255,110 @@ function winop(action: 'hide' | 'close') {
 
 function stopPolling() {
   seq++
-  if (pollTimer) {
-    clearTimeout(pollTimer)
-    pollTimer = null
-  }
+  pollAbort?.abort()
+  pollAbort = null
+  state.refreshingSgp = false
 }
 
-/** 优先 SGP（字段最全，评分最准）；不可用或尚未入库时回落 LCU 单局接口 */
-async function fetchSummary(gameId: number): Promise<LcuOrSgpGameSummary | null> {
-  const me = lcs.summoner.me?.puuid
-  if (me && sgps.availability.serversSupported.matchHistory) {
-    try {
-      const { data } = await sgp.api.matchHistoryQuery.getMatchHistorySummaryByPlayerPuuid(me, {
-        startIndex: 0,
-        count: 3,
-        __sgpServerId: sgps.availability.sgpServerId
-      })
-      const hit = (data?.games ?? []).find((g: any) => Number(g?.json?.gameId) === gameId)
-      if (hit) return { gameId, source: 'sgp', data: hit }
-    } catch {}
-  }
-  try {
-    const { data } = await lc.api.matchHistory.getGame(gameId)
-    if (data && Array.isArray((data as any).participants) && (data as any).participants.length) {
-      return { gameId, source: 'lcu', data }
-    }
-  } catch {}
-  return null
+async function fetchSgpSummary(
+  gameId: number,
+  puuid: string,
+  serverId: string
+): Promise<LcuOrSgpGameSummary | null> {
+  const { data } = await sgp.api.matchHistoryQuery.getMatchHistorySummaryByPlayerPuuid(puuid, {
+    startIndex: 0,
+    count: 3,
+    __sgpServerId: serverId
+  })
+  const hit = (data?.games ?? []).find((g) => g.json?.gameId === gameId)
+  return hit ? { gameId, source: 'sgp', data: hit } : null
 }
 
-function startLoading(gameId: number) {
+async function fetchLcuSummary(gameId: number): Promise<LcuOrSgpGameSummary | null> {
+  const { data } = await lc.api.matchHistory.getGame(gameId)
+  return data && Array.isArray(data.participants) && data.participants.length
+    ? { gameId, source: 'lcu', data }
+    : null
+}
+
+async function startLoading(gameId: number) {
   stopPolling()
   const mySeq = seq
+  const controller = new AbortController()
+  pollAbort = controller
+  const me = lcs.summoner.me?.puuid
+  const serverId = sgps.availability.sgpServerId
+  const canUseSgp = !!me && sgps.availability.serversSupported.matchHistory
   state.gameId = gameId
   state.phase = 'loading'
   state.attempts = 0
   state.summary = null
   state.error = ''
-  const tick = async () => {
-    if (mySeq !== seq) return
-    state.attempts++
-    const summary = await fetchSummary(gameId)
-    if (mySeq !== seq) return
-    if (summary) {
-      state.summary = summary
-      state.phase = 'ready'
-      return
-    }
-    if (state.attempts >= POLL_MAX_ATTEMPTS) {
+  state.refreshingSgp = canUseSgp
+  try {
+    const summary = await loadPostGameSummary(gameId, {
+      getSgpSummary: canUseSgp && me ? () => fetchSgpSummary(gameId, me, serverId) : undefined,
+      getLcuSummary: () => fetchLcuSummary(gameId),
+      signal: controller.signal,
+      attempts: POLL_MAX_ATTEMPTS,
+      intervalMs: POLL_INTERVAL_MS,
+      onAttempt: (attempt) => {
+        if (mySeq === seq) state.attempts = attempt
+      },
+      onSummary: (value) => {
+        if (mySeq !== seq || controller.signal.aborted) return
+        state.summary = value
+        state.phase = 'ready'
+        if (value.source === 'sgp') state.refreshingSgp = false
+      }
+    })
+    if (mySeq !== seq || controller.signal.aborted) return
+    if (!summary) {
       state.phase = 'error'
       state.error = '本局战绩暂未入库，稍后可在战绩页查看'
-      return
     }
-    pollTimer = setTimeout(tick, POLL_INTERVAL_MS)
+  } catch {
+    if (mySeq !== seq || controller.signal.aborted) return
+    if (!state.summary) {
+      state.phase = 'error'
+      state.error = '本局战绩获取失败，稍后可在战绩页查看'
+    }
+  } finally {
+    if (mySeq === seq) {
+      state.refreshingSgp = false
+      pollAbort = null
+    }
   }
-  void tick()
 }
 
-// 结算相位一到就记下本局 gameId 并开始拉取（此时 gameflow 会话仍带 gameData）
+// 结算时绑定账号、区服和 gameId；换号、断连或进入下一局即取消旧请求。
 watch(
-  () => [lcs.gameflow.phase, (lcs.gameflow.session as any)?.gameData?.gameId] as const,
-  ([phase, gameId]) => {
+  () =>
+    [
+      lcs.gameflow.phase,
+      lcs.gameflow.session?.gameData?.gameId,
+      lcs.summoner.me?.puuid,
+      sgps.availability.sgpServerId,
+      lcs.isConnected
+    ] as const,
+  ([phase, gameId, puuid, serverId, connected], previous) => {
+    const identityChanged = previous && (puuid !== previous[2] || serverId !== previous[3])
+    if (!connected || identityChanged) {
+      stopPolling()
+      state.gameId = null
+      state.summary = null
+      state.phase = 'idle'
+    }
+    if (!connected) return
+    if (['ChampSelect', 'GameStart', 'InProgress', 'Reconnect'].includes(String(phase))) {
+      stopPolling()
+      state.gameId = null
+      return
+    }
     if (!END_PHASES.has(String(phase))) return
     const id = Number(gameId)
     if (!Number.isFinite(id) || id <= 0 || id === state.gameId) return
-    startLoading(id)
+    void startLoading(id)
   },
   { immediate: true }
 )
@@ -282,21 +366,29 @@ watch(
 onBeforeUnmount(stopPolling)
 
 const hintText = computed(() => {
-  if (state.phase === 'loading') return `正在获取本局数据…（${state.attempts}/${POLL_MAX_ATTEMPTS}）`
+  if (state.phase === 'loading')
+    return `正在获取本局数据…（${state.attempts}/${POLL_MAX_ATTEMPTS}）`
   if (state.phase === 'error') return state.error
   return '对局结算后自动显示本局评分'
 })
 
+const parsedCalibration = computed(() => parseStoredCalibration(mrs.settings.calibration))
 const weightsNote = computed(() => {
-  const c = parseStoredCalibration(mrs.settings.calibration)
-  return c ? `权重：基于 ${c.sourceName ?? '你'} ${c.games} 场校准` : '权重：内置'
+  const c = parsedCalibration.value
+  if (c) return `权重：基于 ${c.sourceName ?? '你'} ${c.trainingGames} 场拟合`
+  return mrs.settings.calibration ? '权重：内置（校准需更新）' : '权重：内置'
 })
 
-function ratingClass(r: number) {
+function ratingClass(r: number | null) {
+  if (r === null) return 'text-white/45'
   if (r >= 8) return 'text-amber-300'
   if (r >= 6) return 'text-emerald-300'
   if (r >= 4) return 'text-white'
   return 'text-red-300'
+}
+
+function ratingText(rating: number | null) {
+  return rating === null ? '—' : formatAkariRating(rating)
 }
 
 /** 名字下方只放对局标签；MVP/SVP 改为贴在头像底部的标牌（WeGame 式） */
@@ -317,7 +409,12 @@ const view = computed(() => {
     if (!basicInfo.isTwoTeam || !mode) return null
     const participants = toParticipants(summary, basicInfo)
     const { inputs, earlySurrender } = buildAkariScoreInputs(summary, participants)
-    const scores = computeAkariScores(inputs, basicInfo.gameDuration, { earlySurrender, mode })
+    const scores = computeAkariScores(
+      inputs,
+      basicInfo.gameDuration,
+      { earlySurrender, mode },
+      parsedCalibration.value?.weights ?? AKARI_POSITION_WEIGHTS
+    )
     const achievements = computeAkariAchievements(inputs, basicInfo.gameDuration)
     const me = participants.find((p) => p.puuid === myPuuid)
     if (!me) return null
@@ -336,7 +433,7 @@ const view = computed(() => {
         kills: p.kills,
         deaths: p.deaths,
         assists: p.assists,
-        rating: s?.rating ?? 0,
+        rating: s?.rating ?? null,
         positionText: s ? POSITION_TEXT[s.position] : '',
         badge: s?.badge ?? null,
         rank: s?.rank ?? 0,
@@ -350,7 +447,9 @@ const view = computed(() => {
     const teams = teamIds
       .map((key) => {
         const members = participants.filter((p) => p.teamIdentifier === key)
-        const rows = members.map(rowOf).sort((a, b) => b.rating - a.rating)
+        const rows = members
+          .map(rowOf)
+          .sort((a, b) => (a.rank || Number.MAX_SAFE_INTEGER) - (b.rank || Number.MAX_SAFE_INTEGER))
         return {
           key,
           isMine: key === me.teamIdentifier,
@@ -369,7 +468,7 @@ const view = computed(() => {
     )
     const footnote = scores.skipped
       ? '本局为提前投降/重开，不计评分'
-      : `对局评分 · ${AKARI_SCORE_MODE_LABELS[mode]}口径 · 详情见战绩页 · ${basicInfo.dataSource === 'sgp' ? '数据源 SGP' : '数据源 LCU'}`
+      : `对局评分 · ${AKARI_SCORE_MODE_LABELS[mode]}口径 · 详情见战绩页 · ${basicInfo.dataSource === 'sgp' ? '数据源 SGP' : state.refreshingSgp ? 'LCU 暂评 · 等待 SGP 完整数据' : 'LCU 数据有限，可能与 SGP 战绩评分不同'}`
     return {
       durationText,
       queueText: QUEUE_TEXT[basicInfo.queueId] ?? '',
@@ -452,7 +551,12 @@ const view = computed(() => {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(20, 20, 22, 0.35) 0%, rgba(20, 20, 22, 0.72) 55%, rgba(20, 20, 22, 0.96) 100%),
+    linear-gradient(
+      180deg,
+      rgba(20, 20, 22, 0.35) 0%,
+      rgba(20, 20, 22, 0.72) 55%,
+      rgba(20, 20, 22, 0.96) 100%
+    ),
     linear-gradient(90deg, rgba(20, 20, 22, 0.55) 0%, rgba(20, 20, 22, 0) 60%);
 }
 .pg-hero-win .pg-hero-shade {

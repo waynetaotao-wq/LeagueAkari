@@ -35,30 +35,33 @@
                   {{ deep.deepGames }} 场<template v-if="state.phase === 'deep'">↻</template>
                 </span>
                 <span class="shrink-0 text-black/35 dark:text-white/35">·</span>
-                <span class="min-w-0 truncate whitespace-nowrap" :class="styleClass">{{ styleText }}</span>
+                <span class="min-w-0 truncate whitespace-nowrap" :class="styleClass">{{
+                  styleText
+                }}</span>
               </div>
               <div class="flex min-w-0 text-black/75 dark:text-white/75">
                 <span class="inline-flex min-w-0 gap-1.5 whitespace-nowrap">
                   <span class="inline-flex items-baseline gap-1">
                     <span class="text-red-600 dark:text-red-400">上</span>
-                    <span>{{ zonePct.top }}%</span>
+                    <span>{{ percentage(zonePct.top) }}</span>
                   </span>
                   <span class="text-black/25 dark:text-white/25">|</span>
                   <span class="inline-flex items-baseline gap-1">
                     <span class="text-amber-600 dark:text-yellow-400">中</span>
-                    <span>{{ zonePct.mid }}%</span>
+                    <span>{{ percentage(zonePct.mid) }}</span>
                   </span>
                   <span class="text-black/25 dark:text-white/25">|</span>
                   <span class="inline-flex items-baseline gap-1">
                     <span class="text-blue-600 dark:text-blue-400">下</span>
-                    <span>{{ zonePct.bot }}%</span>
+                    <span>{{ percentage(zonePct.bot) }}</span>
                   </span>
                   <span class="text-black/25 dark:text-white/25">|</span>
-                  <span>10 分钟经济 {{ signed(goldDiff10) }}</span>
+                  <span>约 10 分钟经济 {{ signed(goldDiff10) }}</span>
                 </span>
               </div>
             </template>
             <div v-else class="text-black/50 dark:text-white/50">{{ progressText }}</div>
+            <NButton v-if="canRetry" size="tiny" quaternary @click.stop="run">重试中单研究</NButton>
           </div>
         </div>
       </template>
@@ -67,8 +70,10 @@
         <div class="flex items-center gap-1.5 text-xs">
           <ChampionIcon v-if="championId" :champion-id="championId" class="size-4 rounded" />
           <span class="font-medium">中单研究</span>
-          <span class="rounded bg-black/6 px-1 text-[10px] leading-4 text-black/55 dark:bg-white/8 dark:text-white/60">
-            {{ deep.deepGames }} 场详析 · 共 {{ totalGames }} 场{{ sliceText }}
+          <span
+            class="rounded bg-black/6 px-1 text-[10px] leading-4 text-black/55 dark:bg-white/8 dark:text-white/60"
+          >
+            {{ deep.deepGames }} 场有效详析 · 共 {{ totalGames }} 场{{ sliceText }}
           </span>
         </div>
 
@@ -88,7 +93,7 @@
             />
             <div class="flex flex-col gap-0.5 pl-0.5 text-[10px] text-black/55 dark:text-white/55">
               <span>● 位置点（2–14 分钟）</span>
-              <span>✕ 击杀参与点</span>
+              <span>✕ 击杀发生地（含远程参与）</span>
             </div>
           </template>
           <template #content>
@@ -99,57 +104,117 @@
             </div>
             <div class="flex gap-3 text-black/75 dark:text-white/75">
               <span>分区权重</span>
-              <span class="text-red-600 dark:text-red-400">上 {{ zonePct.top }}%</span>
-              <span class="text-amber-600 dark:text-yellow-400">中 {{ zonePct.mid }}%</span>
-              <span class="text-blue-600 dark:text-blue-400">下 {{ zonePct.bot }}%</span>
+              <span class="text-red-600 dark:text-red-400">上 {{ percentage(zonePct.top) }}</span>
+              <span class="text-amber-600 dark:text-yellow-400"
+                >中 {{ percentage(zonePct.mid) }}</span
+              >
+              <span class="text-blue-600 dark:text-blue-400">下 {{ percentage(zonePct.bot) }}</span>
             </div>
 
             <div class="mt-1 rounded border border-fuchsia-500/25 p-1.5">
               <div class="font-semibold">游走</div>
               <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-black/75 dark:text-white/75">
-                <span>游走率 <b>{{ roam.ratePct }}%</b></span>
-                <span>场均 <b>{{ roam.perGame }}</b> 次</span>
-                <span>首次游走 <b>{{ roam.firstMedian }}</b></span>
-                <span>成功率 <b>{{ roam.successPct }}%</b></span>
+                <span
+                  >游走率 <b>{{ percentage(roam.ratePct) }}</b></span
+                >
+                <span
+                  >场均 <b>{{ oneDecimal(roam.perGame) }}</b> 次</span
+                >
+                <span
+                  >首次游走 <b>{{ roam.firstMedian }}</b></span
+                >
+                <span
+                  >成功率 <b>{{ percentage(roam.successPct) }}</b></span
+                >
                 <span class="col-span-2">
                   去向
-                  <span class="text-red-600 dark:text-red-400">上 {{ roam.dirTopPct }}%</span>
+                  <span class="text-red-600 dark:text-red-400"
+                    >上 {{ percentage(roam.dirTopPct) }}</span
+                  >
                   ·
-                  <span class="text-blue-600 dark:text-blue-400">下 {{ roam.dirBotPct }}%</span>
+                  <span class="text-blue-600 dark:text-blue-400"
+                    >下 {{ percentage(roam.dirBotPct) }}</span
+                  >
                 </span>
               </div>
             </div>
 
             <div class="rounded border border-fuchsia-500/25 p-1.5">
-              <div class="font-semibold">对线（10 分钟）</div>
+              <div class="font-semibold">对线（约 10 分钟，{{ deep.laneDiffGames }} 场有效）</div>
               <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-black/75 dark:text-white/75">
-                <span>补刀差 <b>{{ signed(csDiff10) }}</b></span>
-                <span>经济差 <b>{{ signed(goldDiff10) }}</b></span>
-                <span>经济领先率 <b>{{ lane.leadPct }}%</b></span>
-                <span>首杀等级 <b>{{ lane.firstKillLevelText }}</b></span>
-                <span>单杀 <b>{{ lane.soloKillsPerGame }}</b> /局</span>
-                <span>被单杀 <b>{{ lane.soloDeathsPerGame }}</b> /局</span>
+                <span
+                  >补刀差 <b>{{ signed(csDiff10) }}</b></span
+                >
+                <span
+                  >经济差 <b>{{ signed(goldDiff10) }}</b></span
+                >
+                <span
+                  >经济领先率 <b>{{ percentage(lane.leadPct) }}</b></span
+                >
+                <span
+                  >前期首次单杀 <b>{{ lane.firstKillLevelText }}</b></span
+                >
+                <span
+                  >前期单杀 <b>{{ oneDecimal(lane.soloKillsPerGame) }}</b> /局</span
+                >
+                <span
+                  >前期被单杀 <b>{{ oneDecimal(lane.soloDeathsPerGame) }}</b> /局</span
+                >
               </div>
             </div>
 
             <div class="rounded border border-fuchsia-500/25 p-1.5">
               <div class="font-semibold">前期参团（14 分钟前）</div>
               <div class="text-black/75 dark:text-white/75">
-                参团率 <b>{{ kp.pct }}%</b> · 场均参与 <b>{{ kp.perGame }}</b> 次击杀
+                参团率 <b>{{ percentage(kp.pct) }}</b> · 场均参与
+                <b>{{ oneDecimal(kp.perGame) }}</b> 次击杀
               </div>
             </div>
           </template>
         </JunglePathingSection>
 
-        <div class="border-t border-black/5 pt-1.5 text-[10px] leading-relaxed text-black/35 dark:border-white/8 dark:text-white/35">
-          <div>· 位置点来自时间线每分钟坐标快照；游走 = 进入上/下路走廊或在走廊参与击杀（河道/野区插眼、帮野、打龙不计）；成功 = 段内 90 秒有本人参与的击杀。</div>
+        <div
+          class="border-t border-black/5 pt-1.5 text-[10px] leading-relaxed text-black/35 dark:border-white/8 dark:text-white/35"
+        >
+          <div v-if="deep.timelineFailures">
+            · {{ deep.attemptedGames }} 场已尝试，{{ deep.timelineFailures }}
+            场时间线失败或不完整，已排除；失败样本可能影响代表性。
+          </div>
+          <div v-if="deep.deepGames < 10">· 有效样本少于 10 场，画像仅供参考。</div>
+          <div v-if="state.result?.ladder.truncated">
+            · 已达到战绩翻页上限，历史样本未全部扫描。
+          </div>
+          <div>
+            · 只收该英雄本人中路、至少 5 分钟的完整
+            5v5，排除重开/中止；版本范围为最近玩过的三个版本。
+          </div>
+          <div>
+            · 游走以本人上/下路走廊快照为证；击杀须有最近 60 秒内同走廊、相距 3000
+            地图单位内的本人快照佐证，成功按片段前后 90 秒内的上述参与计。击杀发生地不等于本人位置。
+          </div>
           <div>· 坐标快照为分钟级：一分钟内往返的短游走可能漏计，首次游走时间精度 ±1 分钟。</div>
-          <div>· 对线差取 10:00 帧相对敌方中单；被单杀只计中路带内。</div>
+          <div>
+            · 对线差取 10:00 前后 5 秒内最近快照，相对敌方中单；缺失显示
+            —。单杀、首次单杀等级与参团均统计前 14 分钟，被单杀只计中路带内。
+          </div>
         </div>
       </div>
     </NPopover>
   </div>
 </template>
+
+<script lang="ts">
+import type { MidDeepResult, MidLadderResult } from './midlane-research'
+
+interface MidResult {
+  ladder: MidLadderResult
+  deep: MidDeepResult
+}
+
+/** 跨卡片实例缓存；按玩家、英雄和服务器隔离，失败结果不缓存。 */
+const MIDLANE_CACHE_TTL = 30 * 60 * 1000
+const midlaneCache = new Map<string, { at: number; result: MidResult }>()
+</script>
 
 <script setup lang="ts">
 import GankMap from '@renderer-shared/components/jungle-pathing-analysis/GankMap.vue'
@@ -158,7 +223,7 @@ import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useInstance } from '@renderer-shared/shards'
 import { SgpRenderer } from '@renderer-shared/shards/sgp'
 import { useSgpStore } from '@renderer-shared/shards/sgp/store'
-import { NPopover } from 'naive-ui'
+import { NButton, NPopover } from 'naive-ui'
 import { computed, onBeforeUnmount, reactive, watch } from 'vue'
 
 import { useOngoingGamePanel } from '../../context'
@@ -166,8 +231,6 @@ import {
   DEEP_GAMES,
   LEVEL_BUCKETS,
   TARGET_GAMES,
-  type MidDeepResult,
-  type MidLadderResult,
   analyzeDeep,
   collectVersionLadder,
   emptyDeepResult
@@ -180,15 +243,6 @@ const { puuid } = defineProps<{
 const { ongoingGame } = useOngoingGamePanel()
 const sgp = useInstance(SgpRenderer)
 const sgps = useSgpStore()
-
-interface MidResult {
-  ladder: MidLadderResult
-  deep: MidDeepResult
-}
-
-/** 模块级缓存：同一对局界面反复渲染 / 重进不重拉；30 分钟过期，整天不关客户端也不会跨版本沿用旧结论 */
-const MIDLANE_CACHE_TTL = 30 * 60 * 1000
-const midlaneCache = new Map<string, { at: number; result: MidResult }>()
 
 const position = computed(() => ongoingGame.value.positionAssignments?.[puuid]?.position)
 const championId = computed(() => ongoingGame.value.championSelections?.[puuid] ?? null)
@@ -220,8 +274,9 @@ function cancelInFlight() {
 async function run() {
   const myPuuid = puuid
   const myChampion = championId.value
+  const myServerId = sgps.availability.sgpServerId
   if (!myPuuid || !myChampion) return
-  const key = `${myPuuid}:${myChampion}:${sgps.availability.sgpServerId}`
+  const key = `${myPuuid}:${myChampion}:${myServerId}`
   const cached = midlaneCache.get(key)
   if (cached && Date.now() - cached.at < MIDLANE_CACHE_TTL) {
     cancelInFlight()
@@ -245,7 +300,7 @@ async function run() {
           .getMatchHistorySummaryByPlayerPuuid(myPuuid, {
             startIndex,
             count,
-            __sgpServerId: sgps.availability.sgpServerId
+            __sgpServerId: myServerId
           })
           .then((r) => r.data),
       myPuuid,
@@ -268,7 +323,7 @@ async function run() {
       ladder.games,
       (gameId) =>
         sgp.api.matchHistoryQuery
-          .getGameDetailsByGameId(gameId, { __sgpServerId: sgps.availability.sgpServerId })
+          .getGameDetailsByGameId(gameId, { __sgpServerId: myServerId })
           .then((r) => r.data),
       {
         onPartial: (partial) => {
@@ -285,16 +340,17 @@ async function run() {
     )
     if (mySeq !== seq || signal.aborted) return
     const result: MidResult = { ladder, deep }
-    midlaneCache.set(key, { at: Date.now(), result })
+    if (deep.deepGames > 0 && deep.timelineFailures === 0)
+      midlaneCache.set(key, { at: Date.now(), result })
     state.result = result
     state.phase = 'done'
   } catch {
-    if (mySeq === seq) state.phase = 'error'
+    if (mySeq === seq && !signal.aborted) state.phase = 'error'
   }
 }
 
 watch(
-  () => [visible.value, puuid, championId.value] as const,
+  () => [visible.value, puuid, championId.value, sgps.availability.sgpServerId] as const,
   ([v]) => {
     if (v) {
       void run()
@@ -312,11 +368,17 @@ onBeforeUnmount(() => {
 
 const deep = computed<MidDeepResult>(() => state.result?.deep ?? emptyDeepResult())
 const hasData = computed(() => !!state.result && deep.value.deepGames > 0)
+const canRetry = computed(
+  () => state.phase === 'error' || (state.phase === 'done' && deep.value.timelineFailures > 0)
+)
 
 const progressText = computed(() => {
   if (state.phase === 'list') return `拉取战绩 ${state.progressDone}/${state.progressTotal}…`
   if (state.phase === 'deep') return `分析时间线 ${state.progressDone}/${state.progressTotal}…`
-  if (state.phase === 'error') return '中单研究失败（稍后重试）'
+  if (state.phase === 'error') return '中单研究获取失败'
+  if (state.phase === 'done' && deep.value.timelineFailures > 0)
+    return `时间线失败或不完整（${deep.value.timelineFailures} 场）`
+  if (state.phase === 'done') return '没有符合条件的中路对局'
   return '中单研究准备中…'
 })
 
@@ -329,9 +391,16 @@ const sliceText = computed(() => {
 })
 
 function pct(n: number, d: number) {
-  return d > 0 ? Math.round((n / d) * 100) : 0
+  return d > 0 ? Math.round((n / d) * 100) : null
 }
-function signed(n: number) {
+function percentage(n: number | null) {
+  return n === null ? '—' : `${n}%`
+}
+function oneDecimal(n: number | null) {
+  return n === null ? '—' : n.toFixed(1)
+}
+function signed(n: number | null) {
+  if (n === null) return '—'
   const r = Math.round(n)
   return r > 0 ? `+${r}` : `${r}`
 }
@@ -349,11 +418,13 @@ const zonePct = computed(() => {
 const roam = computed(() => {
   const d = deep.value
   const times = [...d.roamFirstTimesMs].sort((a, b) => a - b)
-  const median = times.length ? times[Math.floor(times.length / 2)] : null
+  const median = times.length
+    ? (times[Math.floor((times.length - 1) / 2)] + times[Math.floor(times.length / 2)]) / 2
+    : null
   const dirTotal = d.roamEpisodeDirs.top + d.roamEpisodeDirs.bot
   return {
     ratePct: pct(d.roamFirstTimesMs.length, d.deepGames),
-    perGame: d.deepGames ? (d.roamEpisodes / d.deepGames).toFixed(1) : '0',
+    perGame: d.deepGames ? d.roamEpisodes / d.deepGames : null,
     firstMedian: median !== null ? mmss(median) : '—',
     successPct: pct(d.roamSuccess, d.roamEpisodes),
     dirTopPct: pct(d.roamEpisodeDirs.top, dirTotal),
@@ -361,22 +432,27 @@ const roam = computed(() => {
   }
 })
 
-const csDiff10 = computed(() => (deep.value.laneDiffGames ? deep.value.csDiff10Sum / deep.value.laneDiffGames : 0))
-const goldDiff10 = computed(() => (deep.value.laneDiffGames ? deep.value.goldDiff10Sum / deep.value.laneDiffGames : 0))
+const csDiff10 = computed(() =>
+  deep.value.laneDiffGames ? deep.value.csDiff10Sum / deep.value.laneDiffGames : null
+)
+const goldDiff10 = computed(() =>
+  deep.value.laneDiffGames ? deep.value.goldDiff10Sum / deep.value.laneDiffGames : null
+)
 
 const lane = computed(() => {
   const d = deep.value
   let firstKillLevelText = '—'
   if (d.firstKillGames > 0) {
-    const idx = d.firstKillBuckets.indexOf(Math.max(...d.firstKillBuckets))
+    const max = Math.max(...d.firstKillBuckets)
+    const idx = max > 0 ? d.firstKillBuckets.indexOf(max) : -1
     const b = LEVEL_BUCKETS[idx]
-    firstKillLevelText = b ? `${b.label}（${pct(d.firstKillGames, d.deepGames)}% 有单杀）` : '—'
+    firstKillLevelText = `${b ? b.label : '等级缺失'}（${percentage(pct(d.firstKillGames, d.deepGames))} 有单杀）`
   }
   return {
     leadPct: pct(d.goldLead10Games, d.laneDiffGames),
     firstKillLevelText,
-    soloKillsPerGame: d.deepGames ? (d.soloKills / d.deepGames).toFixed(1) : '0',
-    soloDeathsPerGame: d.deepGames ? (d.soloDeaths / d.deepGames).toFixed(1) : '0'
+    soloKillsPerGame: d.deepGames ? d.soloKills / d.deepGames : null,
+    soloDeathsPerGame: d.deepGames ? d.soloDeaths / d.deepGames : null
   }
 })
 
@@ -384,7 +460,7 @@ const kp = computed(() => {
   const d = deep.value
   return {
     pct: pct(d.earlyTakedowns, d.earlyTeamKills),
-    perGame: d.deepGames ? (d.earlyTakedowns / d.deepGames).toFixed(1) : '0'
+    perGame: d.deepGames ? d.earlyTakedowns / d.deepGames : null
   }
 })
 
@@ -392,10 +468,10 @@ const kp = computed(() => {
 const styleText = computed(() => {
   const r = roam.value
   const z = zonePct.value
-  const roamy = Number(r.perGame) >= 1.2 || z.mid < 62
-  const laney = Number(r.perGame) < 0.6 && z.mid >= 75
-  const dir =
-    r.dirTopPct >= 60 ? '偏上' : r.dirBotPct >= 60 ? '偏下' : ''
+  if (r.perGame === null || z.mid === null) return '位置样本不足'
+  const roamy = r.perGame >= 1.2 || z.mid < 62
+  const laney = r.perGame < 0.6 && z.mid >= 75
+  const dir = (r.dirTopPct ?? 0) >= 60 ? '偏上' : (r.dirBotPct ?? 0) >= 60 ? '偏下' : ''
   if (roamy) return `游走型${dir ? ' · ' + dir : ''}`
   if (laney) return '对线型'
   return `均衡${dir ? ' · ' + dir : ''}`

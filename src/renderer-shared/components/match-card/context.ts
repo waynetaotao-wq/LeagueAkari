@@ -1,3 +1,4 @@
+import { useMatchRatingStore } from '@renderer-shared/shards/match-rating/store'
 import { toFrames } from '@shared/data-adapter/match-history/frames'
 import { toBasicInfo } from '@shared/data-adapter/match-history/match-basic'
 import { toParticipants } from '@shared/data-adapter/match-history/participants'
@@ -17,10 +18,12 @@ import {
 } from 'vue'
 
 import {
+  AKARI_POSITION_WEIGHTS,
   type AkariScoreResult,
   computeAkariScores,
   resolveAkariScoreMode
 } from './utils/akari-score'
+import { parseStoredCalibration } from './utils/akari-score-calibration'
 import { buildAkariScoreInputs } from './utils/akari-score-input'
 
 export type MatchCardContext = {
@@ -79,6 +82,11 @@ export function provideMatchCard(props: {
   loadDetails: (gameId: number) => void
   dryRunOngoingGame: (draft: DraftOptions) => void
 }) {
+  const ratingStore = useMatchRatingStore()
+  const ratingWeights = computed(
+    () =>
+      parseStoredCalibration(ratingStore.settings.calibration)?.weights ?? AKARI_POSITION_WEIGHTS
+  )
   const basicInfo = computed(() => toBasicInfo(toValue(props.summary)))
   const participants = computed(() => toParticipants(toValue(props.summary), basicInfo.value))
   const teams = computed(() => toTeams(toValue(props.summary), basicInfo.value, participants.value))
@@ -111,7 +119,12 @@ export function provideMatchCard(props: {
       toValue(props.summary),
       participants.value
     )
-    return computeAkariScores(inputs, basicInfo.value.gameDuration, { earlySurrender, mode })
+    return computeAkariScores(
+      inputs,
+      basicInfo.value.gameDuration,
+      { earlySurrender, mode },
+      ratingWeights.value
+    )
   })
 
   const draftOptions = computed<DraftOptions>(() => {

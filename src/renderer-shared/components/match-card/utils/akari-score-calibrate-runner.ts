@@ -4,9 +4,10 @@ import type { SgpGameSummary } from '@shared/data-adapter/wrapper'
 
 import { type AkariMetricSample, computeAkariMetrics } from './akari-score'
 import {
-  type CalibrationResult,
+  type CalibrationGameSamples,
   type StoredCalibration,
-  fitAkariWeights
+  type ValidatedCalibrationResult,
+  fitAkariWeightsWithValidation
 } from './akari-score-calibration'
 import { buildAkariScoreInputs } from './akari-score-input'
 
@@ -23,8 +24,16 @@ export interface CalibrationRunOptions {
 
 export interface CollectedSamples {
   samples: AkariMetricSample[]
+  matches: CalibrationGameSamples[]
   games: number
   skipped: number
+}
+
+export function throwIfCalibrationAborted(signal?: AbortSignal) {
+  if (!signal?.aborted) return
+  const error = new Error('校准已取消')
+  error.name = 'AbortError'
+  throw error
 }
 
 /**
@@ -38,20 +47,24 @@ export async function collectCalibrationSamples(
   const { games: target, pageSize = 20, onProgress, signal } = options
   const seen = new Set<number>()
   const samples: AkariMetricSample[] = []
+  const matches: CalibrationGameSamples[] = []
   let games = 0
   let skipped = 0
 
   const pages = Math.ceil(target / pageSize)
   for (let i = 0; i < pages; i++) {
-    if (signal?.aborted) break
+    throwIfCalibrationAborted(signal)
     const start = i * pageSize
     const count = Math.min(pageSize, target - start)
     let page: any[] = []
     try {
       const res = await getPage(start, count)
-      page = Array.isArray(res?.games) ? res.games : []
-    } catch {
-      break
+      throwIfCalibrationAborted(signal)
+      if (!Array.isArray(res?.games)) throw new Error('战绩数据格式异常，未保存校准')
+      page = res.games
+    } catch (error) {
+      throwIfCalibrationAborted(signal)
+      throw error
     }
     let fresh = 0
     for (const raw of page) {
@@ -64,13 +77,26 @@ export async function collectCalibrationSamples(
         const basicInfo = toBasicInfo(summary)
         if (
           !basicInfo.isTwoTeam ||
+          basicInfo.gameMode !== 'CLASSIC' ||
+          basicInfo.mapId !== 11 ||
           !CALIBRATION_QUEUES.has(basicInfo.queueId) ||
-          basicInfo.gameDuration < CALIBRATION_MIN_DURATION_SECONDS
+          basicInfo.gameDuration < CALIBRATION_MIN_DURATION_SECONDS ||
+          basicInfo.endOfGameResult?.startsWith('Abort_')
         ) {
           skipped++
           continue
         }
         const participants = toParticipants(summary, basicInfo)
+        if (
+          participants.length !== 10 ||
+          new Set(participants.map((p) => p.puuid)).size !== 10 ||
+          new Set(participants.map((p) => p.participantId)).size !== 10 ||
+          participants.filter((p) => p.teamId === 100).length !== 5 ||
+          participants.filter((p) => p.teamId === 200).length !== 5
+        ) {
+          skipped++
+          continue
+        }
         const { inputs, earlySurrender } = buildAkariScoreInputs(summary, participants)
         const gameSamples = computeAkariMetrics(inputs, basicInfo.gameDuration, {
           earlySurrender,
@@ -81,6 +107,7 @@ export async function collectCalibrationSamples(
           continue
         }
         samples.push(...gameSamples)
+        matches.push({ gameId, samples: gameSamples })
         games++
       } catch {
         skipped++
@@ -89,22 +116,25 @@ export async function collectCalibrationSamples(
     onProgress?.(Math.min(target, start + count), target)
     if (fresh === 0 || page.length < count) break
   }
-  return { samples, games, skipped }
+  throwIfCalibrationAborted(signal)
+  return { samples, matches, games, skipped }
 }
 
 export function buildStoredCalibration(
-  result: CalibrationResult,
+  result: ValidatedCalibrationResult,
   games: number,
   source: { puuid?: string; name?: string } = {},
   calibratedAt = Date.now()
 ): StoredCalibration {
   return {
-    version: 1,
+    version: 2,
     calibratedAt,
     games,
+    trainingGames: result.trainingGames,
     totalSamples: result.totalSamples,
     weights: result.weights,
     report: result.report,
+    validation: result.validation,
     sourcePuuid: source.puuid,
     sourceName: source.name
   }
@@ -112,10 +142,14 @@ export function buildStoredCalibration(
 
 export async function runCalibration(
   getPage: (startIndex: number, count: number) => Promise<{ games: any[] }>,
-  options: CalibrationRunOptions & { source?: { puuid?: string; name?: string } }
+  options: CalibrationRunOptions & {
+    source?: { puuid?: string; name?: string }
+  }
 ): Promise<{ stored: StoredCalibration; collected: CollectedSamples }> {
   const collected = await collectCalibrationSamples(getPage, options)
-  const result = fitAkariWeights(collected.samples)
+  throwIfCalibrationAborted(options.signal)
+  const result = fitAkariWeightsWithValidation(collected.matches)
+  throwIfCalibrationAborted(options.signal)
   return {
     stored: buildStoredCalibration(result, collected.games, options.source ?? {}),
     collected
