@@ -3,8 +3,25 @@
     <NPopover :keep-alive-on-hover="true" :delay="50" :disabled="!hasData">
       <template #trigger>
         <div
-          class="flex w-full cursor-default items-center gap-2 rounded border border-fuchsia-500/60 bg-fuchsia-500/8 px-2 py-1 transition-[filter] hover:brightness-110 dark:border-fuchsia-300/56 dark:bg-fuchsia-300/8"
+          class="flex w-full cursor-pointer items-center gap-2 rounded border border-fuchsia-500/60 bg-fuchsia-500/8 px-2 py-1 transition-[filter] hover:brightness-110 dark:border-fuchsia-300/56 dark:bg-fuchsia-300/8"
         >
+          <div class="shrink-0">
+            <GankMap
+              v-if="hasData"
+              :position-points="deep.minutePositions"
+              :kill-points="deep.killPoints"
+              :size="48"
+              heatmap
+              :heatmap-grid-size="7"
+              :heatmap-cell-limit="14"
+            />
+            <div
+              v-else
+              class="flex size-12 shrink-0 items-center justify-center rounded bg-black/10 text-[10px] text-black/35 dark:bg-white/10 dark:text-white/35"
+            >
+              中
+            </div>
+          </div>
 
           <div class="flex min-w-0 flex-1 flex-col justify-center gap-1 text-[11px]">
             <template v-if="hasData">
@@ -15,95 +32,119 @@
                   class="size-4 shrink-0 rounded-full"
                 />
                 <span class="shrink-0 font-semibold text-fuchsia-900/75 dark:text-fuchsia-100/80">
-                  {{ state.result!.deep.deepGames }}场深析<template v-if="state.phase === 'deep'">↻</template>
+                  {{ deep.deepGames }} 场<template v-if="state.phase === 'deep'">↻</template>
                 </span>
                 <span class="shrink-0 text-black/35 dark:text-white/35">·</span>
-                <span class="min-w-0 truncate whitespace-nowrap">
-                  <template v-if="topKillBucket">首杀 {{ topKillBucket.text }}</template>
-                  <template v-else>深析样本中无单杀</template>
-                </span>
+                <span class="min-w-0 truncate whitespace-nowrap" :class="styleClass">{{ styleText }}</span>
               </div>
               <div class="flex min-w-0 text-black/75 dark:text-white/75">
                 <span class="inline-flex min-w-0 gap-1.5 whitespace-nowrap">
-                  <template v-if="topRoamBucket">
-                    <span>首游 {{ topRoamBucket.text }}</span>
-                    <span class="text-black/25 dark:text-white/25">|</span>
-                    <span class="text-red-600 dark:text-red-400">上 {{ dirPct.top }}%</span>
-                    <span class="text-amber-600 dark:text-yellow-400">侵 {{ dirPct.invade }}%</span>
-                    <span class="text-blue-600 dark:text-blue-400">下 {{ dirPct.bot }}%</span>
-                  </template>
-                  <template v-else>深析样本中未捕捉到游走</template>
+                  <span class="inline-flex items-baseline gap-1">
+                    <span class="text-red-600 dark:text-red-400">上</span>
+                    <span>{{ zonePct.top }}%</span>
+                  </span>
+                  <span class="text-black/25 dark:text-white/25">|</span>
+                  <span class="inline-flex items-baseline gap-1">
+                    <span class="text-amber-600 dark:text-yellow-400">中</span>
+                    <span>{{ zonePct.mid }}%</span>
+                  </span>
+                  <span class="text-black/25 dark:text-white/25">|</span>
+                  <span class="inline-flex items-baseline gap-1">
+                    <span class="text-blue-600 dark:text-blue-400">下</span>
+                    <span>{{ zonePct.bot }}%</span>
+                  </span>
+                  <span class="text-black/25 dark:text-white/25">|</span>
+                  <span>10 分钟经济 {{ signed(goldDiff10) }}</span>
                 </span>
               </div>
             </template>
-            <template v-else-if="state.phase === 'error'">
-              <div class="text-black/50 dark:text-white/50">中单研究：数据拉取失败</div>
-            </template>
-            <template v-else>
-              <div class="text-black/50 dark:text-white/50">中单研究 · {{ progressText }}</div>
-            </template>
+            <div v-else class="text-black/50 dark:text-white/50">{{ progressText }}</div>
           </div>
         </div>
       </template>
 
-      <div v-if="state.result" class="flex max-w-120 flex-col gap-2 text-xs">
-        <div class="flex items-center gap-1.5 text-[13px] font-bold">
-          <ChampionIcon v-if="championId" :champion-id="championId" class="size-4.5 rounded" />
-          中单研究
-          <span class="font-normal text-black/45 dark:text-white/45">
-            共 {{ totalGames }} 场 · 胜率 {{ totalWinRate }}%
+      <div v-if="hasData" class="flex max-w-140 flex-col gap-2">
+        <div class="flex items-center gap-1.5 text-xs">
+          <ChampionIcon v-if="championId" :champion-id="championId" class="size-4 rounded" />
+          <span class="font-medium">中单研究</span>
+          <span class="rounded bg-black/6 px-1 text-[10px] leading-4 text-black/55 dark:bg-white/8 dark:text-white/60">
+            {{ deep.deepGames }} 场详析 · 共 {{ totalGames }} 场{{ sliceText }}
           </span>
         </div>
 
-        <div>
-          <div class="mb-0.5 font-bold text-black/60 dark:text-white/55">
-            首次单杀等级（{{ state.result.deep.firstKillGames }}/{{ state.result.deep.deepGames }} 局发生）
-          </div>
-          <div class="flex flex-wrap gap-x-2 gap-y-0.5">
-            <span
-              v-for="(b, i) of killBucketRows"
-              :key="i"
-              :class="i === 0 ? 'font-bold text-emerald-600 dark:text-emerald-400' : ''"
-            >
-              {{ b }}
-            </span>
-            <span v-if="!killBucketRows.length" class="text-black/40 dark:text-white/40">
-              深析样本中从未单杀
-            </span>
-          </div>
-        </div>
+        <!-- 地图偏好 -->
+        <JunglePathingSection>
+          <template #map>
+            <GankMap
+              :position-points="deep.minutePositions"
+              :kill-points="deep.killPoints"
+              :size="140"
+              :position-limit="54"
+              :kill-limit="100"
+              balance-by-lane
+              show-side-fill
+              position-dot-size-class="h-1 w-1"
+              kill-marker-size-class="h-3 w-3"
+            />
+            <div class="flex flex-col gap-0.5 pl-0.5 text-[10px] text-black/55 dark:text-white/55">
+              <span>● 位置点（2–14 分钟）</span>
+              <span>✕ 击杀参与点</span>
+            </div>
+          </template>
+          <template #content>
+            <div class="font-semibold">地图偏好</div>
+            <div class="text-black/75 dark:text-white/75">
+              {{ deep.deepGames }} 场 ·
+              <span :class="styleClass">{{ styleText }}</span>
+            </div>
+            <div class="flex gap-3 text-black/75 dark:text-white/75">
+              <span>分区权重</span>
+              <span class="text-red-600 dark:text-red-400">上 {{ zonePct.top }}%</span>
+              <span class="text-amber-600 dark:text-yellow-400">中 {{ zonePct.mid }}%</span>
+              <span class="text-blue-600 dark:text-blue-400">下 {{ zonePct.bot }}%</span>
+            </div>
 
-        <div>
-          <div class="mb-0.5 font-bold text-black/60 dark:text-white/55">
-            首次游走时间（{{ state.result.deep.roamGames }}/{{ state.result.deep.deepGames }} 局捕捉）
-          </div>
-          <div class="flex flex-wrap gap-x-2 gap-y-0.5">
-            <span
-              v-for="(b, i) of roamBucketRows"
-              :key="i"
-              :class="i === 0 ? 'font-bold text-emerald-600 dark:text-emerald-400' : ''"
-            >
-              {{ b }}
-            </span>
-            <span v-if="!roamBucketRows.length" class="text-black/40 dark:text-white/40">
-              深析样本中未捕捉到游走
-            </span>
-          </div>
-          <div v-if="state.result.deep.roamGames > 0" class="mt-0.5 text-black/70 dark:text-white/70">
-            去向：
-            <span class="text-red-600 dark:text-red-400">偏上 {{ dirPct.top }}%</span> ·
-            <span class="text-amber-600 dark:text-yellow-400">入侵野区 {{ dirPct.invade }}%</span> ·
-            <span class="text-blue-600 dark:text-blue-400">偏下 {{ dirPct.bot }}%</span>
-          </div>
-        </div>
+            <div class="mt-1 rounded border border-fuchsia-500/25 p-1.5">
+              <div class="font-semibold">游走</div>
+              <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-black/75 dark:text-white/75">
+                <span>游走率 <b>{{ roam.ratePct }}%</b></span>
+                <span>场均 <b>{{ roam.perGame }}</b> 次</span>
+                <span>首次游走 <b>{{ roam.firstMedian }}</b></span>
+                <span>成功率 <b>{{ roam.successPct }}%</b></span>
+                <span class="col-span-2">
+                  去向
+                  <span class="text-red-600 dark:text-red-400">上 {{ roam.dirTopPct }}%</span>
+                  ·
+                  <span class="text-blue-600 dark:text-blue-400">下 {{ roam.dirBotPct }}%</span>
+                </span>
+              </div>
+            </div>
 
-        <div class="border-t border-black/5 pt-1.5 text-[11px] leading-relaxed text-black/35 dark:border-white/8 dark:text-white/35">
-          <div>样本：{{ sliceText }}<template v-if="state.result.ladder.truncated">（已达翻页上限，样本可能不完整）</template></div>
-          <div>
-            深度分析取其中最近 {{ state.result.deep.deepGames
-            }}<template v-if="state.phase === 'deep'">/{{ state.progressTotal }}（分析中，数字会继续收敛）</template>
-            场时间线；首次游走 = 分钟级坐标帧 + 击杀/助攻事件坐标双信号取更早者，快去快回且无战果的游走可能漏检。
-          </div>
+            <div class="rounded border border-fuchsia-500/25 p-1.5">
+              <div class="font-semibold">对线（10 分钟）</div>
+              <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-black/75 dark:text-white/75">
+                <span>补刀差 <b>{{ signed(csDiff10) }}</b></span>
+                <span>经济差 <b>{{ signed(goldDiff10) }}</b></span>
+                <span>经济领先率 <b>{{ lane.leadPct }}%</b></span>
+                <span>首杀等级 <b>{{ lane.firstKillLevelText }}</b></span>
+                <span>单杀 <b>{{ lane.soloKillsPerGame }}</b> /局</span>
+                <span>被单杀 <b>{{ lane.soloDeathsPerGame }}</b> /局</span>
+              </div>
+            </div>
+
+            <div class="rounded border border-fuchsia-500/25 p-1.5">
+              <div class="font-semibold">前期参团（14 分钟前）</div>
+              <div class="text-black/75 dark:text-white/75">
+                参团率 <b>{{ kp.pct }}%</b> · 场均参与 <b>{{ kp.perGame }}</b> 次击杀
+              </div>
+            </div>
+          </template>
+        </JunglePathingSection>
+
+        <div class="border-t border-black/5 pt-1.5 text-[10px] leading-relaxed text-black/35 dark:border-white/8 dark:text-white/35">
+          <div>· 位置点来自时间线每分钟坐标快照；游走 = 进入上/下路走廊或在走廊参与击杀（河道/野区插眼、帮野、打龙不计）；成功 = 段内 90 秒有本人参与的击杀。</div>
+          <div>· 坐标快照为分钟级：一分钟内往返的短游走可能漏计，首次游走时间精度 ±1 分钟。</div>
+          <div>· 对线差取 10:00 帧相对敌方中单；被单杀只计中路带内。</div>
         </div>
       </div>
     </NPopover>
@@ -111,6 +152,8 @@
 </template>
 
 <script setup lang="ts">
+import GankMap from '@renderer-shared/components/jungle-pathing-analysis/GankMap.vue'
+import JunglePathingSection from '@renderer-shared/components/jungle-pathing-analysis/JunglePathingSection.vue'
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useInstance } from '@renderer-shared/shards'
 import { SgpRenderer } from '@renderer-shared/shards/sgp'
@@ -122,7 +165,6 @@ import { useOngoingGamePanel } from '../../context'
 import {
   DEEP_GAMES,
   LEVEL_BUCKETS,
-  ROAM_TIME_BUCKETS,
   TARGET_GAMES,
   type MidDeepResult,
   type MidLadderResult,
@@ -268,68 +310,101 @@ onBeforeUnmount(() => {
   cancelInFlight()
 })
 
-const hasData = computed(() => !!state.result && state.result.deep.deepGames > 0)
+const deep = computed<MidDeepResult>(() => state.result?.deep ?? emptyDeepResult())
+const hasData = computed(() => !!state.result && deep.value.deepGames > 0)
 
 const progressText = computed(() => {
-  if (state.phase === 'list') return `拉取战绩 ${state.progressDone}/${state.progressTotal}`
-  if (state.phase === 'deep') return `深度分析 ${state.progressDone}/${state.progressTotal}`
-  return '待命'
+  if (state.phase === 'list') return `拉取战绩 ${state.progressDone}/${state.progressTotal}…`
+  if (state.phase === 'deep') return `分析时间线 ${state.progressDone}/${state.progressTotal}…`
+  if (state.phase === 'error') return '中单研究失败（稍后重试）'
+  return '中单研究准备中…'
 })
 
 const totalGames = computed(() => state.result?.ladder.games.length ?? 0)
-const totalWinRate = computed(() => {
-  const g = state.result?.ladder.games ?? []
-  if (!g.length) return '0.0'
-  return ((g.filter((x) => x.win).length / g.length) * 100).toFixed(1)
+const sliceText = computed(() => {
+  const l = state.result?.ladder
+  if (!l) return ''
+  const s = l.slices.map((x) => `${x.version} ${x.games}`).join(' / ')
+  return s ? `（${s}）` : ''
 })
 
-function rankRows(
-  buckets: number[],
-  total: number,
-  labels: readonly { label: string }[]
-): { text: string; short: string }[] {
-  if (!total) return []
-  return buckets
-    .map((n, i) => ({ n, i }))
-    .filter((x) => x.n > 0)
-    .sort((a, b) => b.n - a.n)
-    .map((x) => ({
-      text: `${labels[x.i].label} ${Math.round((x.n / total) * 100)}%`,
-      short: labels[x.i].label.replace('级', '').replace('当级', '级')
-    }))
+function pct(n: number, d: number) {
+  return d > 0 ? Math.round((n / d) * 100) : 0
+}
+function signed(n: number) {
+  const r = Math.round(n)
+  return r > 0 ? `+${r}` : `${r}`
+}
+function mmss(ms: number) {
+  const s = Math.round(ms / 1000)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-const killRanked = computed(() =>
-  state.result
-    ? rankRows(state.result.deep.firstKillBuckets, state.result.deep.firstKillGames, LEVEL_BUCKETS)
-    : []
-)
-const roamRanked = computed(() =>
-  state.result
-    ? rankRows(state.result.deep.roamTimeBuckets, state.result.deep.roamGames, ROAM_TIME_BUCKETS)
-    : []
-)
-const topKillBucket = computed(() => killRanked.value[0] ?? null)
-const topRoamBucket = computed(() => roamRanked.value[0] ?? null)
-const killBucketRows = computed(() => killRanked.value.map((x) => x.text))
-const roamBucketRows = computed(() => roamRanked.value.map((x) => x.text))
+const zonePct = computed(() => {
+  const z = deep.value.zoneFrames
+  const total = z.top + z.mid + z.bot
+  return { top: pct(z.top, total), mid: pct(z.mid, total), bot: pct(z.bot, total) }
+})
 
-const dirPct = computed(() => {
-  const d = state.result?.deep
-  const total = d?.roamGames ?? 0
-  const p = (n: number) => (total ? Math.round((n / total) * 100) : 0)
+const roam = computed(() => {
+  const d = deep.value
+  const times = [...d.roamFirstTimesMs].sort((a, b) => a - b)
+  const median = times.length ? times[Math.floor(times.length / 2)] : null
+  const dirTotal = d.roamEpisodeDirs.top + d.roamEpisodeDirs.bot
   return {
-    top: p(d?.roamDirs.top ?? 0),
-    bot: p(d?.roamDirs.bot ?? 0),
-    invade: p(d?.roamDirs.invade ?? 0)
+    ratePct: pct(d.roamFirstTimesMs.length, d.deepGames),
+    perGame: d.deepGames ? (d.roamEpisodes / d.deepGames).toFixed(1) : '0',
+    firstMedian: median !== null ? mmss(median) : '—',
+    successPct: pct(d.roamSuccess, d.roamEpisodes),
+    dirTopPct: pct(d.roamEpisodeDirs.top, dirTotal),
+    dirBotPct: pct(d.roamEpisodeDirs.bot, dirTotal)
   }
 })
 
-const sliceText = computed(() => {
-  const s = state.result?.ladder.slices ?? []
-  if (!s.length) return '无'
-  return s.map((x) => `${x.version} ${x.games}场`).join(' + ') + ` = ${totalGames.value}场`
-})
-</script>
+const csDiff10 = computed(() => (deep.value.laneDiffGames ? deep.value.csDiff10Sum / deep.value.laneDiffGames : 0))
+const goldDiff10 = computed(() => (deep.value.laneDiffGames ? deep.value.goldDiff10Sum / deep.value.laneDiffGames : 0))
 
-<style scoped></style>
+const lane = computed(() => {
+  const d = deep.value
+  let firstKillLevelText = '—'
+  if (d.firstKillGames > 0) {
+    const idx = d.firstKillBuckets.indexOf(Math.max(...d.firstKillBuckets))
+    const b = LEVEL_BUCKETS[idx]
+    firstKillLevelText = b ? `${b.label}（${pct(d.firstKillGames, d.deepGames)}% 有单杀）` : '—'
+  }
+  return {
+    leadPct: pct(d.goldLead10Games, d.laneDiffGames),
+    firstKillLevelText,
+    soloKillsPerGame: d.deepGames ? (d.soloKills / d.deepGames).toFixed(1) : '0',
+    soloDeathsPerGame: d.deepGames ? (d.soloDeaths / d.deepGames).toFixed(1) : '0'
+  }
+})
+
+const kp = computed(() => {
+  const d = deep.value
+  return {
+    pct: pct(d.earlyTakedowns, d.earlyTeamKills),
+    perGame: d.deepGames ? (d.earlyTakedowns / d.deepGames).toFixed(1) : '0'
+  }
+})
+
+/** 一句话画像：游走型 / 对线型 / 均衡 */
+const styleText = computed(() => {
+  const r = roam.value
+  const z = zonePct.value
+  const roamy = Number(r.perGame) >= 1.2 || z.mid < 62
+  const laney = Number(r.perGame) < 0.6 && z.mid >= 75
+  const dir =
+    r.dirTopPct >= 60 ? '偏上' : r.dirBotPct >= 60 ? '偏下' : ''
+  if (roamy) return `游走型${dir ? ' · ' + dir : ''}`
+  if (laney) return '对线型'
+  return `均衡${dir ? ' · ' + dir : ''}`
+})
+const styleClass = computed(() =>
+  styleText.value.startsWith('游走')
+    ? 'text-red-600 dark:text-red-400'
+    : styleText.value.startsWith('对线')
+      ? 'text-emerald-700 dark:text-emerald-300'
+      : 'text-black/70 dark:text-white/70'
+)
+</script>
