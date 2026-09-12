@@ -4,6 +4,30 @@ AI agent onboarding guide. Describes the project layout and architecture at a hi
 
 ---
 
+## Fork maintenance workflow
+
+This checkout is the user's customized fork: `waynetaotao-wq/LeagueAkari`, delivery branch
+`dev`. The configured local project is `D:\LeagueAkari-dev`. Preserve the existing customizations;
+do not synchronize the official upstream unless the user asks for it.
+
+- Before changing features, read [the authoritative customization manual](docs/LeagueAkari定制版·功能说明与维护速查（全量版）.md).
+  Consult [the historical change archive](docs/维护速查手册_历史变更归档.md) for older details.
+  The user's latest explicit request takes precedence; historical upload instructions are archival.
+- Fetch the fork's current state, protect local uncommitted work, and read complete current files
+  before editing. Verify old package-status notes against actual commits and file differences.
+- For requested implementations or fixes, carry out local edits, appropriate verification, a scoped
+  commit, and a push to `origin/dev`. The user does not need to operate Git or upload source ZIPs.
+  A request only to inspect, audit, or propose changes remains read-only unless the user also asks for
+  fixes. Respect branch protection; never force-push or discard the user's work.
+- Update the relevant sections of the authoritative manual with feature changes and append historical
+  details to the archive when useful. Commit these documentation updates with the corresponding code.
+- Verify GitHub Actions and release results for the actual pushed commit. Report checks, builds,
+  real-client validation, and statistical validity separately; never present an unrun check as passed.
+- Start new tasks within the existing LeagueAkari local project so this file and the manuals are
+  available. No application dependency installation is needed for documentation-only formatting.
+
+---
+
 ## Overview
 
 **League Akari** is an Electron + Vue 3 desktop companion for League of Legends, built around the LCU (League Client Update) API. It provides automation, player analytics, and in-game utilities.
