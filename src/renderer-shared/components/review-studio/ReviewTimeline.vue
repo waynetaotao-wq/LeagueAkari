@@ -58,6 +58,21 @@
         :aria-label="text.slider"
         @update:value="setFrame"
       />
+      <NAlert v-if="frameGap > 75_000" type="warning" :show-icon="false" class="text-xs">{{
+        t('gap', { seconds: Math.round(frameGap / 1000) })
+      }}</NAlert>
+      <NText
+        v-if="selectedEvent && selectedEvent.timestamp !== currentFrame.timestamp"
+        type="info"
+        class="text-xs"
+        >{{
+          t('eventOffset', {
+            eventTime: reviewTime(selectedEvent.timestamp),
+            frameTime: reviewTime(currentFrame.timestamp),
+            seconds: Math.round(Math.abs(selectedEvent.timestamp - currentFrame.timestamp) / 1000)
+          })
+        }}</NText
+      >
       <div class="timeline-layout">
         <div class="flex min-w-0 flex-col gap-3">
           <NRadioGroup v-model:value="mapMode" size="small" :aria-label="text.map">
@@ -152,32 +167,36 @@
             }}<template v-if="!selectedEvent.position"> · {{ text.noCoordinates }}</template></NText
           >
           <NText depth="3" class="text-xs leading-5">{{ text.playbackHint }}</NText>
-          <NDivider class="my-0!" />
-          <NText strong class="text-xs">{{ text.participants }}</NText>
-          <div class="participant-grid">
-            <NButton
-              v-for="participant in sortedParticipants"
-              :key="participant.participantId"
-              size="small"
-              :secondary="focusedId === participant.participantId"
-              :aria-pressed="focusedId === participant.participantId"
-              :type="focusedId === participant.participantId ? 'primary' : 'default'"
-              @click="focusedId = participant.participantId"
-            >
-              <div class="flex min-w-0 items-center gap-1.5">
-                <ChampionIcon :champion-id="participant.championId" class="size-5! rounded" />
-                <span class="truncate">{{ championName(participant) }}</span>
-                <span v-if="participant.participantId === model.meta.participantId" class="text-xs"
-                  >· {{ text.me }}</span
+          <NCollapse
+            ><NCollapseItem :title="text.participants" name="participants">
+              <div class="participant-grid">
+                <NButton
+                  v-for="participant in sortedParticipants"
+                  :key="participant.participantId"
+                  size="small"
+                  :secondary="focusedId === participant.participantId"
+                  :aria-pressed="focusedId === participant.participantId"
+                  :type="focusedId === participant.participantId ? 'primary' : 'default'"
+                  @click="focusedId = participant.participantId"
                 >
-                <span
-                  v-else-if="participant.participantId === model.meta.opponentId"
-                  class="text-xs"
-                  >· {{ text.opponent }}</span
-                >
+                  <div class="flex min-w-0 items-center gap-1.5">
+                    <ChampionIcon :champion-id="participant.championId" class="size-5! rounded" />
+                    <span class="truncate">{{ championName(participant) }}</span>
+                    <span
+                      v-if="participant.participantId === model.meta.participantId"
+                      class="text-xs"
+                      >· {{ text.me }}</span
+                    >
+                    <span
+                      v-else-if="participant.participantId === model.meta.opponentId"
+                      class="text-xs"
+                      >· {{ text.opponent }}</span
+                    >
+                  </div>
+                </NButton>
               </div>
-            </NButton>
-          </div>
+            </NCollapseItem></NCollapse
+          >
           <div v-if="focusedPlayer" class="player-details">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <NText strong>{{ championName(focusedPlayer) }}</NText>
@@ -217,11 +236,12 @@
             :description="text.noEvents"
             class="py-8"
           />
-          <NScrollbar v-else class="event-scroll" style="max-height: 590px">
-            <div class="flex flex-col gap-2 pr-2">
+          <NScrollbar v-else ref="eventScroll" class="event-scroll" style="max-height: 460px">
+            <div ref="eventList" class="relative flex flex-col gap-2 pr-2">
               <NButton
                 v-for="event in filteredEvents"
                 :key="event.id"
+                :data-review-event="event.id"
                 block
                 class="event-row"
                 :secondary="selectedEventId === event.id"
@@ -273,11 +293,14 @@ import { mapToImagePosition } from '@renderer-shared/components/match-card/utils
 import { getTeamColor } from '@renderer-shared/components/match-card/utils/theme'
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
+import { useTranslation } from 'i18next-vue'
 import {
+  NAlert,
   NButton,
   NCard,
   NCheckbox,
-  NDivider,
+  NCollapse,
+  NCollapseItem,
   NEmpty,
   NRadioButton,
   NRadioGroup,
@@ -289,7 +312,7 @@ import {
   NTooltip,
   useThemeVars
 } from 'naive-ui'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type {
   ReviewEvent,
@@ -315,6 +338,9 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ frame: [index: number]; event: [event: ReviewEvent] }>()
 const resources = useAkariResourceProvider()
+const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
+const eventScroll = ref<InstanceType<typeof NScrollbar> | null>(null)
+const eventList = ref<HTMLElement | null>(null)
 const theme = useThemeVars()
 const playing = ref(false)
 const speed = ref(1)
@@ -338,6 +364,9 @@ const currentIndex = computed(() =>
 )
 const currentFrame = computed(() => props.model.frames[currentIndex.value])
 const intervalStart = computed(() => props.model.frames[currentIndex.value - 1]?.timestamp ?? 0)
+const frameGap = computed(() =>
+  currentFrame.value ? currentFrame.value.timestamp - intervalStart.value : 0
+)
 const selectedEvent = computed(() =>
   props.model.events.find((event) => event.id === props.selectedEventId)
 )
@@ -387,7 +416,7 @@ const playerMarkers = computed(() => {
   })
 })
 const eventMarkers = computed(() =>
-  props.model.events
+  filteredEvents.value
     .filter(
       (event) =>
         event.position &&
@@ -497,7 +526,22 @@ watch(
 watch(speed, () => {
   if (playing.value) start()
 })
-watch(() => props.selectedEventId, stop)
+watch(
+  () => props.selectedEventId,
+  async (id) => {
+    stop()
+    if (!id) return
+    const event = props.model.events.find((value) => value.id === id)
+    if (event) {
+      if (eventType.value !== 'all' && eventType.value !== event.type) eventType.value = 'all'
+      if (!isReviewEventRelated(event, props.model.meta.participantId)) eventScope.value = 'all'
+    }
+    await nextTick()
+    const row = eventList.value?.querySelector<HTMLElement>(`[data-review-event="${id}"]`)
+    if (row) eventScroll.value?.scrollTo({ top: row.offsetTop, behavior: 'auto' })
+  },
+  { immediate: true }
+)
 watch(() => props.seekToken, stop)
 watch(
   () => props.moment?.id,
@@ -523,7 +567,7 @@ onBeforeUnmount(() => {
 .review-map {
   position: relative;
   width: 100%;
-  max-width: 380px;
+  max-width: 340px;
   aspect-ratio: 1;
   margin: 0 auto;
   border-radius: 4px;

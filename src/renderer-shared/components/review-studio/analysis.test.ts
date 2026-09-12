@@ -263,4 +263,59 @@ describe('review timeline evidence', () => {
       { ok: false, reason: expect.any(String) }
     )
   })
+
+  it('groups a shutdown, repeat death and subsequent objective into one death sequence', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(fixture.details, reviewKill(610_000, 8, 450))
+    addReviewEvent(fixture.details, reviewDragon(650_000))
+    addReviewEvent(fixture.details, reviewKill(750_000))
+    const match = parse(fixture)
+    const sequences = match.moments.filter((moment) => moment.scope === null)
+    expect(sequences).toHaveLength(1)
+    expect(sequences[0]).toMatchObject({ kind: 'shutdown', start: 580_000, end: 750_000 })
+    expect(new Set(sequences[0].eventIds)).toEqual(new Set(match.events.map((event) => event.id)))
+    expect(sequences[0].description).toContain('450')
+    expect(sequences[0].description).toContain('2 次死亡')
+    expect(sequences[0].description).toContain('不代表因果')
+  })
+
+  it('finds a documented lead gain without inventing its cause, and never across missing data', () => {
+    const fixture = createReviewFixture()
+    for (let m = 10; m <= 25; m++)
+      fixture.details.json.frames[m].participantFrames['8'].totalGold += Math.min(m - 10, 4) * 350
+    const gains = parse(fixture).moments.filter((moment) => moment.kind === 'gold-gain')
+    expect(
+      gains.some((moment) => moment.scope === 'personal' && moment.after! > moment.before!)
+    ).toBe(true)
+    expect(gains.every((moment) => moment.end - moment.start <= 300_000)).toBe(true)
+    fixture.details.json.frames = fixture.details.json.frames.filter(
+      (frame) => frame.timestamp <= 600_000 || frame.timestamp >= 900_000
+    )
+    expect(parse(fixture).moments.some((moment) => moment.kind === 'gold-gain')).toBe(false)
+  })
+
+  it('keeps death groups bounded and sums multiple recorded shutdowns once', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(fixture.details, reviewKill(400_000, 8, 300))
+    addReviewEvent(fixture.details, reviewKill(530_000, 8, 450))
+    addReviewEvent(fixture.details, reviewKill(660_000, 8, 200))
+    const sequences = parse(fixture).moments.filter((moment) => moment.scope === null)
+    expect(sequences).toHaveLength(2)
+    expect(sequences[0].description).toContain('合计 750')
+    expect(sequences[1].description).toContain('额外 200')
+    expect(sequences[0].eventIds.some((id) => sequences[1].eventIds.includes(id))).toBe(false)
+  })
+
+  it('retains separate death groups even when a later objective is related to both', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(fixture.details, reviewKill(400_000, 8, 300))
+    addReviewEvent(fixture.details, reviewKill(570_000, 8, 450))
+    addReviewEvent(fixture.details, reviewKill(590_000, 8, 200))
+    addReviewEvent(fixture.details, reviewDragon(610_000))
+    const match = parse(fixture)
+    const sequences = match.moments.filter((moment) => moment.scope === null)
+    expect(sequences).toHaveLength(2)
+    for (const death of match.events.filter((event) => event.type === 'kill'))
+      expect(sequences.filter((moment) => moment.eventIds.includes(death.id))).toHaveLength(1)
+  })
 })

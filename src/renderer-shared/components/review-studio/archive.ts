@@ -1,3 +1,4 @@
+import { getReviewPatch } from './analysis'
 import {
   REVIEW_STORAGE_NAMESPACE,
   type ReviewArchiveScope,
@@ -182,7 +183,7 @@ function compactMatch(value: unknown): ReviewMatch | null {
       gameCreation: meta.gameCreation,
       gameDuration: meta.gameDuration,
       queueId: meta.queueId,
-      patch: meta.patch,
+      patch: getReviewPatch(meta.patch),
       championId: meta.championId,
       position: meta.position as ReviewPosition,
       participantId: meta.participantId,

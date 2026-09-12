@@ -48,6 +48,7 @@
       }}；{{ allStats.excludedGames }}
       场缺少适用快照，未纳入判断。此处描述已选样本，不代表个人能力或因果关系。
     </div>
+    <NAlert v-if="mixedEnvironment" type="info" :show-icon="false">{{ t('mixed') }}</NAlert>
     <div class="lead-results-heading">
       <NRadioGroup v-model:value="outcome" size="small"
         ><NRadioButton value="all">全部领先 {{ allStats.games }}</NRadioButton
@@ -195,7 +196,9 @@
 <script setup lang="ts">
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
+import { useTranslation } from 'i18next-vue'
 import {
+  NAlert,
   NButton,
   NCollapse,
   NCollapseItem,
@@ -220,6 +223,12 @@ import type { ReviewConversionEntry, ReviewMatch } from './types'
 const props = defineProps<{ matches: ReviewMatch[] }>()
 const emit = defineEmits<{ open: [gameId: number] }>()
 const resources = useAkariResourceProvider()
+const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
+const mixedEnvironment = computed(
+  () =>
+    new Set(props.matches.map((match) => match.meta.queueId)).size > 1 ||
+    new Set(props.matches.map((match) => match.meta.patch)).size > 1
+)
 const checkpoint = ref<10 | 15>(10)
 const scope = ref<'personal' | 'team'>('personal')
 const outcome = ref<'all' | 'win' | 'loss'>('all')
@@ -271,8 +280,8 @@ const subsequentEvents = (entry: ReviewConversionEntry) =>
   margin-bottom: 4px;
 }
 .lead-hint {
-  font-size: 11px;
-  opacity: 0.6;
+  font-size: 12px;
+  opacity: 0.75;
   line-height: 1.7;
 }
 .lead-controls {
@@ -301,16 +310,16 @@ const subsequentEvents = (entry: ReviewConversionEntry) =>
   flex-direction: column;
   gap: 4px;
   border: 1px solid rgb(var(--la-card-border-rgb) / 0.1);
-  border-radius: 6px;
-  padding: 12px;
+  border-radius: 10px;
+  padding: 16px;
   background: rgb(var(--la-card-tint-rgb) / 0.035);
 }
 .lead-metric > span {
-  font-size: 11px;
-  opacity: 0.6;
+  font-size: 12px;
+  opacity: 0.75;
 }
 .lead-metric strong {
-  font-size: 24px;
+  font-size: 27px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }

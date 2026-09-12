@@ -122,6 +122,15 @@ function storage() {
 }
 
 describe('review history archive', () => {
+  it('normalizes an older empty patch without losing its archived evidence', async () => {
+    const { adapter, values } = storage()
+    const record = toReviewArchiveRecord(match())
+    record.match.meta.patch = ''
+    values.set(`archive:${reviewScopeKey(scope)}`, { version: 1, records: [record] })
+    const read = await readReviewArchive(adapter, scope)
+    expect(read[0].match.meta.patch).toBe('未知')
+    expect(read[0].match.snapshots).toEqual(record.match.snapshots)
+  })
   it('persists conversion evidence without player frame tracks and marks archive limitations', async () => {
     const { adapter } = storage()
     const original = match()

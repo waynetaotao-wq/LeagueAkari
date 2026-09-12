@@ -4,32 +4,40 @@
     preset="card"
     size="small"
     class="review-studio-modal"
+    :style="{ width: 'min(1180px, calc(100vw - 32px))', height: 'min(960px, 92vh)' }"
     :bordered="false"
     :mask-closable="false"
     :content-style="{ padding: '0', minHeight: '0', overflow: 'hidden' }"
     @update:show="emit('update:show', $event)"
   >
     <template #header
-      ><div class="studio-title">
-        对局复盘台
-        <div class="studio-subtitle">关键片段 · 时间线地图 · 对位档案 · 领先兑现</div>
+      ><div class="studio-header">
+        <div class="studio-title">
+          {{ t('title') }}
+          <div class="studio-subtitle">{{ t('subtitle') }}</div>
+        </div>
+        <NRadioGroup v-model:value="activeTab" size="small" aria-label="复盘工作区">
+          <NRadioButton value="match">单局复盘</NRadioButton>
+          <NRadioButton value="matchups">对位档案</NRadioButton>
+          <NRadioButton value="conversion">领先兑现</NRadioButton>
+        </NRadioGroup>
       </div></template
     >
     <div class="studio-content">
       <NAlert v-if="!availability.ready" type="info" :show-icon="false"
         >{{ availability.reason }}。已保存在本机的档案仍可查看。</NAlert
       >
-      <div class="studio-context">
+      <div v-if="activeTab !== 'match'" class="studio-context">
         <div class="flex min-w-0 flex-wrap items-center gap-2">
           <NTag size="small" :bordered="false">SGP 战绩与时间线</NTag
           ><span class="studio-muted">{{ contextTitle }}</span>
         </div>
         <span class="studio-muted">本机已积累 {{ archivedMatches.length }} 场</span>
       </div>
-      <NCollapse v-model:expanded-names="expandedControls">
+      <NCollapse v-if="activeTab !== 'match'" v-model:expanded-names="expandedControls">
         <NCollapseItem
           name="history"
-          :title="`历史分析与筛选${candidates.length ? ` · ${candidates.length} 场候选` : ''}`"
+          :title="`${t('filters')}${candidates.length ? ` · ${matchingCandidates.length} 场候选` : ''}`"
         >
           <div class="history-controls">
             <div class="history-intro">
@@ -135,6 +143,14 @@
             <div v-if="availableMetadata.length" class="studio-muted">
               默认使用有记录的单双排和该队列最近版本；可手动放宽。选择全部队列或全部版本时，结果会混合这些环境，请谨慎比较。
             </div>
+            <NButton
+              v-if="availableMetadata.length && !matchingCandidates.length"
+              size="small"
+              secondary
+              :disabled="busy"
+              @click="broadenFilters"
+              >{{ t('broaden') }}</NButton
+            >
             <div v-if="!availableMetadata.length && !busy" class="studio-muted">
               先读取摘要即可选择实际玩过的英雄和位置。有劫中单记录时会优先选择，也支持其他英雄与位置。
             </div>
@@ -143,7 +159,7 @@
       </NCollapse>
 
       <div
-        v-if="busy || progress.attempted || progress.scanned || canceled"
+        v-if="busy || canceled || progress.failed"
         class="load-progress"
         role="status"
         aria-live="polite"
@@ -214,14 +230,8 @@
         </div></NAlert
       >
 
-      <NTabs
-        v-model:value="activeTab"
-        type="line"
-        size="medium"
-        :animated="false"
-        :theme-overrides="{ tabGapMediumLine: '22px' }"
-      >
-        <NTabPane name="match" tab="单局复盘" display-directive="show:lazy">
+      <div class="studio-views">
+        <div v-show="activeTab === 'match'">
           <div class="single-view">
             <div v-if="selectableGames.length" class="match-selector">
               <NSelect
@@ -229,10 +239,17 @@
                 :options="matchOptions"
                 filterable
                 size="small"
-                :disabled="busy"
+                :disabled="busy || !availability.ready"
                 placeholder="选择一场对局，展开地图与关键片段"
+                aria-label="选择复盘对局"
                 @update:value="openMatch"
               /><NButton
+                size="small"
+                secondary
+                :disabled="busy || !availability.ready"
+                @click="readHistory"
+                >{{ t(historyReady ? 'refreshList' : 'loadList') }}</NButton
+              ><NButton
                 v-if="selectedMatch"
                 size="small"
                 secondary
@@ -242,9 +259,8 @@
               >
             </div>
             <div v-if="progress.phase === 'single'" class="single-loading">
-              <NSpin size="small" /><span class="studio-muted"
-                >正在核对摘要并读取这场对局的时间线…</span
-              >
+              <NSpin size="medium" /><strong>{{ t('preparing') }}</strong
+              ><span class="studio-muted">{{ t('preparingHint') }}</span>
             </div>
             <ReviewMatchView
               v-else-if="selectedMatch"
@@ -252,7 +268,39 @@
               :model="selectedMatch"
               :active="show && activeTab === 'match'"
             />
-            <NEmpty v-else description="选择一场对局，定位值得复盘的片段"
+            <div v-else-if="selectableGames.length" class="recent-games">
+              <div class="welcome-title">{{ t('chooseMatch') }}</div>
+              <NText depth="3" class="text-xs">{{ t('historyLoaded') }}</NText>
+              <NButton
+                v-for="game in selectableGames.slice(0, 8)"
+                :key="game.gameId"
+                block
+                class="recent-game"
+                :disabled="busy || !availability.ready"
+                @click="openMatch(game.gameId)"
+              >
+                <div class="recent-game-content">
+                  <ChampionIcon :champion-id="game.championId" class="size-9! shrink-0 rounded" />
+                  <div class="recent-game-copy">
+                    <NText strong
+                      >{{ resources.champions.name(game.championId) }} ·
+                      {{ REVIEW_POSITION_LABELS[game.position] }}</NText
+                    ><NText depth="3" class="text-xs"
+                      >{{ reviewDate(game.gameCreation) }} ·
+                      {{ resources.queues.name(game.queueId) }} · {{ game.patch }}</NText
+                    >
+                  </div>
+                  <NTag size="small" :bordered="false" :type="game.win ? 'success' : 'error'">{{
+                    game.win ? '胜利' : '失败'
+                  }}</NTag
+                  ><span class="studio-muted">回看 ↗</span>
+                </div>
+              </NButton>
+            </div>
+            <NEmpty
+              v-else
+              :description="historyReady ? t('historyEmpty') : t('chooseMatch')"
+              class="studio-welcome"
               ><template #extra
                 ><NButton
                   v-if="!candidates.length"
@@ -260,16 +308,16 @@
                   size="small"
                   :disabled="busy || !availability.ready"
                   @click="readHistory"
-                  >读取历史对局</NButton
+                  >{{ t('historyAction') }}</NButton
                 ><span v-else class="studio-muted"
                   >从上方选择对局，或在对位档案里点击“复盘此局”。</span
                 ></template
               ></NEmpty
             >
           </div>
-        </NTabPane>
-        <NTabPane name="matchups" tab="对位档案" display-directive="show:lazy"
-          ><div class="analysis-view">
+        </div>
+        <div v-show="activeTab === 'matchups'">
+          <div v-if="visitedTabs.has('matchups')" class="analysis-view">
             <div class="sample-source">
               <NRadioGroup v-model:value="sampleSource" size="small"
                 ><NRadioButton value="session">本次分析 {{ currentFiltered.length }}</NRadioButton
@@ -283,10 +331,11 @@
               :puuid="puuid"
               :sgp-server-id="sgpServerId"
               @open="openMatch"
-            /></div
-        ></NTabPane>
-        <NTabPane name="conversion" tab="领先兑现" display-directive="show:lazy"
-          ><div class="analysis-view">
+            />
+          </div>
+        </div>
+        <div v-show="activeTab === 'conversion'">
+          <div v-if="visitedTabs.has('conversion')" class="analysis-view">
             <div class="sample-source">
               <NRadioGroup v-model:value="sampleSource" size="small"
                 ><NRadioButton value="session">本次分析 {{ currentFiltered.length }}</NRadioButton
@@ -295,9 +344,10 @@
                 ></NRadioGroup
               ><span class="studio-muted">{{ sampleDescription }}</span>
             </div>
-            <ReviewLeadAnalysis :matches="displayedMatches" @open="openMatch" /></div
-        ></NTabPane>
-      </NTabs>
+            <ReviewLeadAnalysis :matches="displayedMatches" @open="openMatch" />
+          </div>
+        </div>
+      </div>
       <div class="studio-footer">
         <span
           >位置来自时间线快照，无法还原完整走位和技能操作。关键片段用于提示复盘，不自动判责。</span
@@ -309,6 +359,8 @@
 
 <script setup lang="ts">
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
+import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
+import { useTranslation } from 'i18next-vue'
 import {
   NAlert,
   NButton,
@@ -321,8 +373,7 @@ import {
   NRadioGroup,
   NSelect,
   NSpin,
-  NTabPane,
-  NTabs,
+  NText,
   NTag
 } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
@@ -347,9 +398,11 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'update:show': [show: boolean] }>()
 const resources = useAkariResourceProvider()
+const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
 const {
   availability,
   candidates,
+  historyReady,
   matches,
   selectedMatch,
   archivedMatches,
@@ -371,14 +424,16 @@ const {
   active: () => props.show
 })
 const activeTab = ref('match')
-const expandedControls = ref<string[]>(props.initialGameId ? [] : ['history'])
+const visitedTabs = ref(new Set(['match']))
+watch(activeTab, (tab) => visitedTabs.value.add(tab))
+const expandedControls = ref<string[]>(['history'])
 const championId = ref<number | null>(props.initialChampionId ?? null)
 const position = ref<ReviewPosition>('MIDDLE')
 const opponentChampionId = ref<number | null>(null)
 const queueId = ref<number | null>(null)
 const patch = ref<string | null>(null)
 const limit = ref<20 | 40 | 60>(20)
-const sampleSource = ref<'session' | 'archive'>('session')
+const sampleSource = ref<'session' | 'archive'>('archive')
 const selectedGameId = ref<number | null>(props.initialGameId ?? null)
 const canceled = ref(false)
 const filtersTouched = ref(false)
@@ -434,7 +489,13 @@ const queueOptions = computed(() =>
   }))
 )
 const patchOptions = computed(() =>
-  [...new Set(contextMetadata.value.map((meta) => meta.patch))].map((value) => ({
+  [
+    ...new Set(
+      contextMetadata.value
+        .filter((meta) => queueId.value === null || meta.queueId === queueId.value)
+        .map((meta) => meta.patch)
+    )
+  ].map((value) => ({
     label: value || '版本未知',
     value
   }))
@@ -552,6 +613,10 @@ watch(championId, () => {
   resetContextFilters()
 })
 watch(position, resetContextFilters)
+watch(queueId, () => {
+  if (patch.value !== null && !patchOptions.value.some((option) => option.value === patch.value))
+    patch.value = patchOptions.value[0]?.value ?? null
+})
 watch(
   () => props.initialChampionId,
   (value) => {
@@ -570,7 +635,7 @@ watch(
     opponentChampionId.value = null
     queueId.value = null
     patch.value = null
-    sampleSource.value = 'session'
+    sampleSource.value = 'archive'
     selectedGameId.value = props.initialGameId ?? null
     filtersTouched.value = false
     lastOperation.value = 'history'
@@ -609,7 +674,14 @@ async function analyzeHistory() {
   lastOperation.value = 'timelines'
   sampleSource.value = 'session'
   if (activeTab.value === 'match') activeTab.value = 'matchups'
+  expandedControls.value = []
   await analyze({ ...filter.value }, limit.value)
+}
+function broadenFilters() {
+  filtersTouched.value = true
+  opponentChampionId.value = null
+  queueId.value = null
+  patch.value = null
 }
 async function openMatch(gameId: number, refresh = false) {
   selectedGameId.value = gameId
@@ -631,18 +703,18 @@ async function resumeBatch() {
 
 <style scoped>
 .review-studio-modal {
-  width: min(1120px, calc(100vw - 32px));
-  height: min(920px, 88vh);
+  width: min(1180px, calc(100vw - 32px));
+  height: min(960px, 92vh);
   color: var(--la-color-text-primary);
 }
 .studio-title {
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 600;
 }
 .studio-subtitle {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
-  opacity: 0.55;
+  opacity: 0.7;
   margin-top: 3px;
 }
 .studio-content {
@@ -650,7 +722,7 @@ async function resumeBatch() {
   flex-direction: column;
   gap: 14px;
   height: 100%;
-  padding: 16px 20px 18px;
+  padding: 18px 24px 20px;
   overflow: auto;
   box-sizing: border-box;
 }
@@ -670,8 +742,8 @@ async function resumeBatch() {
   flex-wrap: wrap;
 }
 .studio-muted {
-  font-size: 11px;
-  opacity: 0.6;
+  font-size: 12px;
+  opacity: 0.72;
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
@@ -737,6 +809,7 @@ async function resumeBatch() {
   align-items: center;
   justify-content: center;
   gap: 10px;
+  flex-direction: column;
   padding: 70px 0;
 }
 .sample-source {
@@ -755,9 +828,55 @@ async function resumeBatch() {
   gap: 8px;
   border-top: 1px solid rgb(var(--la-card-border-rgb) / 0.09);
   padding-top: 10px;
-  font-size: 10px;
-  opacity: 0.5;
+  font-size: 11px;
+  opacity: 0.68;
   margin-top: auto;
+}
+.studio-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 6px 20px 6px 4px;
+}
+.studio-views {
+  min-width: 0;
+}
+.recent-games {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.welcome-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 12px 0 0;
+}
+.recent-game {
+  height: auto;
+  padding: 14px;
+  border-radius: 8px;
+}
+.recent-game :deep(.n-button__content) {
+  width: 100%;
+  white-space: normal;
+}
+.recent-game-content {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+.recent-game-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+.studio-welcome {
+  padding: 90px 16px;
 }
 @media (max-width: 720px) {
   .filter-grid {

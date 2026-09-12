@@ -62,7 +62,7 @@ export interface ReviewSnapshot {
 
 export interface ReviewMoment {
   id: string
-  kind: 'gold-swing' | 'shutdown' | 'repeated-deaths' | 'death-objective'
+  kind: 'gold-swing' | 'gold-gain' | 'shutdown' | 'repeated-deaths' | 'death-objective'
   title: string
   description: string
   start: number

@@ -1,0 +1,82 @@
+reviewStudio:
+  title: 对局复盘台
+  subtitle: 找到本局重点，带着问题回看
+  loadList: 读取历史列表
+  refreshList: 刷新列表
+  sortGames: 交手最多
+  sortDeficit: 15 分钟最落后
+  sortRecent: 最近交手
+  sortLabel: 对位排序
+  overview: 本局重点
+  timeline: 时间线与地图
+  details: 数据明细
+  back: 返回本局重点
+  openTimeline: 打开时间线
+  startReview: 从这里开始回看
+  focus: 优先回看
+  focusHint: 先核对一个决策，再给下一局设一个练习目标。
+  evidence: 事实依据
+  question: 回看时核对
+  questionHint: 以下是待核实的问题，需要结合录像确认。
+  questions:
+    shutdown: 带着赏金进入这次交战前，是否确认了敌人位置、队友距离和撤退路线？
+    repeated-deaths: 两次死亡之间做了什么？复活后是否重复走向同一处风险区域？
+    death-objective: 目标出现前自己在做什么？当时是否有回城、换线或与队友集合的选择？
+    gold-swing: 这段时间双方的补刀和资源获取发生了什么变化？是否错过了可以处理的兵线？
+    gold-gain: 这段时间做对了哪些可重复的选择？核对兵线、击杀和目标收益，保留有效做法。
+  noFocus: 没有筛出明显的关键片段
+  noFocusHint: 可以从 10 或 15 分钟快照开始回看；没有命中规则不等于没有失误。
+  checkpoint: '{{minute}} 分钟观察点'
+  sampledAt: '实际快照 {{time}}'
+  ahead: '对位经济领先 {{gold}}'
+  behind: '对位经济落后 {{gold}}'
+  even: 对位经济持平
+  unknown: 暂时无法判断对位经济
+  earlyMissing: 缺少可用的 10 / 15 分钟快照
+  comparisonHint: 只比较同位置对手的累计经济，不作为个人表现评分。
+  gold: 对位经济差
+  cs: 对位补刀差
+  teamGold: 团队经济差
+  amount: 金币
+  csUnit: 刀
+  checkpoints: 阶段快照
+  checkpointHint: 正值为领先，负值为落后；每项只显示实际取得的数据。
+  minute: 时间点
+  actualTime: 实际采样
+  notReached: 对局未到此时刻
+  missing: 该时刻快照缺失
+  quality: 数据完整性
+  qualitySummary: '快照覆盖 {{coverage}} · 击杀记录{{status}}'
+  reconciled: 已与摘要核对
+  partial: 未完整核对
+  qualityHint: 击杀记录已核对也不代表技能、视野和所有目标事件完整。
+  moments: 关键片段
+  momentCount: '{{count}} 个片段'
+  momentsHint: 按时间排列；同一组死亡及其后续事件已合并。点击即可定位地图。
+  inspect: 回看
+  gain: 优势建立
+  risk: 风险片段
+  recordedEvents: '{{count}} 条关联记录'
+  eventOffset: '事件发生在 {{eventTime}}，英雄位置取自 {{frameTime}}，两者相隔 {{seconds}} 秒。'
+  gap: '此处快照间隔 {{seconds}} 秒，无法判断中间的连续走位。'
+  exitMoment: 查看全局事件
+  preparing: 正在读取这场对局
+  preparingHint: 正在核对对局身份并整理时间线证据…
+  chooseMatch: 先选一场，找到本局重点
+  chooseHint: 从战绩卡片可直接打开单局复盘；历史研究用于比较多场表现。
+  historyAction: 选择历史对局
+  history: 历史研究
+  historyHint: 读取摘要 → 选择范围 → 分析时间线
+  historyLoaded: 已读取历史，可选择单局或进行批量分析。
+  historyEmpty: 当前读取范围内没有符合条件的峡谷 5v5 对局。
+  filters: 筛选与分析
+  filtersHint: 筛选只影响历史研究；单局对局列表保留所有已读记录。
+  broaden: 放宽到全部对位、队列和版本
+  openLatest: 回看最近一局
+  hideFilters: 收起筛选
+  mixed: 当前样本混合了队列或版本，均值差异可能来自对局环境。
+  statsDetails: 查看分布
+  sampleCount: '{{count}} 场有效样本'
+  range: '范围 {{min}} ～ {{max}}'
+  deviation: '样本标准差 {{value}}'
+  deviationHint: 标准差描述对局间波动，不是准确率或均值的置信区间。

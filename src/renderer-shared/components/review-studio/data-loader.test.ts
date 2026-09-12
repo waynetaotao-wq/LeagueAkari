@@ -13,6 +13,7 @@ import {
   getReviewCandidate,
   matchesReviewCandidate
 } from './data-loader'
+import { filterReviewMatches } from './statistics'
 
 const identity = { puuid: 'player-3', sgpServerId: 'TENCENT_HN1' }
 const positions = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY']
@@ -104,6 +105,42 @@ function deferred<T>() {
 }
 
 describe('review data loading', () => {
+  it.each(['', undefined])(
+    'keeps unknown version filtering consistent from summary to analysis: %s',
+    async (version) => {
+      const source = api()
+      const game = summary()
+      Reflect.set(game.json, 'gameVersion', version)
+      const candidate = getReviewCandidate(game, identity.puuid)!
+      const loader = createReviewDataLoader(source, new ReviewRequestPool(), new ReviewMatchCache())
+      const result = await loader.loadMatch(identity, 1, new AbortController().signal, game)
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error(result.failure.reason)
+      const filter = { patch: candidate.patch }
+      expect(matchesReviewCandidate(candidate, filter)).toBe(true)
+      expect(filterReviewMatches([result.match], filter)).toHaveLength(1)
+    }
+  )
+
+  it('refreshes both summary and timeline and discards the previous cache even after a failed refresh', async () => {
+    const source = api()
+    const loader = createReviewDataLoader(source, new ReviewRequestPool(), new ReviewMatchCache())
+    const signal = new AbortController().signal
+    const previousSummary = summary()
+    await loader.loadMatch(identity, 1, signal, previousSummary)
+    const correctedSummary = summary()
+    correctedSummary.json.gameVersion = '16.19.1'
+    source.summary = vi.fn().mockResolvedValue(correctedSummary)
+    source.details = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue(details())
+    expect((await loader.loadMatch(identity, 1, signal, previousSummary, true)).ok).toBe(false)
+    const next = await loader.loadMatch(identity, 1, signal)
+    expect(source.details).toHaveBeenCalledTimes(2)
+    expect(source.summary).toHaveBeenCalledTimes(2)
+    expect(next.ok && next.match.meta.patch).toBe('16.19')
+  })
   it('limits all callers to three active requests and removes cancelled queued work', async () => {
     const pool = new ReviewRequestPool(3)
     const gates = [deferred<number>(), deferred<number>(), deferred<number>()]

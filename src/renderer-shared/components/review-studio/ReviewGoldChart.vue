@@ -43,7 +43,10 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ seek: [timestamp: number] }>()
 const theme = useThemeVars()
-const scope = ref<'personal' | 'team' | 'both'>('both')
+const scope = ref<'personal' | 'team' | 'both'>(
+  props.moment?.scope ??
+    (props.frames.some((frame) => frame.personalGoldDiff !== null) ? 'personal' : 'team')
+)
 const hasData = computed(() =>
   props.frames.some(
     (frame) =>
@@ -138,7 +141,7 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
 
 <style scoped>
 .chart-area {
-  height: 220px;
+  height: 180px;
   min-width: 0;
 }
 :deep(.n-card-header) {

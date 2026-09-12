@@ -1,0 +1,85 @@
+reviewStudio:
+  title: Match Review Studio
+  subtitle: Find the key moments and review with a question in mind
+  loadList: Load match list
+  refreshList: Refresh list
+  sortGames: Most played
+  sortDeficit: Lowest gold at 15 min
+  sortRecent: Most recent
+  sortLabel: Sort matchups
+  overview: Match focus
+  timeline: Timeline & map
+  details: Data details
+  back: Back to match focus
+  openTimeline: Open timeline
+  startReview: Start reviewing here
+  focus: Review first
+  focusHint: Check one decision, then set one practice goal for your next game.
+  evidence: Evidence
+  question: Check in the replay
+  questionHint: These are questions to verify against the replay.
+  questions:
+    shutdown: Before this fight, did you check enemy positions, nearby allies and a retreat route?
+    repeated-deaths: What happened between these deaths? Did you return to the same risky area after respawning?
+    death-objective: What were you doing before this objective? Could you have recalled, changed lanes or grouped?
+    gold-swing: How did farming and resource collection change? Were there waves you could have collected?
+    gold-gain: Which decisions can you repeat? Check waves, kills and objectives for useful habits.
+  noFocus: No major review moments identified
+  noFocusHint: Start at the 10- or 15-minute snapshot. No rule matches does not mean no mistakes.
+  checkpoint: '{{minute}}-minute checkpoint'
+  sampledAt: 'Actual snapshot {{time}}'
+  ahead: '{{gold}} gold ahead of your counterpart'
+  behind: '{{gold}} gold behind your counterpart'
+  even: Level on gold with your counterpart
+  unknown: Counterpart gold comparison unavailable
+  earlyMissing: No usable 10- or 15-minute snapshot
+  comparisonHint: Compares total gold with the same-role opponent; this is not a performance rating.
+  gold: Counterpart gold difference
+  cs: Counterpart CS difference
+  teamGold: Team gold difference
+  amount: gold
+  csUnit: CS
+  checkpoints: Stage snapshots
+  checkpointHint: Positive means ahead; negative means behind. Only recorded values are shown.
+  minute: Checkpoint
+  actualTime: Sample time
+  notReached: Match ended before this point
+  missing: Snapshot unavailable
+  quality: Data coverage
+  qualitySummary: 'Snapshot coverage {{coverage}} · kills {{status}}'
+  reconciled: checked against summary
+  partial: not fully reconciled
+  qualityHint: Reconciled kills do not prove that abilities, vision or all objectives are complete.
+  moments: Key moments
+  momentCount_one: '{{count}} moment'
+  momentCount_other: '{{count}} moments'
+  momentsHint: Chronological order. Related deaths and subsequent events are grouped. Select to locate on the map.
+  inspect: Review
+  gain: Building a lead
+  risk: Risk to review
+  recordedEvents_one: '{{count}} related record'
+  recordedEvents_other: '{{count}} related records'
+  eventOffset: 'Event at {{eventTime}}; player positions from {{frameTime}}, {{seconds}} seconds apart.'
+  gap: 'Snapshots are {{seconds}} seconds apart here. Movement between them is unknown.'
+  exitMoment: Show full-match events
+  preparing: Loading this match
+  preparingHint: Checking match identity and organizing timeline evidence…
+  chooseMatch: Choose a match to find its key moments
+  chooseHint: Open a match directly from a match card, or use history research to compare games.
+  historyAction: Choose from match history
+  history: History research
+  historyHint: Read summaries → choose a scope → analyze timelines
+  historyLoaded: History loaded. Choose a match or analyze a batch.
+  historyEmpty: No eligible standard Rift 5v5 games in the scanned history.
+  filters: Filters & analysis
+  filtersHint: Filters apply to history research. The match selector retains all loaded games.
+  broaden: Include all opponents, queues and patches
+  openLatest: Review latest match
+  hideFilters: Hide filters
+  mixed: These samples mix queues or patches. Different environments may affect the averages.
+  statsDetails: View distribution
+  sampleCount_one: '{{count}} valid sample'
+  sampleCount_other: '{{count}} valid samples'
+  range: 'Range {{min}} to {{max}}'
+  deviation: 'Sample standard deviation {{value}}'
+  deviationHint: Standard deviation describes variation between games, not accuracy or a confidence interval.

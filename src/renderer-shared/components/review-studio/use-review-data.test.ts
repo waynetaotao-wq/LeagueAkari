@@ -125,6 +125,21 @@ beforeEach(() => {
 })
 
 describe('review data lifecycle', () => {
+  it('keeps a failed refresh reviewable, but never presents the previous game after an unavailable selection', async () => {
+    fake.load
+      .mockResolvedValueOnce({ ok: true, match: match(1) })
+      .mockResolvedValueOnce({ ok: false, failure: { reason: 'offline' } })
+    const { scope, data } = setup()
+    await data.loadMatch(1)
+    await data.loadMatch(1, true)
+    expect(data.selectedMatch.value?.meta.gameId).toBe(1)
+    expect(data.error.value).toBe('offline')
+    useSgpStore().isTokenReady = false
+    await nextTick()
+    await data.loadMatch(2)
+    expect(data.selectedMatch.value).toBeNull()
+    scope.stop()
+  })
   it('archives completed games under the captured old account when an incomplete batch is cancelled', async () => {
     fake.scan.mockResolvedValue({
       summaries: [summary(2), summary(1)],

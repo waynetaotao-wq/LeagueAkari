@@ -10,7 +10,16 @@
             {{ reviewPercent(stats.winRate) }} · 所有差值均相对同位置对手
           </div>
         </div>
-        <NTag v-if="stats.games < 10" type="warning" size="small" :bordered="false">样本较少</NTag>
+        <div class="matchup-tools">
+          <NTag v-if="stats.games < 10" type="warning" size="small" :bordered="false">样本较少</NTag
+          ><NSelect
+            v-model:value="sort"
+            size="small"
+            :options="sortOptions"
+            :aria-label="t('sortLabel')"
+            class="w-40!"
+          />
+        </div>
       </div>
       <div class="metric-grid">
         <ReviewMetricCard label="10 分钟平均经济差" :metric="stats.gold10" />
@@ -22,8 +31,9 @@
         均值只使用该项有效快照，缺失数据不会记作
         0。可展开每个对位检查分布、阶段变化、原始对局和个人笔记。
       </div>
+      <NAlert v-if="mixedEnvironment" type="info" :show-icon="false">{{ t('mixed') }}</NAlert>
       <NCollapse accordion>
-        <NCollapseItem v-for="group in groups" :key="groupKey(group)" :name="groupKey(group)">
+        <NCollapseItem v-for="group in sortedGroups" :key="groupKey(group)" :name="groupKey(group)">
           <template #header>
             <div class="matchup-header">
               <ChampionIcon
@@ -42,8 +52,12 @@
                 >
               </div>
               <div class="matchup-preview">
-                <span>10 分钟 {{ reviewSigned(group.gold10.mean) }}</span
-                ><span>15 分钟 {{ reviewSigned(group.gold15.mean) }}</span>
+                <NText :type="reviewValueTone(group.gold10.mean)"
+                  >10 分钟 {{ reviewSigned(group.gold10.mean) }}</NText
+                >
+                <NText :type="reviewValueTone(group.gold15.mean)"
+                  >15 分钟 {{ reviewSigned(group.gold15.mean) }}</NText
+                >
               </div>
               <NTag v-if="group.games < 10" type="warning" size="tiny" :bordered="false"
                 >少量样本</NTag
@@ -89,21 +103,44 @@
 <script setup lang="ts">
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
-import { NCollapse, NCollapseItem, NEmpty, NTag } from 'naive-ui'
-import { computed } from 'vue'
+import { useTranslation } from 'i18next-vue'
+import { NAlert, NCollapse, NCollapseItem, NEmpty, NSelect, NTag, NText } from 'naive-ui'
+import { computed, ref } from 'vue'
 
 import ReviewHistory from './ReviewHistory.vue'
 import ReviewMetricCard from './ReviewMetricCard.vue'
 import ReviewNote from './ReviewNote.vue'
 import ReviewTrend from './ReviewTrend.vue'
 import { reviewPercent, reviewSigned } from './review-display'
+import { reviewValueTone } from './review-insights'
 import { groupReviewMatchups, summarizeReviewMatches } from './statistics'
 import type { ReviewMatch, ReviewMatchupGroup } from './types'
 
 const props = defineProps<{ matches: ReviewMatch[]; puuid: string; sgpServerId: string }>()
 const emit = defineEmits<{ open: [gameId: number] }>()
 const resources = useAkariResourceProvider()
+const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
+const sort = ref('games')
+const sortOptions = computed(() => [
+  { label: t('sortGames'), value: 'games' },
+  { label: t('sortDeficit'), value: 'deficit' },
+  { label: t('sortRecent'), value: 'recent' }
+])
 const groups = computed(() => groupReviewMatchups(props.matches))
+const sortedGroups = computed(() =>
+  [...groups.value].sort((a, b) =>
+    sort.value === 'deficit'
+      ? (a.gold15.mean ?? Infinity) - (b.gold15.mean ?? Infinity)
+      : sort.value === 'recent'
+        ? b.matches[0].meta.gameCreation - a.matches[0].meta.gameCreation
+        : b.games - a.games
+  )
+)
+const mixedEnvironment = computed(
+  () =>
+    new Set(props.matches.map((match) => match.meta.queueId)).size > 1 ||
+    new Set(props.matches.map((match) => match.meta.patch)).size > 1
+)
 const stats = computed(() => summarizeReviewMatches(props.matches))
 const groupKey = (group: ReviewMatchupGroup) =>
   `${group.championId}:${group.position}:${group.opponentChampionId ?? 'unknown'}`
@@ -128,8 +165,8 @@ const groupKey = (group: ReviewMatchupGroup) =>
   margin-bottom: 4px;
 }
 .section-hint {
-  font-size: 11px;
-  opacity: 0.6;
+  font-size: 12px;
+  opacity: 0.75;
   line-height: 1.7;
 }
 .metric-grid {
@@ -155,9 +192,13 @@ const groupKey = (group: ReviewMatchupGroup) =>
 .matchup-preview {
   display: flex;
   gap: 18px;
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  opacity: 0.7;
+}
+.matchup-tools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 .matchup-body {
   display: flex;

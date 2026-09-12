@@ -10,6 +10,7 @@ import ongoingGameEn from '@shared/i18n/en/renderer/ongoing-game.yaml'
 import opggEn from '@shared/i18n/en/renderer/opgg.yaml'
 import playerEn from '@shared/i18n/en/renderer/player.yaml'
 import rankedEn from '@shared/i18n/en/renderer/ranked.yaml'
+import reviewStudioEn from '@shared/i18n/en/renderer/review-studio.yaml'
 import settingsEn from '@shared/i18n/en/renderer/settings.yaml'
 import shellEn from '@shared/i18n/en/renderer/shell.yaml'
 import toolkitEn from '@shared/i18n/en/renderer/toolkit.yaml'
@@ -25,6 +26,7 @@ import ongoingGameZhCN from '@shared/i18n/zh-CN/renderer/ongoing-game.yaml'
 import opggZhCN from '@shared/i18n/zh-CN/renderer/opgg.yaml'
 import playerZhCN from '@shared/i18n/zh-CN/renderer/player.yaml'
 import rankedZhCN from '@shared/i18n/zh-CN/renderer/ranked.yaml'
+import reviewStudioZhCN from '@shared/i18n/zh-CN/renderer/review-studio.yaml'
 import settingsZhCN from '@shared/i18n/zh-CN/renderer/settings.yaml'
 import shellZhCN from '@shared/i18n/zh-CN/renderer/shell.yaml'
 import toolkitZhCN from '@shared/i18n/zh-CN/renderer/toolkit.yaml'
@@ -52,6 +54,7 @@ const rendererEn = mergeRendererResources(
   automationEn,
   leagueClientEn,
   rankedEn,
+  reviewStudioEn,
   matchCardEn,
   playerEn,
   toolkitEn,
@@ -69,6 +72,7 @@ const rendererZhCN = mergeRendererResources(
   automationZhCN,
   leagueClientZhCN,
   rankedZhCN,
+  reviewStudioZhCN,
   matchCardZhCN,
   playerZhCN,
   toolkitZhCN,

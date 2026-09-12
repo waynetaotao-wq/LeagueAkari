@@ -35,9 +35,11 @@ vi.mock('naive-ui', async () => {
   const result: Record<string, Component | (() => unknown)> = {}
   for (const name of [
     'NButton',
+    'NAlert',
     'NCard',
     'NCheckbox',
-    'NDivider',
+    'NCollapse',
+    'NCollapseItem',
     'NEmpty',
     'NRadioButton',
     'NRadioGroup',
@@ -62,6 +64,7 @@ vi.mock('naive-ui', async () => {
 vi.mock('@renderer-shared/providers/akari-resource', () => ({
   useAkariResourceProvider: () => ({ champions: { name: (id: number) => `英雄 ${id}` } })
 }))
+vi.mock('i18next-vue', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 vi.mock('@renderer-shared/components/widgets/ChampionIcon.vue', () => ({
   default: { props: ['championId'], render: () => null }
 }))

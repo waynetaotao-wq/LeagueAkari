@@ -1,6 +1,11 @@
 import type { SgpGameDetailsLol, SgpGameSummaryLol } from '@shared/types/sgp/match-history'
 
-import { getReviewSummaryEligibility, normalizeReviewPosition, parseReviewMatch } from './analysis'
+import {
+  getReviewPatch,
+  getReviewSummaryEligibility,
+  normalizeReviewPosition,
+  parseReviewMatch
+} from './analysis'
 import type { ReviewFilter, ReviewMatch, ReviewPosition } from './types'
 
 export interface ReviewIdentity {
@@ -141,6 +146,10 @@ export class ReviewMatchCache {
       this.entries.delete(this.entries.keys().next().value!)
     }
   }
+
+  delete(identity: ReviewIdentity, gameId: number) {
+    this.entries.delete(this.key(identity, gameId))
+  }
 }
 
 const sharedPool = new ReviewRequestPool()
@@ -173,10 +182,7 @@ export function getReviewCandidate(
         ? opponents[0].championId
         : null,
     queueId: summary.json.queueId,
-    patch:
-      typeof summary.json.gameVersion === 'string'
-        ? summary.json.gameVersion.split('.').slice(0, 2).join('.')
-        : '',
+    patch: getReviewPatch(summary.json.gameVersion),
     gameCreation: summary.json.gameCreation,
     win: self.win
   }
@@ -272,11 +278,13 @@ export function createReviewDataLoader(
     refresh = false
   ) {
     assertReviewNotAborted(signal)
+    if (refresh) cache.delete(identity, gameId)
     const cached = refresh ? null : cache.get(identity, gameId)
     if (cached) return { ok: true as const, match: cached }
     try {
       const actualSummary =
-        summary ?? (await pool.run(signal, () => api.summary(identity, gameId, signal)))
+        (!refresh && summary) ||
+        (await pool.run(signal, () => api.summary(identity, gameId, signal)))
       if (actualSummary?.json?.gameId !== gameId) {
         return {
           ok: false as const,

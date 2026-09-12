@@ -24,6 +24,12 @@ export const REVIEW_SNAPSHOT_TOLERANCE_MS = 10_000
 export const REVIEW_MAX_FRAME_GAP_MS = 75_000
 export const REVIEW_ALLOWED_QUEUES = [420, 440, 400, 430, 490] as const
 
+export function getReviewPatch(version: unknown): string {
+  return typeof version === 'string'
+    ? version.trim().split('.').slice(0, 2).join('.') || '未知'
+    : '未知'
+}
+
 const finite = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value)
 const nonnegative = (value: unknown): number | null => (finite(value) && value >= 0 ? value : null)
@@ -270,63 +276,71 @@ function buildMoments(match: ReviewMatch): ReviewMoment[] {
     match.events
       .filter((event) => event.timestamp >= start && event.timestamp <= end)
       .map((event) => event.id)
-  for (const death of deaths) {
-    if (death.shutdownBounty !== null && death.shutdownBounty > 0) {
-      candidates.push({
-        id: `shutdown-${death.id}`,
-        kind: 'shutdown',
-        title: '送出终结赏金',
-        description: `这次死亡送出额外 ${death.shutdownBounty} 金币终结赏金，可结合录像检查当时的风险。`,
-        start: Math.max(0, death.timestamp - 30_000),
-        end: Math.min(match.meta.gameDuration * 1000, death.timestamp + 30_000),
-        eventIds: [death.id],
-        scope: null,
-        before: null,
-        after: null,
-        priority: 100 + death.shutdownBounty / 100
-      })
-    }
-    const subsequent = deaths.filter(
-      (event) => event.timestamp >= death.timestamp && event.timestamp <= death.timestamp + 180_000
-    )
-    if (subsequent.length >= 2) {
-      candidates.push({
-        id: `deaths-${death.id}`,
-        kind: 'repeated-deaths',
-        title: '短时间连续死亡',
-        description: `3 分钟内记录到 ${subsequent.length} 次死亡，建议复查复活后的路线和进场时机。`,
-        start: Math.max(0, death.timestamp - 30_000),
-        end: subsequent[subsequent.length - 1].timestamp,
-        eventIds: subsequent.map((event) => event.id),
-        scope: null,
-        before: null,
-        after: null,
-        priority: 70 + subsequent.length
-      })
-    }
+  // 每次死亡只属于一组，时间窗锚定该组首个死亡，避免重叠链蔓延到整局。
+  for (let index = 0; index < deaths.length;) {
+    const death = deaths[index]
+    const sequence = deaths
+      .slice(index)
+      .filter((event) => event.timestamp <= death.timestamp + 180_000)
+    index += sequence.length
+    const bounty = sequence.reduce((sum, event) => sum + (event.shutdownBounty ?? 0), 0)
     const objectives = match.events.filter(
       (event) =>
         event.type !== 'kill' &&
         event.teamId !== null &&
         event.teamId !== match.meta.teamId &&
-        event.timestamp > death.timestamp &&
-        event.timestamp <= death.timestamp + 90_000
+        sequence.some(
+          (ownDeath) =>
+            event.timestamp > ownDeath.timestamp && event.timestamp <= ownDeath.timestamp + 90_000
+        )
     )
-    if (objectives.length) {
-      candidates.push({
-        id: `objective-${death.id}`,
-        kind: 'death-objective',
-        title: '死亡后出现敌方资源事件',
-        description: `本次死亡后 90 秒内，记录到敌方 ${objectives.length} 次建筑或大型野怪事件。时间先后仅供复盘，不代表因果。`,
-        start: death.timestamp,
-        end: objectives[objectives.length - 1].timestamp,
-        eventIds: [death.id, ...objectives.map((event) => event.id)],
-        scope: null,
-        before: null,
-        after: null,
-        priority: 60 + objectives.length
-      })
-    }
+    if (!bounty && sequence.length < 2 && !objectives.length) continue
+    const kind =
+      bounty > 0 ? 'shutdown' : sequence.length >= 2 ? 'repeated-deaths' : 'death-objective'
+    const facts: string[] = []
+    if (bounty > 0)
+      facts.push(
+        sequence.length === 1
+          ? `这次死亡送出额外 ${bounty} 金币终结赏金，可结合录像检查当时的风险。`
+          : `这组死亡已记录的额外终结赏金合计 ${bounty} 金币。`
+      )
+    if (sequence.length >= 2)
+      facts.push(`3 分钟内记录到 ${sequence.length} 次死亡，建议复查复活后的路线和进场时机。`)
+    if (objectives.length)
+      facts.push(
+        `这些死亡中至少一次死亡后的 90 秒内，记录到敌方 ${objectives.length} 次建筑或大型野怪事件。时间先后仅供复盘，不代表因果。`
+      )
+    candidates.push({
+      id: `${kind}-${death.id}`,
+      kind,
+      title:
+        kind === 'shutdown'
+          ? '送出终结赏金'
+          : kind === 'repeated-deaths'
+            ? '短时间连续死亡'
+            : '死亡后出现敌方资源事件',
+      description: facts.join(' '),
+      start: Math.max(0, death.timestamp - (kind === 'death-objective' ? 0 : 30_000)),
+      end: Math.min(
+        match.meta.gameDuration * 1000,
+        Math.max(
+          sequence.at(-1)!.timestamp + (sequence.length === 1 && bounty > 0 ? 30_000 : 0),
+          objectives.at(-1)?.timestamp ?? 0
+        )
+      ),
+      eventIds: [...sequence, ...objectives]
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .map((event) => event.id),
+      scope: null,
+      before: null,
+      after: null,
+      priority:
+        bounty > 0
+          ? 100 + bounty / 100
+          : sequence.length >= 2
+            ? 70 + sequence.length
+            : 60 + objectives.length
+    })
   }
   for (const scope of ['personal', 'team'] as const) {
     const key = scope === 'personal' ? 'personalGoldDiff' : 'teamGoldDiff'
@@ -334,7 +348,7 @@ function buildMoments(match: ReviewMatch): ReviewMoment[] {
     for (let i = 0; i < match.frames.length; i++) {
       const start = match.frames[i]
       const before = start[key]
-      if (before === null || before <= 0) continue
+      if (before === null) continue
       for (let j = i + 1; j < match.frames.length; j++) {
         const end = match.frames[j]
         if (end.timestamp - start.timestamp > 300_000) break
@@ -346,19 +360,20 @@ function buildMoments(match: ReviewMatch): ReviewMoment[] {
           break
         if (end.timestamp - start.timestamp < 120_000) continue
         const after = end[key]!
-        if (before - after < threshold) continue
+        const gain = after - before >= threshold && after > 0
+        if (!gain && !(before > 0 && before - after >= threshold)) continue
         candidates.push({
           id: `swing-${scope}-${start.timestamp}-${end.timestamp}`,
-          kind: 'gold-swing',
-          title: scope === 'personal' ? '对位经济优势明显缩水' : '团队经济优势明显缩水',
-          description: `${scope === 'personal' ? '对位' : '团队'}经济差在这段时间减少 ${Math.round(before - after)} 金币；相关事件供定位录像，不能单独证明原因。`,
+          kind: gain ? 'gold-gain' : 'gold-swing',
+          title: `${scope === 'personal' ? '对位' : '团队'}经济${gain ? '建立或扩大优势' : '优势明显缩水'}`,
+          description: `${scope === 'personal' ? '对位' : '团队'}经济差在这段时间${gain ? '增加' : '减少'} ${Math.round(Math.abs(before - after))} 金币；相关事件供定位录像，不能单独证明原因。`,
           start: start.timestamp,
           end: end.timestamp,
           eventIds: eventIdsIn(start.timestamp, end.timestamp),
           scope,
           before,
           after,
-          priority: 40 + Math.min(20, (before - after) / threshold)
+          priority: 40 + Math.min(20, Math.abs(before - after) / threshold)
         })
       }
     }
@@ -376,7 +391,9 @@ function buildMoments(match: ReviewMatch): ReviewMoment[] {
         )
         const shorter = Math.min(other.end - other.start, candidate.end - candidate.start)
         return (
+          candidate.scope !== null &&
           candidate.kind === other.kind &&
+          candidate.scope === other.scope &&
           (overlap / Math.max(1, shorter) >= 0.6 ||
             candidate.eventIds.some((id) => other.eventIds.includes(id)))
         )
@@ -536,10 +553,7 @@ export function parseReviewMatch(
       gameCreation: summary.json.gameCreation,
       gameDuration: summary.json.gameDuration,
       queueId: summary.json.queueId,
-      patch:
-        typeof summary.json.gameVersion === 'string'
-          ? summary.json.gameVersion.split('.').slice(0, 2).join('.') || '未知'
-          : '未知',
+      patch: getReviewPatch(summary.json.gameVersion),
       championId: self.championId,
       position: self.position,
       participantId: self.participantId,

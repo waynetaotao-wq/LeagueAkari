@@ -1,70 +1,90 @@
 <template>
   <div class="metric-card">
     <div class="metric-label">{{ label }}</div>
-    <div class="metric-value">
-      {{ reviewSigned(metric.mean, digits)
-      }}<span v-if="unit && metric.mean !== null" class="metric-unit">{{ unit }}</span>
-    </div>
-    <div class="metric-detail">
-      {{ metric.samples }} 场有效 · 范围 {{ reviewSigned(metric.min, digits) }} ～
-      {{ reviewSigned(metric.max, digits) }}
-    </div>
-    <NTooltip trigger="hover">
+    <NText :type="reviewValueTone(metric.mean)" strong class="metric-value"
+      >{{ reviewSigned(metric.mean, digits)
+      }}<span v-if="unit && metric.mean !== null" class="metric-unit">{{ unit }}</span></NText
+    >
+    <div class="metric-detail">{{ t('sampleCount', { count: metric.samples }) }}</div>
+    <NPopover trigger="click">
       <template #trigger
-        ><div class="metric-detail">
-          标准差
-          {{
-            metric.standardDeviation === null
-              ? '—'
-              : metric.standardDeviation.toLocaleString('zh-CN', { maximumFractionDigits: digits })
-          }}
-        </div></template
+        ><NButton text size="tiny" class="distribution-button">{{
+          t('statsDetails')
+        }}</NButton></template
       >
-      标准差反映这些对局之间的离散程度，不是均值误差或置信区间；少于 2 场不计算。
-    </NTooltip>
+      <div class="distribution">
+        <NText>{{
+          t('range', {
+            min: reviewSigned(metric.min, digits),
+            max: reviewSigned(metric.max, digits)
+          })
+        }}</NText>
+        <NText>{{
+          t('deviation', {
+            value:
+              metric.standardDeviation === null
+                ? '—'
+                : metric.standardDeviation.toLocaleString('zh-CN', {
+                    maximumFractionDigits: digits
+                  })
+          })
+        }}</NText>
+        <NText depth="3" class="text-xs">{{ t('deviationHint') }}</NText>
+      </div>
+    </NPopover>
   </div>
 </template>
 
 <script setup lang="ts">
-import { NTooltip } from 'naive-ui'
+import { useTranslation } from 'i18next-vue'
+import { NButton, NPopover, NText } from 'naive-ui'
 
 import { reviewSigned } from './review-display'
+import { reviewValueTone } from './review-insights'
 import type { ReviewMetric } from './types'
 
 withDefaults(
   defineProps<{ label: string; metric: ReviewMetric; digits?: number; unit?: string }>(),
   { digits: 0, unit: '' }
 )
+const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
 </script>
 
 <style scoped>
 .metric-card {
   min-width: 0;
-  padding: 12px;
-  border: 1px solid rgb(var(--la-card-border-rgb) / 0.09);
-  border-radius: 6px;
-  background: rgb(var(--la-card-tint-rgb) / 0.035);
+  padding: 16px;
+  border: 1px solid rgb(var(--la-card-border-rgb) / 0.1);
+  border-radius: 10px;
+  background: rgb(var(--la-card-tint-rgb) / 0.025);
 }
 .metric-label {
   font-size: 12px;
-  opacity: 0.65;
+  margin-bottom: 6px;
 }
 .metric-value {
-  margin: 3px 0 5px;
-  font-size: 23px;
-  font-weight: 600;
+  display: block;
+  margin-bottom: 5px;
+  font-size: 27px;
   font-variant-numeric: tabular-nums;
 }
 .metric-unit {
   margin-left: 4px;
   font-size: 12px;
   font-weight: 400;
-  opacity: 0.6;
 }
 .metric-detail {
-  font-size: 11px;
-  opacity: 0.55;
+  font-size: 12px;
   line-height: 1.7;
-  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+.distribution-button {
+  margin-top: 8px;
+}
+.distribution {
+  display: flex;
+  max-width: 280px;
+  flex-direction: column;
+  gap: 8px;
 }
 </style>

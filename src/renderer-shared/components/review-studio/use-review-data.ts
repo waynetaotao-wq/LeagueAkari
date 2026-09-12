@@ -135,7 +135,7 @@ export function useReviewData(options: {
   const error = ref('')
   const busy = computed(() => progress.value.phase !== 'idle')
   let summaries = new Map<number, SgpGameSummaryLol>()
-  let historyReady = false
+  const historyReady = ref(false)
   let historyScanned = 0
   let historySkipped = 0
   let historyTruncated = false
@@ -227,7 +227,7 @@ export function useReviewData(options: {
     progress.value.target = 500
     const result = await loader.scanHistory(run.target, run.signal, (scanned, skipped, partial) => {
       if (!run.current()) return
-      historyReady = true
+      historyReady.value = true
       historyScanned = scanned
       historySkipped = skipped
       historyTruncated = true
@@ -237,7 +237,7 @@ export function useReviewData(options: {
     })
     if (!run.current()) return false
     updateSummaries(result.summaries)
-    historyReady = true
+    historyReady.value = true
     progress.value.scanned = result.scanned
     progress.value.skipped = result.skipped
     progress.value.truncated = result.truncated
@@ -310,7 +310,7 @@ export function useReviewData(options: {
     const run = begin('timelines')
     if (!run) return
     try {
-      if (!historyReady && !(await scanInto(run))) return
+      if (!historyReady.value && !(await scanInto(run))) return
       if (!run.current()) return
       const eligible = candidates.value.filter((candidate) =>
         matchesReviewCandidate(candidate, filter)
@@ -330,9 +330,10 @@ export function useReviewData(options: {
   }
 
   async function loadMatch(gameId: number, refresh = false) {
+    if (selectedMatch.value?.meta.gameId !== gameId) selectedMatch.value = null
     const run = begin('single')
     if (!run) return null
-    selectedMatch.value = null
+    if (refresh) summaries.delete(gameId)
     progress.value.target = 1
     try {
       const result = await loader.loadMatch(
@@ -346,6 +347,10 @@ export function useReviewData(options: {
       progress.value.attempted = 1
       if (result.ok) {
         selectedMatch.value = result.match
+        if (refresh)
+          candidates.value = candidates.value.map((candidate) =>
+            candidate.gameId === gameId ? result.match.meta : candidate
+          )
         matches.value = matches.value.map((match) =>
           match.meta.gameId === gameId ? result.match : match
         )
@@ -396,7 +401,7 @@ export function useReviewData(options: {
       selectedMatch.value = null
       failures.value = []
       error.value = ''
-      historyReady = false
+      historyReady.value = false
       historyScanned = 0
       historySkipped = 0
       historyTruncated = false
@@ -429,6 +434,7 @@ export function useReviewData(options: {
   return {
     availability,
     candidates,
+    historyReady,
     matches,
     selectedMatch,
     archivedMatches,
