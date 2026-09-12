@@ -95,7 +95,16 @@ export class ChampionDataMain implements IAkariShardInitDispose {
       opggApi,
       web: this._opggWebHttpClient
     })
-    this._sourceLoader = new ChampionDataMainSourceLoader(this._logger, opggApi, qq101Api, lolpsApi)
+    this._sourceLoader = new ChampionDataMainSourceLoader(
+      this._logger,
+      opggApi,
+      qq101Api,
+      lolpsApi,
+      {
+        http: this._opggWebHttpClient,
+        getSlug: (id) => this._counterIntel.getChampionSlug(id)
+      }
+    )
     this._context = {
       namespace: ChampionDataMain.id,
       logger: this._logger,

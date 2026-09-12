@@ -42,7 +42,7 @@ export const CHAMPION_DATA_CAPABILITIES: Readonly<
     {
       mode: 'aram_mayhem',
       filters: [],
-      features: ['champion-overview', 'champion-summary', 'champion-augments']
+      features: ['champion-overview', 'champion-summary', 'champion-augments', 'item-builds']
     },
     {
       mode: 'arena',

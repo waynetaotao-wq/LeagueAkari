@@ -163,6 +163,8 @@ export interface OpggChampionBuildData {
 }
 
 export interface OpggBuildPickItem {
+  /** Recommendation without source-supported statistical values (e.g. Mayhem pages). */
+  is_recommendation_only?: boolean
   ids: number[]
   win: number
   play: number
@@ -325,10 +327,11 @@ export interface OpggAramMayhemChampionAugmentsResponse {
 }
 
 export interface OpggAramMayhemChampionAugmentItem {
+  display?: import('@shared/data-adapter/champion-data').ChampionAugment['display']
   id: number
   tier: number | null
-  performance: number
-  popular: number
+  performance: number | null
+  popular: number | null
 }
 
 export interface OpggTiersResponse {

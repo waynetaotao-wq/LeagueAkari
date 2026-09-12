@@ -42,6 +42,8 @@ export const BZ_SUMMARY_ZH = {
   fizz: '带着骨镀层再换血。\n\n时刻提防他的 E，靠这招他连塔下都能跟你换。\n\n没把握就出海克斯饮魔刀，对小鱼人非常硬。',
   galio:
     '全程拉开距离打，你后期更强、短换血也占优。\n\n加里奥想 E 你时反向 WEQ。\n\n补刀别落下——劫只要在经济经验上跟加里奥打平，单挑就是赢。',
+  garen:
+    '注意别进入盖伦 Q 接 E 的连招距离。\n\n他比较容易被拉扯，始终保持距离，早买鞋子很有帮助。\n\n他的 W 冷却和劫的 W 大致相同，所以很难击杀；尽量反复触发先攻。\n\n用劫的大招二段拉开足够距离，可以打断他大招的施法。',
   gragas:
     '最大射程站位躲他的 Q。\n\n记住他回复很高。\n\n小心他 E 起手的一波连招。\n\n他 E 没交时避免开大。',
   hwei: '始终对彗保持距离，避免触发他的被动。\n\n时刻注意他的紫色系技能（E）——E 进 CD 就是你的进场窗口。\n\n带净化非常适合强开一波，哪怕他 E 还在手。',
@@ -71,6 +73,8 @@ export const BZ_SUMMARY_ZH = {
   mel: '想用 WEQ 消耗时，打完永远往回走——这样就算 Q 命中，她的反弹也打不到你。\n\n她没 E 时你可以开大贴脸平 A，她一慌交 W，你的 Q 就到账了。',
   naafiri:
     '别双 Q 全吃，只中一发问题不大。\n\n全程用射程打，你优势巨大。\n\n她 W 在手时避免开大。\n\n6 级后永远反向连招，提防她的一波。',
+  nasus:
+    '内瑟斯后期会明显强于你。\n\n前期以触发先攻、尽量补刀为主。\n\n没有 W 就别上前，否则他很容易用枯萎减速后追着你打。\n\n即使你领先，也很难单杀他；以发育为主，配合队友一起处理他。',
   neeko:
     '前期非常烦人。\n\n小心她伪装成小兵。\n\n格外当心她的 E——穿过单位后禁锢时间会变得很长。\n\n卡好时机，你的大招可以躲她的大招。',
   orianna:
@@ -123,7 +127,7 @@ export const BZ_SUMMARY_ZH = {
 export type BzSummaryKey = keyof typeof BZ_SUMMARY_ZH
 
 /**
- * 2026-08-30 从 Bz 公开 CSV 的 61 条 Summary 生成的内容指纹。
+ * 2026-09-12 校对 Bz 公开 CSV 的 63 条 Summary，新增 Garen / Nasus。
  * 来源：Google Sheet 1FInDZ2JhIyto2y-FnCcgCVlAYcjRaF7egcpsV41Spic，gid 1026317672。
  * 指纹只忽略 Unicode 兼容形式和空白排版差异；文字内容改变即不再沿用旧翻译。
  */
@@ -145,6 +149,7 @@ export const BZ_SUMMARY_FINGERPRINTS = {
   ekko: 'e7912d7c384fbc3d',
   fizz: '56fb9976b8636949',
   galio: '52e2a37d09d7874d',
+  garen: '0f81c84483fb929b',
   gragas: 'e77a20f2ff0e3f7a',
   hwei: '389ca2ccede5bd9b',
   irelia: 'e3a71edc19a79b42',
@@ -162,6 +167,7 @@ export const BZ_SUMMARY_FINGERPRINTS = {
   malphite: '9f379e547e0dbbe9',
   mel: '5099e8eb3d1e95f3',
   naafiri: 'b01760f8c0bdad18',
+  nasus: '7ddc319fc6844a78',
   neeko: 'b1845d26e910b71d',
   orianna: '66712ff4f6547d82',
   panth: 'adce6fbd2d4f8059',
@@ -222,7 +228,7 @@ export function getBzSummaryZh(championNameInSheet: string, summaryInSheet: stri
 // ==================== 召唤师技能与出门装（图片人工识别，一次性写死） ====================
 //
 // 表内该列为图片单元格（CSV 拿不到），已逐屏人工识别 61 行写死于此；
-// 此两项 Bz 基本不改动，不参与自动跟更。表新增英雄行（词典无键）时返回 null 不显示。
+// 不能通过 CSV 验证图片是否变更，必须标注历史补充。新增翻译不代表图片已校对。
 
 export interface BzExtras {
   /** 出门装 itemId（多兰剑 1055 / 多兰盾 1054） */
@@ -232,6 +238,14 @@ export interface BzExtras {
 }
 
 const BZ_EXTRAS_DEFAULT: BzExtras = { starterItemId: 1055, spellIds: [4, 14] }
+
+const BZ_EXTRAS_VERIFIED_CHAMPIONS = new Set(
+  `ahri akali akshan ambessa annie anivia aurora aurelion azir brand cassio chogath corki
+  diana ekko fizz galio gragas hwei irelia jayce kassadin karma katarina kayle kennen
+  leblanc lissandr locke lux malzaha malphite mel naafiri neeko orianna panth qiyana
+  riven ryze seraphin smolder swain sylas syndra taliyah talon trist trynd twisted
+  veigar velkoz vex viktor vladimir xerath yasuo yone ziggs zoe zyra`.split(/\s+/)
+)
 
 /**
  * 与默认不同的行（以用户逐行人工校对为准）：
@@ -251,10 +265,10 @@ const BZ_EXTRAS_EXCEPTIONS: Record<string, BzExtras> = {
   trynd: { starterItemId: 1055, spellIds: [4, 12] }
 }
 
-/** 查询：仅对已识别过的 61 行返回（键与词典同口径）；表新行返回 null */
+/** 查询：仅对历史图片已识别的 61 行返回；新翻译/新表行不会生成默认配置。 */
 export function getBzExtras(championNameInSheet: string): BzExtras | null {
   const key = bzNormalizeName(championNameInSheet)
-  if (!Object.hasOwn(BZ_SUMMARY_ZH, key)) return null
+  if (!BZ_EXTRAS_VERIFIED_CHAMPIONS.has(key)) return null
   return BZ_EXTRAS_EXCEPTIONS[key] ?? BZ_EXTRAS_DEFAULT
 }
 

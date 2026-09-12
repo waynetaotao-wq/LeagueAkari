@@ -1,7 +1,4 @@
-import {
-  type BzExtras,
-  getBzExtras
-} from '@renderer-shared/components/ongoing-game-panel/widgets/player-info-card/bz-summary-zh'
+import type { BzExtras } from '@renderer-shared/components/ongoing-game-panel/widgets/player-info-card/bz-summary-zh'
 
 export type BzOverlaySection = 'summoner_spells' | 'starter_items' | 'core_items' | 'runes'
 
@@ -9,6 +6,7 @@ export type BzRuneFilterStatus =
   'not-requested' | 'missing-runes' | 'no-match' | 'already-matched' | 'filtered'
 
 export interface BzOverlayRecommendation {
+  stale?: boolean
   champion?: string
   coreItemIds?: readonly number[]
   coreItemBuilds?: readonly (readonly number[])[]
@@ -161,14 +159,6 @@ function promoteRows(
   }
 }
 
-function resolveExtras(
-  bz: BzOverlayRecommendation,
-  extras: Readonly<BzExtras> | null | undefined
-): Readonly<BzExtras> | null {
-  if (extras !== undefined) return extras
-  return bz.champion ? getBzExtras(bz.champion) : null
-}
-
 /**
  * Adds Bz recommendations to an OP.GG-shaped matchup overlay without mutating either input.
  * Existing rows retain their real statistics; only synthesized rows receive the Bz marker.
@@ -183,7 +173,7 @@ export function mergeBzIntoOverlay(
   const sections: BzOverlaySection[] = []
   let runeFilterStatus: BzRuneFilterStatus = 'not-requested'
 
-  if (!bz) {
+  if (!bz || bz.stale) {
     return {
       overlay: overlay ? base : null,
       sections,
@@ -191,7 +181,7 @@ export function mergeBzIntoOverlay(
     }
   }
 
-  const resolvedExtras = resolveExtras(bz, extras)
+  const resolvedExtras = extras ?? null
   if (resolvedExtras) {
     const spellIds = validIds(resolvedExtras.spellIds, 2)
     if (spellIds) {

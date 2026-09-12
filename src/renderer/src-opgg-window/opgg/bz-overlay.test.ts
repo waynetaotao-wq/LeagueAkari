@@ -98,8 +98,13 @@ describe('mergeBzIntoOverlay', () => {
     ])
   })
 
-  it('resolves the handwritten spell and starter recommendations from the champion name', () => {
-    const result = mergeBzIntoOverlay(null, { champion: 'Ahri' })
+  it('uses historical spell and starter recommendations only when explicitly supplied', () => {
+    expect(mergeBzIntoOverlay(null, { champion: 'Ahri' }).overlay).toBeNull()
+    const result = mergeBzIntoOverlay(
+      null,
+      { champion: 'Ahri' },
+      { spellIds: [4, 14], starterItemId: 1055 }
+    )
 
     expect(result.sections).toEqual(['summoner_spells', 'starter_items'])
     expect(result.overlay).toMatchObject({
@@ -172,5 +177,16 @@ describe('mergeBzIntoOverlay', () => {
       sections: [],
       runeFilterStatus: 'missing-runes'
     })
+  })
+
+  it('never replaces current builds with a stale Bz table', () => {
+    const overlay = { core_items: [{ ids: [3000, 3001], play: 20, win: 10, pick_rate: 0.5 }] }
+    expect(
+      mergeBzIntoOverlay(overlay, {
+        stale: true,
+        coreItemBuilds: [[4000, 4001]],
+        keystonePerkId: 8112
+      })
+    ).toMatchObject({ overlay, sections: [] })
   })
 })

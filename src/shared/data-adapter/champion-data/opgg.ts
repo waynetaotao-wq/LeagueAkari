@@ -238,7 +238,7 @@ export function adaptOpggChampionDetails(
             })
           }
         : {}),
-      ...(supports('item-builds')
+      ...(supports('item-builds') && options.mode !== 'aram_mayhem'
         ? {
             itemBuilds: [
               { slot: 'starting' as const, options: buildOptions(data.starter_items) },

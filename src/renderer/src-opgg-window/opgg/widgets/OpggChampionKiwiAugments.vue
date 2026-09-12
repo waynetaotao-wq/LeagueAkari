@@ -3,13 +3,28 @@
     class="@container mb-1 rounded border border-black/10 p-2 last:mb-0 dark:border-[#37373c]"
     v-if="augments && Object.keys(augments).length"
   >
+    <NInput
+      v-model:value="augmentSearch"
+      size="small"
+      clearable
+      :placeholder="t('opgg.champion.searchAugments')"
+      class="mb-2"
+    />
+    <div v-if="effectiveSource === 'qq101'" class="mb-2 text-xs text-gray-500">
+      {{ t('opgg.champion.qqMayhemAugmentScope') }}
+    </div>
+    <div v-if="unnamedCount" class="mb-2 text-xs text-gray-500">
+      {{ t('opgg.champion.unnamedAugments', { count: unnamedCount }) }}
+    </div>
     <NTabs v-model:value="augmentTab" size="small" :animated="false">
       <NTabPane v-for="group of augments" :key="group.rarity" :name="group.rarity">
         <template #tab>
-          <span class="text-xs font-bold">{{ group.rarityName }}</span>
+          <span class="text-xs font-bold"
+            >{{ group.rarityName }} · {{ group.augments.length }}</span
+          >
         </template>
 
-        <div class="my-2 flex items-center gap-2">
+        <div class="my-2 flex flex-wrap items-center gap-2">
           <NCheckbox size="small" v-model:checked="showAdvancedStats">
             {{ t('opgg.champion.showAdvancedStats') }}
           </NCheckbox>
@@ -35,7 +50,10 @@
         >
           <div
             class="flex h-8 min-w-0 items-center gap-1"
-            v-for="(a, i) of group.augments.slice(0, isAugmentsExpanded ? Infinity : 16)"
+            v-for="(a, i) of group.augments
+              .filter(matchesSearch)
+              .slice(0, isAugmentsExpanded || augmentSearch.trim() ? Infinity : 16)"
+            :key="a.id"
           >
             <!-- name -->
             <div class="min-w-6 shrink-0 text-[10px] text-[#666666] dark:text-[#b2b2b2]">
@@ -52,16 +70,35 @@
             </div>
 
             <div class="flex min-w-0 items-center gap-1">
-              <AugmentDisplay :size="24" :augment-id="a.id" class="mr-1" />
-              <span class="name truncate text-xs">{{ resources.augments.name(a.id) }}</span>
+              <NPopover v-if="a.display" :delay="100">
+                <template #trigger>
+                  <div class="flex min-w-0 items-center gap-1">
+                    <LcuImage :src="a.display.iconPath" class="size-6 shrink-0 rounded" />
+                    <span class="truncate text-xs">{{ a.display.name }}</span>
+                  </div>
+                </template>
+                <div class="max-w-80 text-xs whitespace-pre-line">{{ a.display.description }}</div>
+              </NPopover>
+              <template v-else>
+                <span class="name truncate text-xs">#{{ a.id }}</span>
+              </template>
             </div>
 
             <div
               v-if="showAdvancedStats"
               class="ml-auto flex h-4 shrink-0 items-center justify-center rounded bg-black/10 px-1 text-[11px] text-black dark:bg-white/10 dark:text-white"
             >
-              {{ t('opgg.champion.augmentPerformance') }}
-              <span class="ml-1 font-bold">{{ a.performance }}</span>
+              {{
+                t(
+                  effectiveSource === 'qq101'
+                    ? 'opgg.champion.winRate'
+                    : 'opgg.champion.augmentPerformance'
+                )
+              }}
+              <span class="ml-1 font-bold"
+                >{{ formatAugmentNumber(a.performance)
+                }}{{ effectiveSource === 'qq101' ? '%' : '' }}</span
+              >
             </div>
 
             <div
@@ -69,9 +106,15 @@
               class="flex h-4 shrink-0 items-center justify-center rounded bg-black/10 px-1 text-[11px] text-black dark:bg-white/10 dark:text-white"
             >
               {{ t('opgg.champion.augmentPopular') }}
-              <span class="ml-1 font-bold">{{ a.popular }}</span>
+              <span class="ml-1 font-bold">{{ formatAugmentNumber(a.popular) }}</span>
             </div>
           </div>
+        </div>
+        <div
+          v-if="!group.augments.some(matchesSearch)"
+          class="py-4 text-center text-xs text-gray-500"
+        >
+          {{ t('opgg.champion.noMatchingAugments') }}
         </div>
       </NTabPane>
     </NTabs>
@@ -79,22 +122,42 @@
 </template>
 
 <script setup lang="tsx">
-import AugmentDisplay from '@renderer-shared/components/widgets/AugmentDisplay.vue'
-import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
+import LcuImage from '@renderer-shared/components/LcuImage.vue'
+import { useExtraAssetsStore } from '@renderer-shared/shards/extra-assets/store'
 import { OpggAramMayhemChampionAugmentItem } from '@shared/types/opgg'
 import { ArrowSort16Filled } from '@vicons/fluent'
 import { useTranslation } from 'i18next-vue'
-import { NCheckbox, NIcon, NSelect, NTabPane, NTabs, SelectOption } from 'naive-ui'
+import {
+  NCheckbox,
+  NIcon,
+  NInput,
+  NSelect,
+  NTabPane,
+  NTabs,
+  NPopover,
+  SelectOption
+} from 'naive-ui'
 import { computed, ref, watch, watchEffect } from 'vue'
 
 import { useOpgg } from '../context'
 
-const { champion, kiwiAugments } = useOpgg()
+const { champion, kiwiAugments, effectiveSource } = useOpgg()
 const { t } = useTranslation()
-const resources = useAkariResourceProvider()
+const extra = useExtraAssetsStore()
 
 const augmentTab = ref<AugmentTab | undefined>(undefined)
 const augmentSort = ref<AugmentSort>('default')
+const augmentSearch = ref('')
+
+function formatAugmentNumber(value: number | null) {
+  return value !== null && Number.isFinite(value) ? Number(value.toFixed(2)).toString() : '—'
+}
+
+function matchesSearch(augment: OpggAramMayhemChampionAugmentItem) {
+  const query = augmentSearch.value.trim().toLocaleLowerCase()
+  const name = augment.display?.name ?? ''
+  return !query || `${augment.id} ${name}`.toLocaleLowerCase().includes(query)
+}
 
 const enum AugmentTab {
   All = '<akari:all>',
@@ -156,12 +219,12 @@ const sortAugments = (items: KiwiAugmentWithRarity[]) => {
         return -1
       }
 
-      return b.performance - a.performance
+      return (b.performance ?? -Infinity) - (a.performance ?? -Infinity)
     })
   }
 
   if (augmentSort.value === 'popular') {
-    return items.toSorted((a, b) => b.popular - a.popular)
+    return items.toSorted((a, b) => (b.popular ?? -Infinity) - (a.popular ?? -Infinity))
   }
 
   return items.toSorted((a, b) => (a.tier ?? Infinity) - (b.tier ?? Infinity))
@@ -170,15 +233,36 @@ const sortAugments = (items: KiwiAugmentWithRarity[]) => {
 const isAugmentsExpanded = ref(false)
 const showAdvancedStats = ref(false)
 
+function augmentDisplay(item: OpggAramMayhemChampionAugmentItem) {
+  if (item.display) return item.display
+  // QQ101 uses Tencent's Mayhem resource IDs. Arena resources can reuse IDs for different augments.
+  if (effectiveSource.value !== 'qq101') return undefined
+  const resource = extra.kiwiAugmentsMap[item.id]
+  if (!resource?.name_cn && !resource?.name_en) return undefined
+  return {
+    name: resource.name_cn || resource.name_en,
+    iconPath: resource.small_Icon,
+    rarity: resource.level,
+    description: (resource.tooltip || resource.desc || '')
+      .replace(/<br\s*\/?\s*>/gi, '\n')
+      .replace(/<[^>]*>/g, '')
+  }
+}
+const unnamedCount = computed(
+  () => kiwiAugments.value?.data.filter((item) => !augmentDisplay(item)).length ?? 0
+)
+
 const augments = computed(() => {
   if (!kiwiAugments.value) {
     return null
   }
 
   const mappedByRarity = kiwiAugments.value.data.map((item) => {
+    const display = augmentDisplay(item)
     return {
       ...item,
-      rarity: resources.augments.display(item.id)?.rarity ?? null
+      display,
+      rarity: display?.rarity ?? null
     }
   })
 

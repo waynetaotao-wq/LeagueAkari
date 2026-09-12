@@ -186,6 +186,13 @@ function readEvents(
         { type: 'CHAMPION_KILL' | 'BUILDING_KILL' | 'ELITE_MONSTER_KILL' }
       >
       const killerId = known(selected.killerId)
+      if (
+        selected.type === 'CHAMPION_KILL' &&
+        (known(selected.victimId) === null ||
+          (killerId !== null &&
+            participantTeams.get(killerId) === participantTeams.get(selected.victimId)))
+      )
+        continue
       let receiverTeam = killerId === null ? null : (participantTeams.get(killerId) ?? null)
       if (selected.type === 'BUILDING_KILL') {
         // [lolps] 建筑事件 teamId 是被摧毁建筑所属队伍，不能当作获益队伍。
@@ -215,7 +222,12 @@ function readEvents(
             Array.isArray(selected.assistingParticipantIds) ? selected.assistingParticipantIds : []
           )
         ]
-          .filter((id) => known(id) !== null)
+          .filter(
+            (id) =>
+              known(id) !== null &&
+              id !== killerId &&
+              (receiverTeam === null || participantTeams.get(id) === receiverTeam)
+          )
           .sort((a, b) => a - b),
         teamId: receiverTeam,
         position: readPosition(selected.position),
@@ -474,6 +486,7 @@ export function parseReviewMatch(
       : null
   const durationMs = summary.json.gameDuration * 1000
   const timestampFrames = new Map<number, DetailedTimelineFrame>()
+  const conflictingFrames = new Set<number>()
   let duplicates = 0
   for (const frame of raw.frames) {
     if (
@@ -485,10 +498,21 @@ export function parseReviewMatch(
       continue
     if (timestampFrames.has(frame.timestamp)) {
       duplicates++
+      const previous = readFrame(
+        timestampFrames.get(frame.timestamp)!,
+        participants,
+        self,
+        opponent?.participantId ?? null
+      )
+      const current = readFrame(frame, participants, self, opponent?.participantId ?? null)
+      if (JSON.stringify(previous.participants) !== JSON.stringify(current.participants)) {
+        conflictingFrames.add(frame.timestamp)
+      }
       continue
     }
     timestampFrames.set(frame.timestamp, frame)
   }
+  for (const timestamp of conflictingFrames) timestampFrames.delete(timestamp)
   const orderedRawFrames = [...timestampFrames.values()].sort((a, b) => a.timestamp - b.timestamp)
   const frames = orderedRawFrames.map((frame) =>
     readFrame(frame, participants, self, opponent?.participantId ?? null)
@@ -545,6 +569,8 @@ export function parseReviewMatch(
       '事件记录或死亡数量与摘要无法完整核对，次数仅表示已记录事件，不能据此断言没有其他事件。'
     )
   if (duplicates) warnings.push('服务端包含重复时间帧，重复帧已去重。')
+  if (conflictingFrames.size)
+    warnings.push('同一时刻的玩家快照互相冲突，已留空，避免任选一份产生错误差值。')
   const match: ReviewMatch = {
     meta: {
       gameId: summary.json.gameId,

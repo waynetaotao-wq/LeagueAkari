@@ -61,6 +61,26 @@ akariScore:
     participation: 参团
     vision: 视野
 playerTabs:
+  liveGame:
+    status:
+      checking: 正在核对游戏状态
+      in-game: 正在游戏
+      not-in-game: 未在游戏
+      unknown: 游戏状态无法确认
+    reason:
+      disconnected: 连接游戏客户端后查询
+      unknown: 未获得可核对的公开对局；可能受隐私、接口或网络限制
+      crossRegion: 当前区服没有可用的游戏状态查询服务
+      noGrant: 已查询到游戏状态；客户端未提供可用观战许可，仅支持客户端允许的观战
+      busy: 请先回到客户端大厅；正在选人、排队或游戏时不能启动观战
+      server: 服务器返回的当前对局 · 页面可见时每 30 秒核对
+      friend: 客户端好友状态 · 页面可见时每 30 秒核对，状态可能有延迟
+    checkedAt: '{{time}} 核对'
+    spectate: 观战
+    refresh: 查状态
+    launchRequested: 已请求客户端启动观战，请等待客户端的观战延迟
+    changed: 对局或观战许可已变化，已更新状态，请重新确认
+    launchFailed: 客户端未能启动观战，请检查对局是否结束或观战是否受限
   ranked:
     unranked: 未定级
     win: 胜

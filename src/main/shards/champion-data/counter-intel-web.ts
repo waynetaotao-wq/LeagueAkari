@@ -1,6 +1,8 @@
 import type { LaneName } from '@shared/utils/lane-assignment'
 import type { AxiosInstance } from 'axios'
 
+import { isWebRecord, readOpggFlightRoots, walkOpggObjects } from './opgg-web-data'
+
 /**
  * 对位克制助手 —— OP.GG 网页数据通道（纯逻辑模块）
  *
@@ -280,6 +282,40 @@ export interface LaneKillFetchArgs {
   onWarn?: (message: string) => void
 }
 
+/** Bind the rendered statistics to the JSON scope, not just the requested URL. */
+export function isCounterPageScope(
+  raw: string,
+  args: LaneKillFetchArgs,
+  target: LaneKillTarget
+): boolean {
+  let matched = false
+  let reverseMatchup = false
+  for (const root of readOpggFlightRoots(raw))
+    walkOpggObjects(root, (entry) => {
+      if (entry.sub === 'ranked' && entry.detail === 'counters' && isWebRecord(entry.params)) {
+        const p = entry.params
+        matched =
+          p.game_region === toWebRegion(args.region) &&
+          p.game_tier === toWebTier(args.tier) &&
+          p.game_patch_version === args.patch &&
+          p.game_position === POSITION_TO_WEB_SEGMENT[args.position]
+      }
+      if (isWebRecord(entry.href) && isWebRecord(entry.href.query)) {
+        const q = entry.href.query
+        if (
+          entry.href.pathname ===
+            `/lol/champions/${target.slug}/counters/${POSITION_TO_WEB_SEGMENT[args.position]}` &&
+          q.target_champion === args.baseSlug &&
+          q.patch === args.patch &&
+          q.region === toWebRegion(args.region) &&
+          q.tier === toWebTier(args.tier)
+        )
+          reverseMatchup = true
+      }
+    })
+  return matched && reverseMatchup
+}
+
 /**
  * 并行抓取各候选对手的单杀率。
  * 返回：championId → { enemyPercent, minePercent } | null（该条解析失败）。
@@ -311,7 +347,8 @@ export async function fetchLaneKillRates(
           responseType: 'text',
           transformResponse: [(d: any) => d]
         })
-        const pair = parseLaneKillPair(String(res.data ?? ''))
+        const raw = String(res.data ?? '')
+        const pair = isCounterPageScope(raw, args, target) ? parseLaneKillPair(raw) : null
         if (pair) {
           results.set(target.championId, {
             enemyPercent: pair.leftPercent,

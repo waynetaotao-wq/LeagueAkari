@@ -37,6 +37,8 @@ export interface CounterIntelResult {
   tier: string | number
   /** 本次胜率与单杀率共同绑定的补丁。 */
   version: string | null
+  /** JSON 实际补丁，网页单杀率必须与其一致。 */
+  sourceVersion?: string | null
   updatedAt: string
   /** 单杀率通道整体是否可用（网页改版导致全部解析失败时为 false） */
   laneKillAvailable: boolean
@@ -53,6 +55,7 @@ export interface BzGuideParams {
   opponentChampionId: number
   /** 是否解析核心装备；徽章等纯文字消费者应关闭以减少网络请求 */
   includeCoreItems?: boolean
+  force?: boolean
 }
 
 export interface BzMatchupRow {
@@ -62,6 +65,11 @@ export interface BzMatchupRow {
   difficulty: string
   coreBuild: string
   summary: string
+  /** 成功读取表格的时间；不是作者最后编辑时间。 */
+  fetchedAt?: number
+  stale?: boolean
+  itemCatalogStale?: boolean
+  unresolvedItems?: string[]
   /** 兼容旧消费者：单条核心装方案 */
   coreItemIds?: number[]
   /** 核心装的并列方案（例如「星蚀/亵渎九头蛇 → ...」） */

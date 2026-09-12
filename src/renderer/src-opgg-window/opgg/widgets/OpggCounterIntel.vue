@@ -25,7 +25,7 @@
 
     <template v-if="expanded">
       <!-- 控制行 -->
-      <div class="mt-2 flex items-center gap-1.5">
+      <div class="mt-2 flex flex-wrap items-center gap-1.5">
         <NSelect
           size="tiny"
           class="w-30!"
@@ -35,12 +35,11 @@
           @update:value="updateManualTarget"
         />
         <NSelect
-          v-if="!assignedLane"
           size="tiny"
           class="w-22!"
           :consistent-menu-width="false"
           placeholder="我的分路"
-          :value="manualLane"
+          :value="manualLane || assignedLane || null"
           :options="laneOptions"
           @update:value="updateManualLane"
         />
@@ -96,6 +95,16 @@
 
       <!-- Bz（欧服第一劫）攻略卡：命中时优先展示，与下方 OP.GG 量化数据共存 -->
       <div v-if="bzRow" class="mt-2 rounded border border-black/10 p-2 dark:border-[#37373c]">
+        <div class="mb-1 text-xs" :class="bzRow.stale ? 'text-amber-600' : 'text-gray-500'">
+          {{ bzRow.stale ? '更新失败 · 旧表仅供阅读，未应用到构筑' : '已核对在线表格' }}
+          <span v-if="bzRow.fetchedAt"> · {{ new Date(bzRow.fetchedAt).toLocaleString() }}</span>
+        </div>
+        <div
+          v-if="bzRow.itemCatalogStale || bzRow.unresolvedItems?.length"
+          class="mb-1 text-xs text-amber-600"
+        >
+          装备库未就绪或存在未识别装备，保留原文，未拼接不完整出装。
+        </div>
         <div class="mb-1 flex items-center justify-between text-[12px] font-bold">
           <span>
             Bz 推荐
@@ -135,8 +144,17 @@
           v-if="bzRow.summary"
           class="mt-1 border-t border-black/5 pt-1 text-xs leading-relaxed whitespace-pre-line text-black/80 dark:border-white/8 dark:text-white/80"
         >
-          {{ bzRow.summary }}
+          {{ getBzSummaryZh(bzRow.champion, bzRow.summary) || bzRow.summary }}
         </div>
+        <NCheckbox
+          v-if="getBzExtras(bzRow.champion)"
+          size="small"
+          v-model:checked="useHistoricalBzExtras"
+          class="mt-2"
+          :disabled="bzRow.stale"
+        >
+          使用历史人工补充的召唤师技能与出门装（表格图片无法实时同步）
+        </NCheckbox>
         <div class="mt-1 text-[10px] text-[#666666]/80 dark:text-[#b2b2b2]/70">
           <template
             v-if="
@@ -161,11 +179,15 @@
               未找到匹配 Bz 基石的 OP.GG 完整符文页，本次未应用符文筛选；
             </template>
           </template>
-          数据来自 Bz 的对线表（正常联网时更新最迟 10
-          分钟内生效；源不可用时可能暂用旧缓存）；未收录的对线自动回落 OP.GG
+          表格文字自动跟随作者更新；当前页面每分钟检查缓存，手动刷新立即重读。
+          新英文内容未经校对时显示原文；未收录的对线回落 OP.GG。
         </div>
       </div>
 
+      <div v-if="intel" class="mt-2 text-[10px] text-[#666666] dark:text-[#b2b2b2]">
+        OP.GG · {{ intel.sourceVersion || '补丁未知' }} · {{ region }} · {{ tier }}。
+        胜率为历史对局结果；单杀率按来源口径展示，来源未公开单杀样本数，不代表本局单挑成功概率。
+      </div>
       <div v-if="errorText" class="mt-1 text-xs text-[#dc2626] dark:text-[#d75a5a]">
         {{ errorText }}
       </div>
@@ -178,7 +200,7 @@
           <div
             class="mb-1 flex items-center justify-between text-[10px] text-[#666666] dark:text-[#b2b2b2]"
           >
-            <span>打他胜率</span>
+            <span>对局胜率 · 对位场次</span>
             <span>高 → 低</span>
           </div>
           <NScrollbar class="max-h-100">
@@ -225,7 +247,7 @@
           <div
             class="mb-1 flex items-center justify-between text-[10px] text-[#666666] dark:text-[#b2b2b2]"
           >
-            <span>单杀他概率</span>
+            <span>对线单杀率</span>
             <span>高 → 低</span>
           </div>
           <div
@@ -257,11 +279,6 @@
               >
                 {{ row.laneKillRate === null ? '—' : formatPercent(row.laneKillRate) }}
               </span>
-              <span
-                class="w-9 text-right text-[10px] text-[#666666] tabular-nums dark:text-[#b2b2b2]"
-              >
-                {{ row.games }}场
-              </span>
               <NButton
                 v-if="canHover(row.championId)"
                 size="tiny"
@@ -291,7 +308,10 @@
 </template>
 
 <script setup lang="ts">
-import { getBzExtras } from '@renderer-shared/components/ongoing-game-panel/widgets/player-info-card/bz-summary-zh'
+import {
+  getBzExtras,
+  getBzSummaryZh
+} from '@renderer-shared/components/ongoing-game-panel/widgets/player-info-card/bz-summary-zh'
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import ItemDisplay from '@renderer-shared/components/widgets/ItemDisplay.vue'
 import SummonerSpellDisplay from '@renderer-shared/components/widgets/SummonerSpellDisplay.vue'
@@ -310,7 +330,7 @@ import type {
 } from '@shared/types/counter-intel'
 import { type LaneName, resolveLaneOpponent } from '@shared/utils/lane-assignment'
 import { RefreshSharp } from '@vicons/ionicons5'
-import { NButton, NIcon, NScrollbar, NSelect, NSpin, NSwitch } from 'naive-ui'
+import { NButton, NCheckbox, NIcon, NScrollbar, NSelect, NSpin, NSwitch } from 'naive-ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { useOpgg } from '../context'
@@ -406,7 +426,7 @@ const enemyChampionIds = computed(() => {
   const s = session.value
   if (!s) return [] as number[]
   const ids = s.theirTeam
-    .map((t) => t.championId || t.championPickIntent)
+    .map((t) => t.championId)
     .filter((c): c is number => typeof c === 'number' && c > 0)
   return [...new Set(ids)]
 })
@@ -436,6 +456,7 @@ function updateManualLane(value: string) {
 }
 
 const effectiveLane = computed<LaneName | ''>(() => {
+  if ((LANES as readonly string[]).includes(manualLane.value)) return manualLane.value as LaneName
   if (assignedLane.value) return assignedLane.value
   // 选人会话结束后（加载/对局中）改读真实阵容里我的位置，提示与分路下拉不再显示"未获取"
   if (inGameLane.value) return inGameLane.value
@@ -507,6 +528,7 @@ const targetOptions = computed(() => [
 
 const priors = ref<RolePriors | null>(null)
 let priorsKey = ''
+let priorsLoadedAt = 0
 let priorsSeq = 0
 let priorsInFlight: { key: string; request: Promise<RolePriors> } | null = null
 let priorsRetryKey = ''
@@ -519,13 +541,14 @@ function currentPriorsKey() {
 
 async function ensurePriors(forceRetry = false) {
   const key = currentPriorsKey()
-  if (priors.value && priorsKey === key) return
+  if (!forceRetry && priors.value && priorsKey === key && Date.now() - priorsLoadedAt < 10 * 60_000)
+    return
   // champ-select session 会随计时器频繁推送；同口径请求必须复用，不能每秒把前一次作废。
   if (priorsInFlight?.key === key) return
   if (!forceRetry && priorsRetryKey === key && Date.now() < priorsRetryAt) return
   const seq = ++priorsSeq
   // 新口径到达前不允许继续用旧版本/旧地区的分路先验猜对手。
-  if (priorsKey !== key) {
+  if (priorsKey !== key || Date.now() - priorsLoadedAt >= 10 * 60_000) {
     priors.value = null
     priorsKey = ''
   }
@@ -534,7 +557,8 @@ async function ensurePriors(forceRetry = false) {
     'counterIntel/rolePriors',
     region.value,
     tier.value,
-    opggVersion.value
+    opggVersion.value,
+    forceRetry
   )
   priorsInFlight = { key, request }
   try {
@@ -542,6 +566,7 @@ async function ensurePriors(forceRetry = false) {
     if (seq !== priorsSeq || key !== currentPriorsKey()) return
     priors.value = loaded
     priorsKey = key
+    priorsLoadedAt = Date.now()
     priorsRetryKey = ''
     priorsRetryAt = 0
   } catch {
@@ -596,13 +621,13 @@ const statusText = computed(() => {
   if (autoResolution.value?.exactPosition) {
     return `自动判定：${championName(resolution.championId)}（客户端分路）`
   }
-  return `自动判定：${championName(resolution.championId)}（${Math.round((resolution.probability ?? 0) * 100)}%）`
+  return `推测对位：${championName(resolution.championId)}（分路倾向 ${Math.round((resolution.probability ?? 0) * 100)}%，非实测准确率）`
 })
 
 const placeholderText = computed(() => {
   if (!effectiveLane.value) return '未获取到你的分路，请在上方选择'
   if (enemyChampionIds.value.length === 0) return '等待对面选择英雄…'
-  return '等待对位判定…'
+  return '对位尚不明确，可手动指定；不根据低可信推测自动替换构筑'
 })
 
 // ===== [lolps] 对位数据整窗替换 =====
@@ -703,24 +728,30 @@ function sameLockedIdentity(
 const ZED_ID = 238
 const bzRow = ref<BzMatchupRow | null>(null)
 const bzSourceUnavailable = ref(false)
+const useHistoricalBzExtras = ref(false)
 const bzRuneFilterStatus = ref<BzRuneFilterStatus>('not-requested')
-const bzExtras = computed(() => (bzRow.value ? getBzExtras(bzRow.value.champion) : null))
+const bzExtras = computed(() =>
+  bzRow.value && useHistoricalBzExtras.value && !bzRow.value.stale
+    ? getBzExtras(bzRow.value.champion)
+    : null
+)
 
 /** 流水线内查询：仅劫生效；源故障单独标记，不中断 OP.GG 主链路。 */
 async function fetchBzRow(
   me: number,
-  opp: number
+  opp: number,
+  force = false
 ): Promise<{ row: BzMatchupRow | null; sourceUnavailable: boolean }> {
   if (me !== ZED_ID || !opp) return { row: null, sourceUnavailable: false }
   try {
     const res = await ipc.call<BzGuideResult>(
       CHAMPION_DATA_MAIN_NAMESPACE,
       'counterIntel/bzGuide',
-      { opponentChampionId: opp }
+      { opponentChampionId: opp, force }
     )
     return {
       row: res?.found ? res.row : null,
-      sourceUnavailable: res?.reason === 'source-unavailable'
+      sourceUnavailable: res?.reason === 'source-unavailable' || res?.row?.stale === true
     }
   } catch {
     return { row: null, sourceUnavailable: true }
@@ -787,7 +818,9 @@ const inGameMatchup = computed<{
     [...new Set(enemyIds)].map((id) => ({ championId: id, roleRates: priors.value?.[id] ?? {} })),
     lane
   )
-  return inferred.championId ? { me, opp: inferred.championId, lane, validated: false } : null
+  return inferred.championId && inferred.probability >= 0.6
+    ? { me, opp: inferred.championId, lane, validated: false }
+    : null
 })
 const inGameMatchupKey = computed(() => {
   const matchup = inGameMatchup.value
@@ -797,7 +830,7 @@ const inGameMatchupKey = computed(() => {
 })
 
 const summaryText = computed(() => {
-  if (bzRow.value) {
+  if (bzRow.value && !bzRow.value.stale) {
     return `Bz 推荐已就绪 vs ${bzRow.value.champion}${matchupStatus.value ? ` · ${matchupStatus.value}` : ''}`
   }
   if (matchupStatus.value) return matchupStatus.value
@@ -845,6 +878,7 @@ function resetScopedMatchupState(status = '') {
   requestSeq++
   updateManualTarget(0)
   manualLane.value = ''
+  useHistoricalBzExtras.value = false
   hoverNotice.value = ''
   intel.value = null
   isLoading.value = false
@@ -890,7 +924,7 @@ async function loadMatchupForIdentity(
       })
       .then((result) => ({ result, error: null }))
       .catch((error: unknown) => ({ result: null, error })),
-    fetchBzRow(me, opp)
+    fetchBzRow(me, opp, options.force)
   ])
   const identity: MatchupOverlayIdentity = {
     gameId: options.requestToken.owner.gameId!,
@@ -935,7 +969,7 @@ async function loadMatchupForIdentity(
   setMatchupLoadoutPending(false)
   bzSourceUnavailable.value = bzOutcome.sourceUnavailable
   bzRow.value = bz
-  const merged = mergeBzIntoOverlay(result?.overlay ?? null, bz)
+  const merged = mergeBzIntoOverlay(result?.overlay ?? null, bz, bzExtras.value)
   bzRuneFilterStatus.value = merged.runeFilterStatus
   matchupSections.value = [...new Set([...(result?.parsedSections ?? []), ...merged.sections])]
 
@@ -949,7 +983,7 @@ async function loadMatchupForIdentity(
       metaText,
       identity,
       result?.meta ? { ...result.meta, sourceVersion: result.sourceVersion } : null,
-      resolveMatchupLoadoutSource(!!result?.overlay, !!bz) ?? 'OP.GG'
+      resolveMatchupLoadoutSource(!!result?.overlay, !!bz && !bz.stale) ?? 'OP.GG'
     )
     const previousLock = matchupLock.value
     matchupLock.value = {
@@ -979,7 +1013,7 @@ async function loadMatchupForIdentity(
       : resultError
         ? 'OP.GG 获取失败，已降级'
         : 'OP.GG 该对位样本不足'
-    if (bz) {
+    if (bz && !bz.stale) {
       const changedLabels = merged.sections.map((section) => SECTION_LABELS[section] ?? section)
       const bzAction = changedLabels.length
         ? `Bz 推荐已处理（${changedLabels.join('/')}）`
@@ -1014,6 +1048,9 @@ async function loadMatchupForIdentity(
         ? '该对位暂无 OP.GG 样本，且 BZ 数据源暂不可用，显示通用构筑'
         : '该对位样本不足，显示通用构筑'
   )
+  // 旧表仍可阅读，但不能再进入推荐或自动应用链路。
+  bzRow.value = bz
+  bzSourceUnavailable.value = bzOutcome.sourceUnavailable
   return false
 }
 
@@ -1167,6 +1204,17 @@ watch(
 
 // 原版顶部刷新成功后也强制刷新克制表与对位数据，不能只更新通用英雄详情。
 watch(matchupRefreshGeneration, () => refreshAll())
+watch(useHistoricalBzExtras, () => scheduleMatchupOverlay(true))
+
+// Keep an open page current; do not poll hidden windows or non-match contexts.
+const freshnessTimer = setInterval(() => {
+  if (document.visibilityState !== 'visible' || !observedMatchupSession.value || isLoading.value)
+    return
+  const bzExpired = bzRow.value?.fetchedAt && Date.now() - bzRow.value.fetchedAt >= 10 * 60_000
+  const intelExpired = intel.value && Date.now() - Date.parse(intel.value.updatedAt) >= 8 * 60_000
+  if (bzExpired || intelExpired || errorText.value || bzSourceUnavailable.value) refreshAll()
+  else void ensurePriors()
+}, 60_000)
 
 /** 进入加载/对局后：用真实双方阵容校验选人期的对位推测，必要时精确重定或诚实回退 */
 async function validateMatchupAgainstRealTeams() {
@@ -1287,6 +1335,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  clearInterval(freshnessTimer)
   resetScopedMatchupState()
 })
 

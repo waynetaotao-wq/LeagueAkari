@@ -60,6 +60,7 @@ function counterResponse(version = '16.17') {
     data: {
       data: {
         // 基准英雄是 Gwen；win=Gwen 胜场，所以候选 Gangplank 胜场必须取 88 - 46。
+        summary: { id: 887 },
         counters: [{ champion_id: 41, play: 88, win: 46 }]
       },
       meta: { version }
@@ -162,6 +163,16 @@ describe('ChampionDataCounterIntel.getRolePriors', () => {
       version: '16.16'
     })
     expect(getChampions).toHaveBeenCalledTimes(2)
+    getChampions.mockResolvedValueOnce({
+      data: {
+        data: [{ id: 41, positions: [{ name: 'MID', stats: { play: 100 } }] }],
+        meta: { version: '16.17' }
+      }
+    })
+    expect((await subject.getRolePriors('kr', 'emerald_plus', '16.17', true))[41]).toEqual({
+      middle: 1
+    })
+    expect(getChampions).toHaveBeenCalledTimes(3)
   })
 })
 

@@ -1,5 +1,11 @@
 <template>
-  <NPopover v-if="bzRow" trigger="hover" placement="bottom" style="max-width: 320px">
+  <NPopover
+    v-if="bzRow"
+    trigger="hover"
+    placement="bottom"
+    style="max-width: 320px"
+    @update:show="refreshOnOpen"
+  >
     <template #trigger>
       <div
         class="absolute top-1.5 right-8 z-10 flex h-4.5 cursor-default items-center rounded-full bg-[#8b2252]/90 px-1.5 text-[9px] font-bold text-white/95 select-none dark:bg-[#c2418f]/80"
@@ -8,6 +14,10 @@
       </div>
     </template>
     <div class="text-xs">
+      <div v-if="bzRow.fetchedAt" class="mb-1 text-[10px] text-gray-500">
+        {{ bzRow.stale ? '旧表缓存 · 更新失败' : '表格读取时间' }} ·
+        {{ new Date(bzRow.fetchedAt).toLocaleString() }}
+      </div>
       <div class="mb-1 font-bold">
         Bz 对线心得 · vs {{ bzRow.champion }}
         <span v-if="bzRow.difficulty" class="font-normal text-[#666666] dark:text-[#b2b2b2]">
@@ -31,6 +41,9 @@
       </div>
       <div v-if="!zhText" class="mt-1 text-[10px] text-[#666666] dark:text-[#b2b2b2]">
         （当前内容暂未翻译，显示原文）
+      </div>
+      <div v-if="extras" class="mt-1 text-[10px] text-gray-500">
+        技能与出门装为历史人工补充，不随表格图片自动同步。
       </div>
     </div>
   </NPopover>
@@ -125,6 +138,13 @@ async function loadBzRow(requestSeq: number, opponentChampionId: number, attempt
     retryTimer = null
     void loadBzRow(requestSeq, opponentChampionId, attempt + 1)
   }, retryDelay)
+}
+
+function refreshOnOpen(show: boolean) {
+  if (!show || !targetChampionId.value || !bzRow.value?.fetchedAt) return
+  if (Date.now() - bzRow.value.fetchedAt < 10 * 60_000) return
+  invalidateRequest()
+  void loadBzRow(seq, targetChampionId.value, 0)
 }
 
 watch(

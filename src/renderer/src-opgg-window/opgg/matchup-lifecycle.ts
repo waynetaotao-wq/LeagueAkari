@@ -201,7 +201,13 @@ export function resolveScopedMatchupTarget(input: {
   }
 
   const automatic = input.automaticResolution
-  if (automatic?.championId && enemies.has(automatic.championId)) {
+  if (
+    automatic?.championId &&
+    enemies.has(automatic.championId) &&
+    Number.isFinite(automatic.probability) &&
+    automatic.probability >= 0.6 &&
+    automatic.probability <= 1
+  ) {
     return {
       championId: automatic.championId,
       probability: automatic.probability,
@@ -242,6 +248,7 @@ export function resolveAssignedLaneOpponent(
 ): number | null {
   if (!lane) return null
   const matches = new Set<number>()
+  let claimCount = 0
   for (const enemy of enemies) {
     if (
       String(enemy.assignedPosition ?? '')
@@ -249,10 +256,11 @@ export function resolveAssignedLaneOpponent(
         .toLowerCase() !== lane
     )
       continue
-    const id = championId(enemy.championId) ?? championId(enemy.championPickIntent)
+    claimCount++
+    const id = championId(enemy.championId)
     if (id) matches.add(id)
   }
-  return matches.size === 1 ? [...matches][0] : null
+  return claimCount === 1 && matches.size === 1 ? [...matches][0] : null
 }
 
 /**
@@ -266,14 +274,16 @@ export function resolveRealMatchupValidation(
 ): RealMatchupValidation {
   if (!lane) return { status: 'waiting', opponentChampionId: null }
   const matches = new Set<number>()
+  let claimCount = 0
   for (const enemy of enemies) {
     const selected = String(enemy.selectedPosition ?? '').trim()
     const position = selected || String(enemy.position ?? '').trim()
     if (position.toLowerCase() !== lane) continue
+    claimCount++
     const id = championId(enemy.championId)
     if (id) matches.add(id)
   }
-  if (matches.size !== 1) return { status: 'waiting', opponentChampionId: null }
+  if (claimCount !== 1 || matches.size !== 1) return { status: 'waiting', opponentChampionId: null }
   const actualOpponentChampionId = [...matches][0]
   return {
     status:

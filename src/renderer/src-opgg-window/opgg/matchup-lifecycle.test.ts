@@ -124,6 +124,22 @@ describe('matchup session lifecycle', () => {
 })
 
 describe('match-scoped target and request guards', () => {
+  it('does not replace builds for a low-confidence automatic lane guess', () => {
+    expect(
+      resolveScopedMatchupTarget({
+        currentSession: sessionA,
+        manualTarget: null,
+        enemyChampionIds: [238],
+        automaticResolution: { championId: 238, probability: 0.25 }
+      })
+    ).toBeNull()
+    expect(
+      resolveAssignedLaneOpponent(
+        [{ championId: 0, championPickIntent: 238, assignedPosition: 'middle' }],
+        'middle'
+      )
+    ).toBeNull()
+  })
   it('honors a manual target only in its owning session', () => {
     const manual = { championId: 799, owner: sessionA }
     expect(
@@ -234,6 +250,16 @@ describe('direct assigned-position inference', () => {
   })
 
   it('confirms only the unique real opponent in the expected lane', () => {
+    expect(
+      resolveRealMatchupValidation(
+        [
+          { championId: 82, position: 'TOP' },
+          { championId: 0, position: 'TOP' }
+        ],
+        'top',
+        82
+      )
+    ).toEqual({ status: 'waiting', opponentChampionId: null })
     expect(resolveRealMatchupValidation([{ championId: 82, position: 'TOP' }], 'top', 82)).toEqual({
       status: 'confirmed',
       opponentChampionId: 82

@@ -15,13 +15,13 @@ If you do ult and she has charm, buffer your Q
 Try to time your WQ combo after her ult dash`
 
 describe('Bz summary translations', () => {
-  it('keeps one verified fingerprint for each of the 61 translations', () => {
+  it('keeps one verified fingerprint for each of the 63 translations', () => {
     const translationKeys = Object.keys(BZ_SUMMARY_ZH).sort()
     const fingerprintKeys = Object.keys(BZ_SUMMARY_FINGERPRINTS).sort()
 
-    expect(translationKeys).toHaveLength(61)
+    expect(translationKeys).toHaveLength(63)
     expect(fingerprintKeys).toEqual(translationKeys)
-    expect(new Set(Object.values(BZ_SUMMARY_FINGERPRINTS))).toHaveLength(61)
+    expect(new Set(Object.values(BZ_SUMMARY_FINGERPRINTS))).toHaveLength(63)
     expect(
       Object.values(BZ_SUMMARY_FINGERPRINTS).every((value) => /^[0-9a-f]{16}$/.test(value))
     ).toBe(true)
@@ -64,7 +64,9 @@ describe('getBzExtras', () => {
   })
 
   it('covers all 61 known rows and hides unknown rows', () => {
-    expect(Object.keys(BZ_SUMMARY_ZH).every((key) => getBzExtras(key) !== null)).toBe(true)
+    expect(Object.keys(BZ_SUMMARY_ZH).filter((key) => getBzExtras(key) !== null)).toHaveLength(61)
+    expect(getBzExtras('GAREN')).toBeNull()
+    expect(getBzExtras('Nasus')).toBeNull()
     expect(getBzExtras('New Champion')).toBeNull()
     expect(getBzExtras('constructor')).toBeNull()
   })

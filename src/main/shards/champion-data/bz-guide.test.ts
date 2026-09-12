@@ -63,6 +63,11 @@ afterEach(() => {
 })
 
 describe('BZ item mapping', () => {
+  it('does not silently remove an unknown middle item or a choice from a build', () => {
+    const byName = buildItemNameMap(ITEM_CATALOG)
+    expect(resolveBuildItemSequences('Voltaic -> New Item -> LDR', byName)).toEqual([])
+    expect(resolveBuildItemSequences('Voltaic/New Item -> LDR', byName)).toEqual([])
+  })
   it("selects the purchasable Summoner's Rift item instead of its higher-id Arena duplicate", () => {
     const byName = buildItemNameMap({
       data: {
@@ -195,6 +200,18 @@ describe('BZ CSV parsing and validation', () => {
 })
 
 describe('BZ loading and cache behavior', () => {
+  it('forces a fresh table read before TTL and preserves the last successful read time on failure', async () => {
+    let csv = VALID_CSV
+    const httpClient = createHttpClient(async () => ({ data: csv }))
+    const first = await getBzZedMatchup('tryndamere', { httpClient, includeCoreItems: false })
+    csv = VALID_CSV.replace('Respect level one', 'Updated matchup advice')
+    expect(
+      (await getBzZedMatchup('tryndamere', { httpClient, includeCoreItems: false }))?.summary
+    ).toBe(first?.summary)
+    expect(
+      await getBzZedMatchup('tryndamere', { httpClient, includeCoreItems: false, force: true })
+    ).toMatchObject({ summary: 'Updated matchup advice', stale: false })
+  })
   it('uses the injected client and does not fetch Data Dragon when core items are disabled', async () => {
     const httpClient = createHttpClient(async () => ({ data: VALID_CSV }))
 
@@ -265,8 +282,8 @@ describe('BZ loading and cache behavior', () => {
       includeCoreItems: false
     })
 
-    expect(stale).toEqual(first)
-    expect(staleDuringBackoff).toEqual(first)
+    expect(stale).toEqual({ ...first, stale: true })
+    expect(staleDuringBackoff).toEqual(stale)
     expect(getMock(httpClient)).toHaveBeenCalledTimes(2)
   })
 
@@ -289,7 +306,9 @@ describe('BZ loading and cache behavior', () => {
     now += 7 * 60 * 60 * 1000
     const stale = await getBzZedMatchup('tryndamere', { httpClient })
 
-    expect(stale?.coreItemBuilds).toEqual(first?.coreItemBuilds)
+    expect(stale?.summary).toBe(first?.summary)
+    expect(stale?.coreItemBuilds).toBeUndefined()
+    expect(stale?.itemCatalogStale).toBe(true)
     expect(versionLoads).toBe(2)
   })
 

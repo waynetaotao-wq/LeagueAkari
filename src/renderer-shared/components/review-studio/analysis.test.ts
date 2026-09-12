@@ -15,6 +15,33 @@ function parse(fixture = createReviewFixture()) {
 }
 
 describe('review timeline evidence', () => {
+  it('keeps equivalent snapshots when JSON fields arrive in a different order', () => {
+    const fixture = createReviewFixture()
+    const duplicate = structuredClone(fixture.details.json.frames[10])
+    const player = duplicate.participantFrames['8']
+    duplicate.participantFrames['8'] = Object.fromEntries(
+      Object.entries(player).reverse()
+    ) as typeof player
+    fixture.details.json.frames.push(duplicate)
+    expect(parse(fixture).snapshots[0].personalGoldDiff).toBe(600)
+    expect(parse(fixture).quality.missingFrames).toBe(0)
+  })
+  it('leaves conflicting duplicate snapshots blank instead of arbitrarily selecting a gold value', () => {
+    const fixture = createReviewFixture()
+    const duplicate = structuredClone(fixture.details.json.frames[10])
+    duplicate.participantFrames['8'].totalGold += 2500
+    fixture.details.json.frames.push(duplicate)
+    const match = parse(fixture)
+    expect(match.snapshots[0].personalGoldDiff).toBeNull()
+    expect(match.quality.missingFrames).toBe(1)
+    expect(match.quality.warnings.some((warning) => warning.includes('冲突'))).toBe(true)
+  })
+  it('does not count a kill of an unknown player or a teammate as evidence of a death', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(fixture.details, reviewKill(610_000, 999, 500))
+    addReviewEvent(fixture.details, reviewKill(620_000, 1, 500))
+    expect(parse(fixture).events).toEqual([])
+  })
   it('uses real participant teams and roles when IDs and arrays are scrambled', () => {
     const fixture = createReviewFixture()
     fixture.summary.json.participants.reverse()

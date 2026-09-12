@@ -37,6 +37,7 @@ import {
   Ref,
   computed,
   inject,
+  onBeforeUnmount,
   onMounted,
   provide,
   ref,
@@ -320,6 +321,8 @@ export function provideOpgg() {
     generation: number
   ): Promise<string | null> => {
     const preferred = opts.preferredVersion ?? version.value
+    const followLatest =
+      opts.preferredVersion === undefined && (!version.value || version.value === versions.value[0])
     const capability = getChampionDataCapability(source, toChampionDataMode(mode0))
     const patchContext = `${source}:${region0}:${mode0}`
 
@@ -356,7 +359,9 @@ export function provideOpgg() {
     }
 
     let nextVersion =
-      preferred && versions.value.includes(preferred) ? preferred : versions.value[0]
+      !followLatest && preferred && versions.value.includes(preferred)
+        ? preferred
+        : versions.value[0]
 
     if (!versions.value.includes(nextVersion)) {
       nextVersion = versions.value[0]
@@ -408,7 +413,7 @@ export function provideOpgg() {
           // version 和 mode 需要刷新 version
           // 但也没那么强制，但 mode 变化必须刷新 version
           reload: opts.force || opts.mode !== undefined || opts.version !== undefined,
-          preferredVersion: opts.version ?? version.value
+          preferredVersion: opts.version
         },
         generation
       )
@@ -632,6 +637,15 @@ export function provideOpgg() {
     const updated = await update({ force: true })
     if (updated) requestMatchupRefresh()
   }
+
+  // The window can stay open across a patch release. Refresh only while visible and idle.
+  const dataRefreshTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && !isLoading.value) void refresh()
+  }, 10 * 60_000)
+  onBeforeUnmount(() => {
+    clearInterval(dataRefreshTimer)
+    cancel()
+  })
 
   onMounted(() => {
     if (mode.value !== savedMode) {

@@ -141,6 +141,14 @@ opgg:
     sessionChampions:
       title: Session Champions
   champion:
+    searchAugments: Search augments by name or ID
+    noMatchingAugments: No matching augments in this group
+    qqMayhemAugmentScope: Tencent lists overall augment statistics, not champion-specific win rates. Switch to OP.GG for champion-specific tiers.
+    unnamedAugments_one: The source is missing the name of {{count}} augment; its ID is shown.
+    unnamedAugments_other: The source is missing the names of {{count}} augments; their IDs are shown.
+    recommendationOnly: Recommendation · statistics unavailable
+    mayhemDataNotice: 'ARAM Mayhem · resource patch {{patch}}. Augment tiers and scores come from the selected source; scores are not win rates. Items follow the Mayhem page recommendations.'
+    mayhemItemsUnavailable: Item recommendations unavailable; switch to OP.GG or retry refresh.
     boots: Boots
     adorableRabi: Kawaii Bunny
     avgPlace: Avg. Rank

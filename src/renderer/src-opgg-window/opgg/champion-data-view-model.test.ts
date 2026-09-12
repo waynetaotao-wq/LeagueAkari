@@ -258,5 +258,12 @@ describe('champion data legacy view model', () => {
       data: [{ id: 9001, tier: 2, performance: 88, popular: 72 }]
     })
     expect(toOpggChampionDetailsViewModel(details).data.core_items).toEqual([])
+    details.sections.augments![0].performanceScore = null
+    details.sections.augments![0].popularity = null
+    details.sections.augments![0].performance = { ...recommendation, winRate: null, pickRate: null }
+    expect(toOpggMayhemAugmentsViewModel(details, 'aram_mayhem')?.data[0]).toMatchObject({
+      performance: null,
+      popular: null
+    })
   })
 })

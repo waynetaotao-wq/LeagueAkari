@@ -192,6 +192,13 @@ export interface ChampionAbilityBuild {
 
 export interface ChampionAugment {
   augmentId: number
+  /** Mode-specific resource; augment IDs are not globally unique across modes. */
+  display?: {
+    name: string
+    iconPath?: string
+    rarity: 'kSilver' | 'kGold' | 'kPrismatic' | 'kEventChoice' | null
+    description: string
+  }
   tier: number | null
   rank: number | null
   rankChange: number | null

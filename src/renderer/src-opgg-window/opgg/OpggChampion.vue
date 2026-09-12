@@ -13,6 +13,15 @@
 
     <NScrollbar v-if="champion">
       <div class="grid grid-cols-1 gap-2 lg:grid-cols-2">
+        <div
+          v-if="mode === 'aram_mayhem'"
+          class="col-span-full rounded border border-black/10 px-3 py-2 text-xs leading-relaxed dark:border-white/10"
+        >
+          {{ t('opgg.champion.mayhemDataNotice', { patch: champion.meta.version || '—' }) }}
+          <div v-if="!champion.data.core_items.length">
+            {{ t('opgg.champion.mayhemItemsUnavailable') }}
+          </div>
+        </div>
         <!-- summary -->
         <div class="flex h-20 items-center gap-3 px-2 pt-1 pb-3" v-if="summary && stats">
           <ChampionIcon

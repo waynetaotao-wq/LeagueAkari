@@ -6,6 +6,7 @@
           <PlayerTabHeader class="mb-6 h-28 px-4" />
 
           <div class="box-border px-4 @[764px]:px-0">
+            <PlayerLiveGame class="mb-4" />
             <div ref="stickySentinelEl" class="h-0 w-full"></div>
 
             <div
@@ -133,6 +134,7 @@ import MatchHistoryList from './widgets/MatchHistoryList.vue'
 import { provideMatchHistoryCardViewport } from './widgets/match-history-card'
 import MatchHistoryPagination from './widgets/match-history-pagination'
 import PlayerTabHeader from './widgets/PlayerTabHeader.vue'
+import PlayerLiveGame from './widgets/player-live-game/PlayerLiveGame.vue'
 import CollectModeProgress from './widgets/match-history-filters/CollectModeProgress.vue'
 import PlayerTabSidebarContent from './PlayerTabSidebarContent.vue'
 

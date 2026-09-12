@@ -29,6 +29,7 @@ export interface GetBzZedMatchupOptions {
   httpClient?: AxiosInstance
   /** 徽章等只消费文字的调用方可关闭，避免额外拉取 Data Dragon。 */
   includeCoreItems?: boolean
+  force?: boolean
   /** 装备库失败不会丢弃已获取的文字攻略；通过此回调交给上层 logger 留痕。 */
   onWarn?: (message: string) => void
 }
@@ -42,6 +43,8 @@ export class BzGuideDataValidationError extends Error {
 
 interface CachedResource<T> {
   expiresAt: number
+  fetchedAt?: number
+  stale?: boolean
   value?: T
   inFlight?: Promise<T>
 }
@@ -55,9 +58,10 @@ const STALE_RETRY_TTL = 60 * 1000
 function readThroughCache<T>(
   cache: CachedResource<T>,
   ttl: number,
-  loader: () => Promise<T>
+  loader: () => Promise<T>,
+  force = false
 ): Promise<T> {
-  if (cache.value !== undefined && cache.expiresAt > Date.now()) {
+  if (!force && cache.value !== undefined && cache.expiresAt > Date.now()) {
     return Promise.resolve(cache.value)
   }
   if (cache.inFlight) return cache.inFlight
@@ -66,6 +70,8 @@ function readThroughCache<T>(
   const refresh = loader().then(
     (value) => {
       cache.value = value
+      cache.fetchedAt = Date.now()
+      cache.stale = false
       cache.expiresAt = Date.now() + ttl
       cache.inFlight = undefined
       return value
@@ -73,6 +79,7 @@ function readThroughCache<T>(
     (error: unknown) => {
       cache.inFlight = undefined
       if (staleValue !== undefined) {
+        cache.stale = true
         // 源持续故障时避免每张徽标/每次查询都立刻重打外网；一分钟后再尝试刷新。
         cache.expiresAt = Date.now() + Math.min(ttl, STALE_RETRY_TTL)
         return staleValue
@@ -105,8 +112,8 @@ const ITEM_ALIASES: Record<string, string> = {
   seryldas: 'seryldasgrudge'
 }
 
-/** 装备名映射缓存（Data Dragon 更新慢，长 TTL） */
-const ITEM_MAP_TTL = 6 * 60 * 60 * 1000
+/** 与在线表格同周期核对装备库，避免补丁后继续沿用长时间旧映射。 */
+const ITEM_MAP_TTL = BZ_CACHE_TTL
 const _itemMapCaches = new WeakMap<AxiosInstance, CachedResource<Map<string, number>>>()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -167,9 +174,9 @@ async function loadItemNameMap(httpClient: AxiosInstance): Promise<Map<string, n
   return buildItemNameMap(items.data)
 }
 
-function ensureItemNameMap(httpClient: AxiosInstance): Promise<Map<string, number>> {
+function ensureItemNameMap(httpClient: AxiosInstance, force = false): Promise<Map<string, number>> {
   const cache = getClientCache(_itemMapCaches, httpClient)
-  return readThroughCache(cache, ITEM_MAP_TTL, () => loadItemNameMap(httpClient))
+  return readThroughCache(cache, ITEM_MAP_TTL, () => loadItemNameMap(httpClient), force)
 }
 
 /** 单个装备名 → id：精确 → 别名 → 前缀（≥4 字符且唯一） */
@@ -189,7 +196,7 @@ export function resolveItemName(raw: string, byName: Map<string, number>): numbe
 
 /**
  * 核心装文字链 → 所有合法方案。斜杠表示同一位置的并列选择，例如
- * `Voltaic/Profane → LDR` 会展开为两条序列；无法识别的位置沿用旧行为并跳过。
+ * `Voltaic/Profane → LDR` 会展开为两条序列；任何位置/选项无法识别就保留原文，不拼接残缺方案。
  */
 export function resolveBuildItemSequences(
   coreBuild: string,
@@ -197,6 +204,9 @@ export function resolveBuildItemSequences(
 ): number[][] {
   let builds: number[][] = [[]]
   for (const segment of (coreBuild || '').split(/→|->|>/)) {
+    if (segment.split('/').some((choice) => resolveItemName(choice.trim(), byName) === null)) {
+      return []
+    }
     const choices = Array.from(
       new Set(
         segment
@@ -205,7 +215,7 @@ export function resolveBuildItemSequences(
           .filter((id): id is number => id !== null)
       )
     )
-    if (choices.length === 0) continue
+    if (choices.length === 0) return []
 
     builds = builds.flatMap((build) =>
       choices.map((id) => (build.includes(id) ? [...build] : [...build, id]))
@@ -443,9 +453,9 @@ async function loadTable(httpClient: AxiosInstance): Promise<Map<string, BzMatch
   return byName
 }
 
-function ensureTable(httpClient: AxiosInstance): Promise<Map<string, BzMatchupRow>> {
+function ensureTable(httpClient: AxiosInstance, force = false): Promise<Map<string, BzMatchupRow>> {
   const cache = getClientCache(_tableCaches, httpClient)
-  return readThroughCache(cache, BZ_CACHE_TTL, () => loadTable(httpClient))
+  return readThroughCache(cache, BZ_CACHE_TTL, () => loadTable(httpClient), force)
 }
 
 /**
@@ -460,10 +470,10 @@ export async function getBzZedMatchup(
   if (!opponentSlug) return null
   const httpClient = options.httpClient ?? axios
   const resources = await Promise.all([
-    ensureTable(httpClient),
+    ensureTable(httpClient, options.force),
     options.includeCoreItems === false
       ? Promise.resolve<Map<string, number> | null>(null)
-      : ensureItemNameMap(httpClient).catch((error: unknown) => {
+      : ensureItemNameMap(httpClient, options.force).catch((error: unknown) => {
           options.onWarn?.(
             `Data Dragon 装备库获取失败，已保留 BZ 文字攻略: ${
               error instanceof Error ? error.message : String(error)
@@ -476,9 +486,17 @@ export async function getBzZedMatchup(
   const key = canonicalName(opponentSlug)
   const found = table.get(key) ?? prefixLookup(table, key)
   if (!found) return null
-  if (!byName || !found.coreBuild) return found
-
-  return withCoreItems(found, byName)
+  const cache = getClientCache(_tableCaches, httpClient)
+  const itemCache = getClientCache(_itemMapCaches, httpClient)
+  const row: BzMatchupRow = {
+    ...found,
+    fetchedAt: cache.fetchedAt,
+    stale: cache.stale === true,
+    itemCatalogStale: options.includeCoreItems !== false && (!byName || itemCache.stale === true)
+  }
+  if (row.stale) options.onWarn?.('表格刷新失败，当前展示的是旧缓存，禁止自动应用')
+  if (!byName || !found.coreBuild || row.stale || row.itemCatalogStale) return row
+  return withCoreItems(row, byName)
 }
 
 /** 前缀兜底：表内常见缩写名（Cassio / Trynd / Twisted…），≥4 字符且唯一命中才认 */
@@ -496,6 +514,13 @@ export function withCoreItems(row: BzMatchupRow, byName: Map<string, number>): B
   const builds = resolveBuildItemSequences(row.coreBuild, byName).filter(
     (build) => build.length >= 2
   )
-  if (builds.length === 0) return row
+  if (builds.length === 0)
+    return {
+      ...row,
+      unresolvedItems: row.coreBuild
+        .split(/→|->|>|\//)
+        .map((part) => part.trim())
+        .filter((part) => resolveItemName(part, byName) === null)
+    }
   return { ...row, coreItemIds: builds[0], coreItemBuilds: builds }
 }

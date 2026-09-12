@@ -34,7 +34,7 @@ import {
  * 对位克制助手（Counter Intel）
  *
  * 混合数据架构：
- *   - 整体胜率：OP.GG 官方 JSON 接口（champion 详情的 counters 字段），零维护自动更新
+ *   - 整体胜率：OP.GG JSON 接口（champion 详情的 counters 字段），按补丁校验并定时刷新
  *   - 单杀率：OP.GG 网页 RSC 通道（见 counter-intel-web.ts），失败时优雅降级
  *   - 分路先验：OP.GG 官方梯队接口的各位置场次占比，用于全队分路指派推断
  *
@@ -89,8 +89,13 @@ export class ChampionDataCounterIntel {
     ipc.onCall(
       namespace,
       'counterIntel/rolePriors',
-      (_event: any, region: string, tier: string | number, version: string | null) =>
-        this.getRolePriors(region, tier, version)
+      (
+        _event: any,
+        region: string,
+        tier: string | number,
+        version: string | null,
+        force?: boolean
+      ) => this.getRolePriors(region, tier, version, force === true)
     )
     ipc.onCall(namespace, 'counterIntel/bzGuide', async (_event: any, params: BzGuideParams) => {
       const opponentChampionId = Number(params?.opponentChampionId)
@@ -114,6 +119,7 @@ export class ChampionDataCounterIntel {
         const row = await getBzZedMatchup(slug, {
           httpClient: this._deps.web,
           includeCoreItems: params?.includeCoreItems !== false,
+          force: params?.force === true,
           onWarn: (message) => this._deps.logger.warn(`[BzGuide] ${message}`)
         })
         return {
@@ -188,13 +194,14 @@ export class ChampionDataCounterIntel {
   async getRolePriors(
     region: string,
     tier: string | number,
-    version: string | null = null
+    version: string | null = null,
+    force = false
   ): Promise<RolePriors> {
     const requestedVersion = version?.trim() || null
     const key = `${region}|${tier}|${requestedVersion ?? 'latest'}`
     const now = Date.now()
     const cached = this._priorsCache.get(key)
-    if (cached && cached.expiresAt > now) {
+    if (!force && cached && cached.expiresAt > now) {
       return cached.value
     }
     const response = await this._deps.opggApi.getChampions(this._toApiRegion(region), 'ranked', {
@@ -210,6 +217,7 @@ export class ChampionDataCounterIntel {
         const lane = OPGG_POSITION_TO_UNIFIED[position.name]
         if (!lane) continue
         const play = position.stats?.play ?? 0
+        if (!Number.isSafeInteger(play) || play < 0 || plays[lane] !== undefined) continue
         plays[lane] = play
         total += play
       }
@@ -252,9 +260,22 @@ export class ChampionDataCounterIntel {
         }
       )
       this._assertRequestedVersion(requestedVersion, response.data.meta?.version, '克制表')
+      if (response.data.data.summary?.id !== params.championId) {
+        throw new Error('OP.GG 克制表英雄不匹配')
+      }
+      const sourceVersion = response.data.meta?.version?.trim() || null
       const counters = response.data.data.counters ?? []
       const rowsBase = counters
-        .filter((item) => item.play > 0)
+        .filter(
+          (item) =>
+            Number.isSafeInteger(item.play) &&
+            item.play > 0 &&
+            Number.isSafeInteger(item.win) &&
+            item.win >= 0 &&
+            item.win <= item.play &&
+            Number.isSafeInteger(item.champion_id) &&
+            item.champion_id > 0
+        )
         .map((item) => ({
           championId: item.champion_id,
           games: item.play,
@@ -269,6 +290,7 @@ export class ChampionDataCounterIntel {
       >()
 
       try {
+        if (!sourceVersion) throw new Error('胜率接口未返回补丁，无法核对单杀率口径')
         const slugMap = await this._ensureSlugMap(signal)
         const baseSlug = slugMap.get(params.championId)?.slug
         if (!baseSlug) {
@@ -285,7 +307,7 @@ export class ChampionDataCounterIntel {
           position: params.position,
           region: params.region,
           tier: params.tier,
-          patch: requestedVersion,
+          patch: sourceVersion,
           targets,
           signal,
           onWarn: (message) => this._deps.logger.warn(`[CounterIntel] ${message}`)
@@ -322,6 +344,7 @@ export class ChampionDataCounterIntel {
         region: params.region,
         tier: params.tier,
         version: requestedVersion,
+        sourceVersion,
         updatedAt: new Date().toISOString(),
         laneKillAvailable,
         rows

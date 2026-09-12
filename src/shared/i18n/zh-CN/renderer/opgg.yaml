@@ -141,6 +141,13 @@ opgg:
     sessionChampions:
       title: 本局英雄
   champion:
+    searchAugments: 搜索强化名称或编号
+    noMatchingAugments: 当前分组没有匹配的强化
+    qqMayhemAugmentScope: 腾讯所列强化使用该强化的全局统计，不是此英雄使用该强化的独立胜率；需英雄专属梯队可切换 OP.GG。
+    unnamedAugments: 来源有 {{count}} 条强化缺少名称资源，暂以编号显示。
+    recommendationOnly: 来源推荐 · 未公开可靠统计
+    mayhemDataNotice: '海克斯乱斗 · 资源补丁 {{patch}}。强化梯队与评分来自当前数据源，评分不是胜率；装备按 Mayhem 页面推荐顺序展示。'
+    mayhemItemsUnavailable: 装备推荐暂不可用；可切换 OP.GG 数据源或刷新重试。
     boots: 鞋子
     adorableRabi: 兔兔好可爱
     avgPlace: 平均排名

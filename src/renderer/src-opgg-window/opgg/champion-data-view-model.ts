@@ -198,7 +198,12 @@ export function toOpggChampionDetailsViewModel(
   const itemBuilds = new Map(
     (details.sections.itemBuilds ?? []).map((slot) => [
       slot.slot,
-      slot.options.map((option) => buildPickItem(option.itemIds, option.performance))
+      slot.options.map((option) => ({
+        ...buildPickItem(option.itemIds, option.performance),
+        ...(option.performance.games === null && option.performance.winRate === null
+          ? { is_recommendation_only: true }
+          : {})
+      }))
     ])
   )
   const abilityBuilds = new Map<
@@ -312,13 +317,16 @@ export function toOpggMayhemAugmentsViewModel(
     data: details.sections.augments.map((item) => ({
       id: item.augmentId,
       tier: item.tier,
+      display: item.display,
       performance:
         item.performanceScore ??
-        (item.performance.winRate === null ? 0 : item.performance.winRate * 100),
+        (item.performance.winRate === null ? null : item.performance.winRate * 100),
       popular:
         details.metadata.source === 'qq101'
-          ? (item.popularity ?? item.performance.pickRate ?? 0) * 100
-          : (item.popularity ?? item.performance.pickRate ?? 0)
+          ? item.popularity === null && item.performance.pickRate === null
+            ? null
+            : (item.popularity ?? item.performance.pickRate!) * 100
+          : (item.popularity ?? item.performance.pickRate)
     }))
   }
 }

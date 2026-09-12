@@ -61,6 +61,26 @@ akariScore:
     participation: Kill Participation
     vision: Vision
 playerTabs:
+  liveGame:
+    status:
+      checking: Checking game status
+      in-game: In game
+      not-in-game: Not in game
+      unknown: Game status unknown
+    reason:
+      disconnected: Connect the League client to check
+      unknown: No verifiable public game; privacy, service or network restrictions may apply
+      crossRegion: Game status is unavailable for this server
+      noGrant: Game status found; the client has not provided permission to spectate
+      busy: Return to the lobby before spectating; unavailable while queuing, selecting or playing
+      server: Current game reported by the server · checked every 30 seconds while visible
+      friend: Client friend presence · checked every 30 seconds while visible; presence may be delayed
+    checkedAt: Checked at {{time}}
+    spectate: Spectate
+    refresh: Check status
+    launchRequested: Spectate requested; wait for the client spectator delay
+    changed: Game or spectator permission changed; status refreshed
+    launchFailed: The client could not start spectating; the game may have ended or be restricted
   ranked:
     unranked: Unranked
     win: W

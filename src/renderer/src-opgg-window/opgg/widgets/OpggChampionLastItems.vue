@@ -36,28 +36,33 @@
           </NIcon>
         </template>
         <div class="desc ml-auto flex items-center">
-          <div class="pick flex min-w-19 flex-col items-center">
-            <span
-              class="pick-rate text-xs font-bold text-[#1a1a1a] dark:text-[#ebebeb]"
-              :title="t('opgg.champion.pickRate')"
-              >{{ (s.pick_rate * 100).toFixed(2) }}%</span
+          <span v-if="s.is_recommendation_only" class="text-xs text-gray-500">{{
+            t('opgg.champion.recommendationOnly')
+          }}</span>
+          <template v-else>
+            <div class="pick flex min-w-19 flex-col items-center">
+              <span
+                class="pick-rate text-xs font-bold text-[#1a1a1a] dark:text-[#ebebeb]"
+                :title="t('opgg.champion.pickRate')"
+                >{{ (s.pick_rate * 100).toFixed(2) }}%</span
+              >
+              <span
+                class="pick-play text-center text-xs text-[#666666] dark:text-[#bebebe]"
+                :title="t('opgg.champion.plays')"
+                >{{
+                  t('opgg.champion.times', {
+                    times: s.play.toLocaleString()
+                  })
+                }}
+              </span>
+            </div>
+            <div
+              class="win-rate min-w-19 text-center text-xs font-bold text-[#2563eb] dark:text-[#a0c6f8]"
+              :title="t('opgg.champion.winRate')"
             >
-            <span
-              class="pick-play text-center text-xs text-[#666666] dark:text-[#bebebe]"
-              :title="t('opgg.champion.plays')"
-              >{{
-                t('opgg.champion.times', {
-                  times: s.play.toLocaleString()
-                })
-              }}
-            </span>
-          </div>
-          <div
-            class="win-rate min-w-19 text-center text-xs font-bold text-[#2563eb] dark:text-[#a0c6f8]"
-            :title="t('opgg.champion.winRate')"
-          >
-            {{ ((s.win / (s.play || 1)) * 100).toFixed(2) }}%
-          </div>
+              {{ ((s.win / (s.play || 1)) * 100).toFixed(2) }}%
+            </div>
+          </template>
         </div>
       </div>
     </div>

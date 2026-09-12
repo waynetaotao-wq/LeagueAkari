@@ -26,10 +26,12 @@ import type { OpggHttpApiAxiosHelper } from '@shared/http-api-axios-helper/opgg'
 import type { Qq101HttpApiAxiosHelper, Qq101RiftQuery } from '@shared/http-api-axios-helper/qq101'
 import type { PositionType, RegionType, TierType } from '@shared/types/opgg'
 import { formatError } from '@shared/utils/errors'
+import type { AxiosInstance } from 'axios'
 import dayjs from 'dayjs'
 
 import type { AkariLogger } from '../logger-factory'
 import type { ChampionDataLoadOptions, ChampionDataSourceLoader } from './context'
+import { parseOpggMayhemAugments, parseOpggMayhemItems } from './opgg-web-data'
 
 const UNIFIED_TO_OPGG_POSITION: Readonly<Record<ChampionDataPosition, PositionType>> = {
   all: 'all',
@@ -46,7 +48,11 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
     private readonly _logger: AkariLogger,
     private readonly _opggApi: OpggHttpApiAxiosHelper,
     private readonly _qq101Api: Qq101HttpApiAxiosHelper,
-    private readonly _lolpsApi: LolpsHttpApiAxiosHelper
+    private readonly _lolpsApi: LolpsHttpApiAxiosHelper,
+    private readonly _mayhemWeb: {
+      http: AxiosInstance
+      getSlug: (championId: number) => Promise<string | null>
+    }
   ) {}
 
   private async _resolveOpggVersion(query: ChampionDataQuery, options: ChampionDataLoadOptions) {
@@ -155,12 +161,50 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
     options: ChampionDataLoadOptions
   ): Promise<ChampionDataDetails | null> {
     if (query.mode === 'aram_mayhem') {
-      const [tiers, augments] = await Promise.all([
+      const slug = await this._mayhemWeb.getSlug(championId)
+      const getPage = async (section: 'items' | 'augments') => {
+        if (!slug || !/^[a-z0-9]+$/.test(slug)) throw new Error('Unknown Mayhem champion slug')
+        const locale = section === 'augments' ? '/zh-cn' : ''
+        const response = await this._mayhemWeb.http.get<string>(
+          `https://op.gg${locale}/lol/modes/aram-mayhem/${slug}/${section}`,
+          { signal: options.signal, responseType: 'text', headers: { 'Accept-Language': 'en-US' } }
+        )
+        return response.data
+      }
+      const [tiers, augments, itemsPage, augmentsPage] = await Promise.allSettled([
         this._opggApi.getAramMayhemTiers(options),
-        this._opggApi.getAramMayhemChampionAugments(championId, options)
+        this._opggApi.getAramMayhemChampionAugments(championId, options),
+        getPage('items').then((page) => parseOpggMayhemItems(page, slug!)),
+        getPage('augments').then((page) => parseOpggMayhemAugments(page, slug!))
       ])
-      const tierItem = tiers.data.data.find((item) => item.champion_id === championId)
-      return tierItem ? adaptOpggMayhemDetails(tierItem, augments.data, { dataDate: null }) : null
+      options.signal?.throwIfAborted()
+      if (tiers.status === 'rejected') throw tiers.reason
+      const tierItem = tiers.value.data.data.find((item) => item.champion_id === championId)
+      if (!tierItem) return null
+      for (const [label, result] of [
+        ['Mayhem items', itemsPage],
+        ['Mayhem augment resources', augmentsPage]
+      ] as const)
+        this._logPartialFailure(label, result)
+      const details = adaptOpggMayhemDetails(
+        tierItem,
+        augments.status === 'fulfilled' ? augments.value.data : { data: [] },
+        { dataDate: null }
+      )
+      if (augmentsPage.status === 'fulfilled') {
+        details.sections.augments = augmentsPage.value.augments
+        details.metadata.patch = augmentsPage.value.patch
+      }
+      if (
+        itemsPage.status === 'fulfilled' &&
+        (!details.metadata.patch || details.metadata.patch === itemsPage.value.patch)
+      ) {
+        details.sections.itemBuilds = itemsPage.value.itemBuilds
+        details.metadata.patch = itemsPage.value.patch
+      }
+      if (!details.sections.augments?.length && !details.sections.itemBuilds?.length)
+        throw new Error('Mayhem details unavailable')
+      return details
     }
 
     const region = (query.region ?? 'global') as RegionType

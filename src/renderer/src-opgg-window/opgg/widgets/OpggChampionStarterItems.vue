@@ -27,7 +27,10 @@
         </NIcon>
       </template>
       <div class="desc ml-auto flex items-center">
-        <div v-if="isBzRecommendation(s)" class="pick flex min-w-38 flex-col items-center">
+        <span v-if="s.is_recommendation_only" class="text-xs text-gray-500">{{
+          t('opgg.champion.recommendationOnly')
+        }}</span>
+        <div v-else-if="isBzRecommendation(s)" class="pick flex min-w-38 flex-col items-center">
           <span class="text-xs font-bold text-[#2a947d] dark:text-[#5fd3a5]">
             {{ t('opgg.champion.bzRecommendation') }}
           </span>
