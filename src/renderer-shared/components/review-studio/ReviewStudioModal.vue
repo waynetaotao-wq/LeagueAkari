@@ -242,7 +242,7 @@
                 :disabled="busy || !availability.ready"
                 placeholder="选择一场对局，展开地图与关键片段"
                 aria-label="选择复盘对局"
-                @update:value="openMatch"
+                @update:value="openMatch($event)"
               /><NButton
                 size="small"
                 secondary
