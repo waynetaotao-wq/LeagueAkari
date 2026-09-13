@@ -119,6 +119,7 @@ export class ChampionDataCounterIntel {
         const row = await getBzZedMatchup(slug, {
           httpClient: this._deps.web,
           includeCoreItems: params?.includeCoreItems !== false,
+          includeImages: params?.includeImages !== false,
           force: params?.force === true,
           onWarn: (message) => this._deps.logger.warn(`[BzGuide] ${message}`)
         })

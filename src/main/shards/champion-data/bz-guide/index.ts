@@ -1,12 +1,31 @@
 /**
  * [lolps] Bz（欧服第一劫）对线攻略表接入
  *
- * 数据源：公开 Google Sheets 的 CSV 导出端点（无需认证，永远指向表的当前最新版，
+ * 数据源：公开 Google Sheets 的 Excel 导出及 CSV 文字回退（无需认证，
  * 作者更新表格后本端点内容随之变化——配合短 TTL 缓存即实现"自动跟更"）。
  * 结构：每行一个对线英雄（英文名），列含符文 / 难度 / 核心装 / 打法要点。
  */
 import type { BzMatchupRow } from '@shared/types/counter-intel'
 import axios, { type AxiosInstance } from 'axios'
+
+import {
+  BzGuideDataValidationError,
+  canonicalName,
+  extractBzRows,
+  normalizeName,
+  parseCsv
+} from './table'
+import { BZ_WORKBOOK_MAX_BYTES, parseBzWorkbook } from './workbook'
+
+export {
+  BzGuideDataValidationError,
+  canonicalName,
+  extractBzRows,
+  normalizeName,
+  parseCsv,
+  parseKeystone,
+  KEYSTONE_MAP
+} from './table'
 
 export type { BzMatchupRow }
 
@@ -15,30 +34,26 @@ export type { BzMatchupRow }
 /** 表文档 id 与工作表 gid（作者若开新表页在此更新） */
 export const BZ_SHEET_ID = '1FInDZ2JhIyto2y-FnCcgCVlAYcjRaF7egcpsV41Spic'
 export const BZ_SHEET_GID = '1026317672'
-/** 缓存时长：过期后下次查询重拉（作者更新表后最迟此时长内生效） */
+/** 缓存时长：过期后下次查询重拉；非后台实时订阅。 */
 export const BZ_CACHE_TTL = 10 * 60 * 1000
 /** 该攻略仅对此英雄生效（劫） */
 export const BZ_MY_CHAMPION_ID = 238
 
 export const BZ_CSV_URL = `https://docs.google.com/spreadsheets/d/${BZ_SHEET_ID}/export?format=csv&gid=${BZ_SHEET_GID}`
+export const BZ_XLSX_URL = `https://docs.google.com/spreadsheets/d/${BZ_SHEET_ID}/export?format=xlsx`
 
 // ============================ 类型 ==============================
 
 export interface GetBzZedMatchupOptions {
   /** 可注入主进程已有的 Axios 客户端，便于统一代理、重试和测试。 */
   httpClient?: AxiosInstance
-  /** 徽章等只消费文字的调用方可关闭，避免额外拉取 Data Dragon。 */
+  /** 不需要核心装备映射时可关闭；图片仍须核对当前补丁。 */
   includeCoreItems?: boolean
+  /** false 为轻量 CSV 文字模式，默认读取完整工作簿和图片。 */
+  includeImages?: boolean
   force?: boolean
   /** 装备库失败不会丢弃已获取的文字攻略；通过此回调交给上层 logger 留痕。 */
   onWarn?: (message: string) => void
-}
-
-export class BzGuideDataValidationError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'BzGuideDataValidationError'
-  }
 }
 
 interface CachedResource<T> {
@@ -114,7 +129,15 @@ const ITEM_ALIASES: Record<string, string> = {
 
 /** 与在线表格同周期核对装备库，避免补丁后继续沿用长时间旧映射。 */
 const ITEM_MAP_TTL = BZ_CACHE_TTL
-const _itemMapCaches = new WeakMap<AxiosInstance, CachedResource<Map<string, number>>>()
+interface ItemCatalog {
+  byName: Map<string, number>
+  version: string
+}
+const _itemMapCaches = new WeakMap<AxiosInstance, CachedResource<ItemCatalog>>()
+const _spellCaches = new WeakMap<
+  AxiosInstance,
+  { version: string; cache: CachedResource<Set<number>> }
+>()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -156,7 +179,7 @@ export function buildItemNameMap(payload: unknown): Map<string, number> {
   return byName
 }
 
-async function loadItemNameMap(httpClient: AxiosInstance): Promise<Map<string, number>> {
+async function loadItemNameMap(httpClient: AxiosInstance): Promise<ItemCatalog> {
   const versions = await httpClient.get<unknown>(
     'https://ddragon.leagueoflegends.com/api/versions.json',
     { timeout: 12000 }
@@ -171,12 +194,43 @@ async function loadItemNameMap(httpClient: AxiosInstance): Promise<Map<string, n
     `https://ddragon.leagueoflegends.com/cdn/${ver}/data/en_US/item.json`,
     { timeout: 15000 }
   )
-  return buildItemNameMap(items.data)
+  return { byName: buildItemNameMap(items.data), version: ver }
 }
 
-function ensureItemNameMap(httpClient: AxiosInstance, force = false): Promise<Map<string, number>> {
+function ensureItemNameMap(httpClient: AxiosInstance, force = false): Promise<ItemCatalog> {
   const cache = getClientCache(_itemMapCaches, httpClient)
   return readThroughCache(cache, ITEM_MAP_TTL, () => loadItemNameMap(httpClient), force)
+}
+
+async function ensureSpells(httpClient: AxiosInstance, version: string, force = false) {
+  let entry = _spellCaches.get(httpClient)
+  if (!entry || entry.version !== version) {
+    entry = { version, cache: { expiresAt: 0 } }
+    _spellCaches.set(httpClient, entry)
+  }
+  const ids = await readThroughCache(
+    entry.cache,
+    ITEM_MAP_TTL,
+    async () => {
+      const { data } = await httpClient.get<unknown>(
+        `https://ddragon.leagueoflegends.com/cdn/${version}/data/en_US/summoner.json`,
+        { timeout: 12000 }
+      )
+      if (!isRecord(data) || !isRecord(data.data))
+        throw new BzGuideDataValidationError('invalid summoner spell catalog')
+      const ids = new Set<number>()
+      for (const spell of Object.values(data.data)) {
+        if (!isRecord(spell) || !Array.isArray(spell.modes) || !spell.modes.includes('CLASSIC'))
+          continue
+        const id = Number(spell.key)
+        if (Number.isSafeInteger(id) && id > 0) ids.add(id)
+      }
+      if (!ids.size) throw new BzGuideDataValidationError('empty summoner spell catalog')
+      return ids
+    },
+    force
+  )
+  return entry.cache.stale ? null : ids
 }
 
 /** 单个装备名 → id：精确 → 别名 → 前缀（≥4 字符且唯一） */
@@ -232,203 +286,10 @@ export function resolveBuildItems(coreBuild: string, byName: Map<string, number>
   return resolveBuildItemSequences(coreBuild, byName)[0] ?? []
 }
 
-// ============================ CSV 解析 ==========================
-
-/** 标准 CSV 解析（支持引号包裹的换行与转义引号） */
-export function parseCsv(text: string): string[][] {
-  const rows: string[][] = []
-  let row: string[] = []
-  let field = ''
-  let inQuotes = false
-  let closedQuotedField = false
-
-  const finishField = () => {
-    row.push(field)
-    field = ''
-    closedQuotedField = false
-  }
-  const finishRow = () => {
-    finishField()
-    rows.push(row)
-    row = []
-  }
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    if (inQuotes) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') {
-          field += '"'
-          i++
-        } else {
-          inQuotes = false
-          closedQuotedField = true
-        }
-      } else if (ch === '\r') {
-        if (text[i + 1] === '\n') i++
-        field += '\n'
-      } else {
-        field += ch
-      }
-      continue
-    }
-
-    if (closedQuotedField) {
-      if (ch === ',') {
-        finishField()
-      } else if (ch === '\n' || ch === '\r') {
-        if (ch === '\r' && text[i + 1] === '\n') i++
-        finishRow()
-      } else {
-        throw new BzGuideDataValidationError(
-          `invalid CSV character after closing quote at offset ${i}`
-        )
-      }
-      continue
-    }
-
-    if (ch === '"') {
-      if (field.length > 0) {
-        throw new BzGuideDataValidationError(`invalid CSV quote at offset ${i}`)
-      }
-      inQuotes = true
-    } else if (ch === ',') {
-      finishField()
-    } else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && text[i + 1] === '\n') i++
-      finishRow()
-    } else {
-      field += ch
-    }
-  }
-
-  if (inQuotes) {
-    throw new BzGuideDataValidationError('unterminated quoted CSV field')
-  }
-  if (field.length > 0 || row.length > 0 || closedQuotedField) {
-    finishField()
-    rows.push(row)
-  }
-  return rows
-}
-
-/** 名字归一：小写并去除全部非字母数字（Kha'Zix → khazix、Dr. Mundo → drmundo） */
-export function normalizeName(name: string): string {
-  return (name || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-}
-
-/** 基石符文英文名 → perkId（可调区：新基石在此追加；含常见缩写） */
-export const KEYSTONE_MAP: Record<string, number> = {
-  presstheattack: 8005,
-  lethaltempo: 8008,
-  fleetfootwork: 8021,
-  conqueror: 8010,
-  conq: 8010,
-  electrocute: 8112,
-  darkharvest: 8128,
-  hailofblades: 9923,
-  summonaery: 8214,
-  aery: 8214,
-  arcanecomet: 8229,
-  phaserush: 8230,
-  graspoftheundying: 8437,
-  grasp: 8437,
-  aftershock: 8439,
-  guardian: 8465,
-  glacialaugment: 8351,
-  unsealedspellbook: 8360,
-  firststrike: 8369
-}
-
-/** 从 Bz 符文列文字里解析基石 perkId（逐行归一后查映射，命中首个；无法识别返回 null） */
-export function parseKeystone(runeText: string): number | null {
-  for (const line of (runeText || '').split('\n')) {
-    const n = normalizeName(line)
-    if (!n) continue
-    if (KEYSTONE_MAP[n] !== undefined) return KEYSTONE_MAP[n]
-  }
-  // 整段兜底（"First Strike Precision" 单行书写的情况）
-  const whole = normalizeName(runeText)
-  for (const [name, id] of Object.entries(KEYSTONE_MAP)) {
-    if (name.length >= 4 && whole.startsWith(name)) return id
-  }
-  return null
-}
-
-/** 少数表名与 OP.GG slug 不同源的别名（归一后比对） */
-const NAME_ALIASES: Record<string, string> = {
-  monkeyking: 'wukong'
-}
-
-export function canonicalName(name: string): string {
-  const n = normalizeName(name)
-  return NAME_ALIASES[n] ?? n
-}
-
-/** 从整表行中解析出对线攻略行（自动定位表头行，对列名不敏感于大小写与空白） */
-export function extractBzRows(rows: string[][]): BzMatchupRow[] {
-  const headerIdx = rows.findIndex((r) => {
-    const normalized = r.map((cell) => normalizeName(cell))
-    return (
-      normalized.some((cell) => cell.includes('champion')) &&
-      normalized.some((cell) => cell.includes('difficulty'))
-    )
-  })
-  if (headerIdx < 0) {
-    throw new BzGuideDataValidationError('BZ CSV header row was not found')
-  }
-
-  const header = rows[headerIdx].map((cell) => normalizeName(cell))
-  const col = (name: string) => header.findIndex((value) => value.includes(normalizeName(name)))
-  const cChampion = col('champion')
-  const cRune = col('rune')
-  const cDifficulty = col('difficulty')
-  const cCore = col('core build')
-  const cSummary = col('summary')
-  const requiredColumns: Array<[string, number]> = [
-    ['champion', cChampion],
-    ['rune', cRune],
-    ['difficulty', cDifficulty],
-    ['core build', cCore],
-    ['summary', cSummary]
-  ]
-  const missingColumns = requiredColumns.filter(([, index]) => index < 0).map(([name]) => name)
-  if (missingColumns.length > 0) {
-    throw new BzGuideDataValidationError(
-      `BZ CSV is missing required columns: ${missingColumns.join(', ')}`
-    )
-  }
-
-  const out: BzMatchupRow[] = []
-  for (let i = headerIdx + 1; i < rows.length; i++) {
-    const r = rows[i]
-    if (!r.some((cell) => cell.trim().length > 0)) continue
-    const champion = (r[cChampion] ?? '').trim()
-    if (!champion || normalizeName(champion).length === 0) continue
-    const rune = (r[cRune] ?? '').trim()
-    const difficulty = (r[cDifficulty] ?? '').trim()
-    const coreBuild = (r[cCore] ?? '').trim()
-    const summary = (r[cSummary] ?? '').trim()
-    // 五列是当前表的完整契约；任一内容列缺失都视为编辑中的半行。
-    if (![rune, difficulty, coreBuild, summary].every(Boolean)) continue
-    out.push({
-      champion,
-      rune,
-      difficulty,
-      coreBuild,
-      summary,
-      keystonePerkId: parseKeystone(rune)
-    })
-  }
-  if (out.length === 0) {
-    throw new BzGuideDataValidationError('BZ CSV contains no valid matchup rows')
-  }
-  return out
-}
-
 // ============================ 拉取与查询 ========================
 
 const _tableCaches = new WeakMap<AxiosInstance, CachedResource<Map<string, BzMatchupRow>>>()
+const _workbookCaches = new WeakMap<AxiosInstance, CachedResource<Map<string, BzMatchupRow>>>()
 
 async function loadTable(httpClient: AxiosInstance): Promise<Map<string, BzMatchupRow>> {
   const { data } = await httpClient.get<unknown>(BZ_CSV_URL, {
@@ -445,7 +306,7 @@ async function loadTable(httpClient: AxiosInstance): Promise<Map<string, BzMatch
     if (byName.has(key)) {
       throw new BzGuideDataValidationError(`BZ CSV contains duplicate champion key: ${key}`)
     }
-    byName.set(key, row)
+    byName.set(key, { ...row, sourceFormat: 'csv' })
   }
   if (byName.size === 0) {
     throw new BzGuideDataValidationError('BZ CSV contains no uniquely addressable matchup rows')
@@ -453,9 +314,50 @@ async function loadTable(httpClient: AxiosInstance): Promise<Map<string, BzMatch
   return byName
 }
 
-function ensureTable(httpClient: AxiosInstance, force = false): Promise<Map<string, BzMatchupRow>> {
-  const cache = getClientCache(_tableCaches, httpClient)
-  return readThroughCache(cache, BZ_CACHE_TTL, () => loadTable(httpClient), force)
+async function ensureTable(
+  httpClient: AxiosInstance,
+  images: boolean,
+  force = false,
+  onWarn?: (message: string) => void
+): Promise<Map<string, BzMatchupRow>> {
+  const cache = getClientCache(images ? _workbookCaches : _tableCaches, httpClient)
+  const value = await readThroughCache(
+    cache,
+    BZ_CACHE_TTL,
+    async () => {
+      if (!images) return loadTable(httpClient)
+      try {
+        const { data } = await httpClient.get<ArrayBuffer>(BZ_XLSX_URL, {
+          responseType: 'arraybuffer',
+          timeout: 15000,
+          maxContentLength: BZ_WORKBOOK_MAX_BYTES,
+          'axios-retry': { retries: 0 }
+        })
+        const bytes = Buffer.isBuffer(data)
+          ? data
+          : data instanceof ArrayBuffer
+            ? new Uint8Array(data)
+            : null
+        if (!bytes) throw new BzGuideDataValidationError('BZ Excel response is not binary')
+        return new Map(parseBzWorkbook(bytes).map((row) => [canonicalName(row.champion), row]))
+      } catch (error) {
+        onWarn?.(
+          `图片表读取失败，尝试 CSV 文字回退: ${error instanceof Error ? error.message : String(error)}`
+        )
+        const textRows = await loadTable(httpClient)
+        for (const row of textRows.values())
+          row.imageLoadout = {
+            status: 'unavailable',
+            issues: [{ code: 'source-unavailable', field: 'both' }]
+          }
+        return textRows
+      }
+    },
+    force
+  )
+  if (images && [...value.values()].some((row) => row.imageLoadout?.status === 'unavailable'))
+    cache.expiresAt = Math.min(cache.expiresAt, Date.now() + STALE_RETRY_TTL)
+  return value
 }
 
 /**
@@ -469,32 +371,81 @@ export async function getBzZedMatchup(
 ): Promise<BzMatchupRow | null> {
   if (!opponentSlug) return null
   const httpClient = options.httpClient ?? axios
+  const images = options.includeImages !== false
+  const needsCatalog = images || options.includeCoreItems !== false
   const resources = await Promise.all([
-    ensureTable(httpClient, options.force),
-    options.includeCoreItems === false
-      ? Promise.resolve<Map<string, number> | null>(null)
-      : ensureItemNameMap(httpClient, options.force).catch((error: unknown) => {
-          options.onWarn?.(
-            `Data Dragon 装备库获取失败，已保留 BZ 文字攻略: ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          )
-          return null
-        })
+    ensureTable(httpClient, images, options.force, options.onWarn).then((table) => {
+      const { fetchedAt, stale } = getClientCache(
+        images ? _workbookCaches : _tableCaches,
+        httpClient
+      )
+      return { table, fetchedAt, stale }
+    }),
+    !needsCatalog
+      ? Promise.resolve(null)
+      : ensureItemNameMap(httpClient, options.force)
+          .then((catalog) => ({
+            catalog,
+            stale: getClientCache(_itemMapCaches, httpClient).stale === true
+          }))
+          .catch((error: unknown) => {
+            options.onWarn?.(
+              `Data Dragon 装备库获取失败，已保留 BZ 文字攻略: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            )
+            return null
+          })
   ])
-  const [table, byName] = resources
+  // Capture metadata with each response: another window can force a refresh while a catalog waits.
+  const [snapshot, catalogSnapshot] = resources
+  const { table } = snapshot
+  const catalog = catalogSnapshot?.catalog
+  const byName = catalog?.byName
   const key = canonicalName(opponentSlug)
   const found = table.get(key) ?? prefixLookup(table, key)
   if (!found) return null
-  const cache = getClientCache(_tableCaches, httpClient)
-  const itemCache = getClientCache(_itemMapCaches, httpClient)
   const row: BzMatchupRow = {
     ...found,
-    fetchedAt: cache.fetchedAt,
-    stale: cache.stale === true,
-    itemCatalogStale: options.includeCoreItems !== false && (!byName || itemCache.stale === true)
+    fetchedAt: snapshot.fetchedAt,
+    stale: snapshot.stale === true,
+    itemCatalogStale: needsCatalog && (!byName || catalogSnapshot?.stale === true)
   }
   if (row.stale) options.onWarn?.('表格刷新失败，当前展示的是旧缓存，禁止自动应用')
+  if (row.imageLoadout && row.imageLoadout.status !== 'unavailable' && !row.stale) {
+    row.imageLoadout = { ...row.imageLoadout, issues: [...row.imageLoadout.issues] }
+    const loadout = row.imageLoadout
+    if (!catalog || row.itemCatalogStale) {
+      delete loadout.spellIds
+      delete loadout.starterItemId
+      loadout.issues.push({ code: 'catalog-unavailable', field: 'both' })
+    } else {
+      loadout.catalogVersion = catalog.version
+      if (loadout.starterItemId && ![...catalog.byName.values()].includes(loadout.starterItemId)) {
+        delete loadout.starterItemId
+        loadout.issues.push({ code: 'unavailable-in-patch', field: 'starter' })
+      }
+      if (loadout.spellIds) {
+        const spells = await ensureSpells(httpClient, catalog.version, options.force).catch(
+          (error: unknown) => {
+            options.onWarn?.(
+              `召唤师技能库读取失败: ${error instanceof Error ? error.message : String(error)}`
+            )
+            return null
+          }
+        )
+        if (!spells || !loadout.spellIds.every((id) => spells.has(id))) {
+          delete loadout.spellIds
+          loadout.issues.push({
+            code: spells ? 'unavailable-in-patch' : 'catalog-unavailable',
+            field: 'spells'
+          })
+        }
+      }
+    }
+    loadout.status = loadout.spellIds && loadout.starterItemId ? 'ready' : 'partial'
+  }
+  if (options.includeCoreItems === false) return row
   if (!byName || !found.coreBuild || row.stale || row.itemCatalogStale) return row
   return withCoreItems(row, byName)
 }

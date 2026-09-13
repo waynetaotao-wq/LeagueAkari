@@ -25,25 +25,9 @@
         </span>
       </div>
       <div class="leading-relaxed whitespace-pre-line">{{ displayText }}</div>
-      <div
-        v-if="extras"
-        class="mt-1.5 flex items-center gap-2 border-t border-black/5 pt-1.5 dark:border-white/8"
-      >
-        <span class="text-[10px] text-[#666666] dark:text-[#b2b2b2]">召唤师</span>
-        <SummonerSpellDisplay
-          v-for="(sid, i) of extras.spellIds"
-          :key="i"
-          :spell-id="sid"
-          :size="18"
-        />
-        <span class="ml-1 text-[10px] text-[#666666] dark:text-[#b2b2b2]">出门</span>
-        <ItemDisplay :item-id="extras.starterItemId" :size="18" />
-      </div>
+      <BzImageLoadout :row="bzRow" />
       <div v-if="!zhText" class="mt-1 text-[10px] text-[#666666] dark:text-[#b2b2b2]">
         （当前内容暂未翻译，显示原文）
-      </div>
-      <div v-if="extras" class="mt-1 text-[10px] text-gray-500">
-        技能与出门装为历史人工补充，不随表格图片自动同步。
       </div>
     </div>
   </NPopover>
@@ -57,11 +41,10 @@ import type { BzGuideParams, BzGuideResult, BzMatchupRow } from '@shared/types/c
 import { NPopover } from 'naive-ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
-import ItemDisplay from '@renderer-shared/components/widgets/ItemDisplay.vue'
-import SummonerSpellDisplay from '@renderer-shared/components/widgets/SummonerSpellDisplay.vue'
+import BzImageLoadout from '@renderer-shared/components/bz-guide/BzImageLoadout.vue'
 
 import { useOngoingGamePanel } from '../../context'
-import { getBzExtras, getBzSummaryZh, isBzLaneOpponent, resolveBzSelfPuuid } from './bz-summary-zh'
+import { getBzSummaryZh, isBzLaneOpponent, resolveBzSelfPuuid } from './bz-summary-zh'
 
 const { puuid } = defineProps<{
   puuid: string
@@ -142,7 +125,8 @@ async function loadBzRow(requestSeq: number, opponentChampionId: number, attempt
 
 function refreshOnOpen(show: boolean) {
   if (!show || !targetChampionId.value || !bzRow.value?.fetchedAt) return
-  if (Date.now() - bzRow.value.fetchedAt < 10 * 60_000) return
+  const retrySoon = bzRow.value.stale || bzRow.value.imageLoadout?.status === 'unavailable'
+  if (Date.now() - bzRow.value.fetchedAt < (retrySoon ? 60_000 : 10 * 60_000)) return
   invalidateRequest()
   void loadBzRow(seq, targetChampionId.value, 0)
 }
@@ -184,7 +168,6 @@ onBeforeUnmount(() => {
 const zhText = computed(() =>
   bzRow.value ? getBzSummaryZh(bzRow.value.champion, bzRow.value.summary) : null
 )
-const extras = computed(() => (bzRow.value ? getBzExtras(bzRow.value.champion) : null))
 const displayText = computed(() => zhText.value ?? bzRow.value?.summary ?? '')
 </script>
 

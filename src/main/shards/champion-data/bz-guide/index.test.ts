@@ -9,12 +9,15 @@ import {
   buildItemNameMap,
   canonicalName,
   extractBzRows,
-  getBzZedMatchup,
+  getBzZedMatchup as getMatchup,
   parseCsv,
   resolveBuildItemSequences,
   resolveItemName,
   withCoreItems
-} from './bz-guide'
+} from './index'
+
+const getBzZedMatchup: typeof getMatchup = (slug, options) =>
+  getMatchup(slug, { ...options, includeImages: false })
 
 const VALID_CSV = [
   'Champion,Rune,Difficulty,Core Build,Summary',
@@ -212,7 +215,7 @@ describe('BZ loading and cache behavior', () => {
       await getBzZedMatchup('tryndamere', { httpClient, includeCoreItems: false, force: true })
     ).toMatchObject({ summary: 'Updated matchup advice', stale: false })
   })
-  it('uses the injected client and does not fetch Data Dragon when core items are disabled', async () => {
+  it('uses the injected client and does not fetch Data Dragon in explicit text-only mode', async () => {
     const httpClient = createHttpClient(async () => ({ data: VALID_CSV }))
 
     const row = await getBzZedMatchup('tryndamere', {

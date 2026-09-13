@@ -1,4 +1,31 @@
 opgg:
+  bzImages:
+    status:
+      ready: 图片已同步
+      partial: 图片需核对
+      unavailable: 图片暂不可用
+      stale: 旧图片已停用
+    location: '{{sheet}} · 第 {{row}} 行'
+    catalog: '资源版本 {{version}}'
+    stale: 表格更新失败，旧图片不参与配置推荐。
+    previews: 原表图标
+    previewAlt: '原表图标 {{index}}'
+    issue: '{{field}}：{{reason}}。'
+    fields:
+      spells: 召唤师技能
+      starter: 出门装
+      both: 技能与出门装
+    issues:
+      source-unavailable: 图片下载或解析失败，暂时保留文字攻略
+      unknown-image: 图标未能可靠识别，未自动应用
+      ambiguous-position: 图标跨行或位置不明确，未自动应用
+      overlapping-images: 图标大面积重叠，未自动应用
+      missing-spells: 未找到完整的两个技能
+      missing-starter: 未找到出门装
+      ambiguous-spells: 无法确定唯一的两个技能
+      ambiguous-starter: 存在多个出门装图标，未自动选择
+      catalog-unavailable: 当前资源库未能核对，未自动应用
+      unavailable-in-patch: 图标对应内容不在当前峡谷资源库中
   titlebar:
     title: 英雄数据
     close: 关闭

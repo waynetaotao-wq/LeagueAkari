@@ -1,11 +1,16 @@
 import type { BzExtras } from '@renderer-shared/components/ongoing-game-panel/widgets/player-info-card/bz-summary-zh'
+import type { BzMatchupRow } from '@shared/types/counter-intel'
+import { resolveBzImageLoadout } from '@shared/utils/bz-image-loadout'
 
 export type BzOverlaySection = 'summoner_spells' | 'starter_items' | 'core_items' | 'runes'
 
 export type BzRuneFilterStatus =
   'not-requested' | 'missing-runes' | 'no-match' | 'already-matched' | 'filtered'
 
-export interface BzOverlayRecommendation {
+export interface BzOverlayRecommendation extends Pick<
+  BzMatchupRow,
+  'imageLoadout' | 'itemCatalogStale'
+> {
   stale?: boolean
   champion?: string
   coreItemIds?: readonly number[]
@@ -181,10 +186,10 @@ export function mergeBzIntoOverlay(
     }
   }
 
-  const resolvedExtras = extras ?? null
+  const resolvedExtras = resolveBzImageLoadout(bz, extras)
   if (resolvedExtras) {
     const spellIds = validIds(resolvedExtras.spellIds, 2)
-    if (spellIds) {
+    if (spellIds?.length === 2 && new Set(spellIds).size === 2) {
       const spells = promoteRows(base.summoner_spells, [spellIds], sameUnorderedIds)
       base.summoner_spells = spells.rows
       if (spells.changed) sections.push('summoner_spells')
@@ -198,7 +203,7 @@ export function mergeBzIntoOverlay(
     }
   }
 
-  const builds = coreItemBuilds(bz)
+  const builds = bz.itemCatalogStale ? [] : coreItemBuilds(bz)
   if (builds.length > 0) {
     const coreItems = promoteRows(base.core_items, builds, sameIds)
     base.core_items = coreItems.rows

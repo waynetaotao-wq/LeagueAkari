@@ -1,4 +1,31 @@
 opgg:
+  bzImages:
+    status:
+      ready: Images synced
+      partial: Images need review
+      unavailable: Images unavailable
+      stale: Old images disabled
+    location: '{{sheet}} · Row {{row}}'
+    catalog: 'Resource version {{version}}'
+    stale: The table could not be refreshed. Old images are excluded from recommendations.
+    previews: Source icons
+    previewAlt: 'Source icon {{index}}'
+    issue: '{{field}}: {{reason}}.'
+    fields:
+      spells: Summoner spells
+      starter: Starting item
+      both: Spells and starting item
+    issues:
+      source-unavailable: Image download or parsing failed; text advice remains available
+      unknown-image: The icon could not be reliably identified and was not applied
+      ambiguous-position: The icon crosses rows or has an unclear position and was not applied
+      overlapping-images: Icons substantially overlap and were not applied
+      missing-spells: A complete pair of spells was not found
+      missing-starter: No starting item was found
+      ambiguous-spells: A unique pair of spells could not be determined
+      ambiguous-starter: Multiple starting items were found; none was selected automatically
+      catalog-unavailable: The current resource catalog could not be checked; not applied
+      unavailable-in-patch: The icon is absent from the current Summoner's Rift catalog
   titlebar:
     title: Champion Data
     close: Close

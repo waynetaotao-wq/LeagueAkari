@@ -123,7 +123,9 @@
             难度 {{ bzRow.difficulty }}
           </span>
         </div>
-        <div v-if="bzExtras" class="mb-1 flex items-center gap-2">
+        <BzImageLoadout :row="bzRow" />
+        <div v-if="bzExtras" class="mb-1 flex flex-wrap items-center gap-2">
+          <span class="text-xs text-amber-600">历史人工补充</span>
           <span class="text-xs text-[#666666] dark:text-[#b2b2b2]">召唤师</span>
           <SummonerSpellDisplay
             v-for="(sid, i) of bzExtras.spellIds"
@@ -147,13 +149,16 @@
           {{ getBzSummaryZh(bzRow.champion, bzRow.summary) || bzRow.summary }}
         </div>
         <NCheckbox
-          v-if="getBzExtras(bzRow.champion)"
+          v-if="
+            (!bzRow.imageLoadout || bzRow.imageLoadout.status === 'unavailable') &&
+            getBzExtras(bzRow.champion)
+          "
           size="small"
           v-model:checked="useHistoricalBzExtras"
           class="mt-2"
-          :disabled="bzRow.stale"
+          :disabled="bzRow.stale || bzRow.itemCatalogStale"
         >
-          使用历史人工补充的召唤师技能与出门装（表格图片无法实时同步）
+          临时使用历史人工补充（不代表作者当前图片推荐）
         </NCheckbox>
         <div class="mt-1 text-[10px] text-[#666666]/80 dark:text-[#b2b2b2]/70">
           <template
@@ -164,7 +169,11 @@
           >
             核心装已按 Bz 推荐置顶至下方“核心装备”区（人工推荐行不显示虚假胜率）；
           </template>
-          <template v-if="bzExtras"> 召唤师技能与出门装同样已置顶至各自区块首行； </template>
+          <template v-if="bzExtras">历史人工补充已置顶；</template>
+          <template v-else-if="!bzRow.stale && bzRow.imageLoadout?.catalogVersion">
+            <template v-if="bzRow.imageLoadout.spellIds">图片中的召唤师技能已置顶；</template>
+            <template v-if="bzRow.imageLoadout.starterItemId">图片中的出门装已置顶；</template>
+          </template>
           <template v-if="bzRow.keystonePerkId">
             <template v-if="bzRuneFilterStatus === 'filtered'">
               符文区已按 Bz 基石筛选流派（保留 OP.GG 完整页数据）；
@@ -179,7 +188,7 @@
               未找到匹配 Bz 基石的 OP.GG 完整符文页，本次未应用符文筛选；
             </template>
           </template>
-          表格文字自动跟随作者更新；当前页面每分钟检查缓存，手动刷新立即重读。
+          文字和已识别图片随作者更新；缓存有效期 10 分钟，当前页面每分钟检查，手动刷新立即重读。
           新英文内容未经校对时显示原文；未收录的对线回落 OP.GG。
         </div>
       </div>
@@ -308,6 +317,7 @@
 </template>
 
 <script setup lang="ts">
+import BzImageLoadout from '@renderer-shared/components/bz-guide/BzImageLoadout.vue'
 import {
   getBzExtras,
   getBzSummaryZh
@@ -731,7 +741,11 @@ const bzSourceUnavailable = ref(false)
 const useHistoricalBzExtras = ref(false)
 const bzRuneFilterStatus = ref<BzRuneFilterStatus>('not-requested')
 const bzExtras = computed(() =>
-  bzRow.value && useHistoricalBzExtras.value && !bzRow.value.stale
+  bzRow.value &&
+  useHistoricalBzExtras.value &&
+  !bzRow.value.stale &&
+  !bzRow.value.itemCatalogStale &&
+  (!bzRow.value.imageLoadout || bzRow.value.imageLoadout.status === 'unavailable')
     ? getBzExtras(bzRow.value.champion)
     : null
 )
@@ -751,7 +765,10 @@ async function fetchBzRow(
     )
     return {
       row: res?.found ? res.row : null,
-      sourceUnavailable: res?.reason === 'source-unavailable' || res?.row?.stale === true
+      sourceUnavailable:
+        res?.reason === 'source-unavailable' ||
+        res?.row?.stale === true ||
+        res?.row?.imageLoadout?.status === 'unavailable'
     }
   } catch {
     return { row: null, sourceUnavailable: true }

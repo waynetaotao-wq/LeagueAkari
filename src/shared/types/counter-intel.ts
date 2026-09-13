@@ -53,9 +53,42 @@ export type RolePriors = Record<number, Partial<Record<LaneName, number>>>
 export interface BzGuideParams {
   /** 敌方对位英雄 id */
   opponentChampionId: number
-  /** 是否解析核心装备；徽章等纯文字消费者应关闭以减少网络请求 */
+  /** 是否解析核心装备；纯文字消费者同时关闭 includeImages 才跳过资源库请求。 */
   includeCoreItems?: boolean
+  /** false 仅取 CSV 文字；默认同时读取在线图片。 */
+  includeImages?: boolean
   force?: boolean
+}
+
+export type BzImageIssueCode =
+  | 'source-unavailable'
+  | 'unknown-image'
+  | 'ambiguous-position'
+  | 'overlapping-images'
+  | 'missing-spells'
+  | 'missing-starter'
+  | 'ambiguous-spells'
+  | 'ambiguous-starter'
+  | 'catalog-unavailable'
+  | 'unavailable-in-patch'
+
+export interface BzImageIssue {
+  code: BzImageIssueCode
+  field: 'spells' | 'starter' | 'both'
+}
+
+/** 同一份在线工作簿中的图片识别结果；缺失/冲突字段不生成推荐。 */
+export interface BzImageLoadout {
+  status: 'ready' | 'partial' | 'unavailable'
+  spellIds?: [number, number]
+  starterItemId?: number
+  /** 已核对这些 id 的 Data Dragon 补丁。 */
+  catalogVersion?: string
+  /** 内容摘要覆盖图像及其实际位置，不能用导出时会变化的 imageN 文件名。 */
+  fingerprint?: string
+  issues: BzImageIssue[]
+  /** 经解码验证并缩小的源图预览，供查看未知/冲突图标；禁止外部 URL。 */
+  previews?: string[]
 }
 
 export interface BzMatchupRow {
@@ -65,6 +98,10 @@ export interface BzMatchupRow {
   difficulty: string
   coreBuild: string
   summary: string
+  sourceFormat?: 'xlsx' | 'csv'
+  sourceSheet?: string
+  sourceRow?: number
+  imageLoadout?: BzImageLoadout
   /** 成功读取表格的时间；不是作者最后编辑时间。 */
   fetchedAt?: number
   stale?: boolean

@@ -3,6 +3,38 @@ import { describe, expect, it } from 'vitest'
 import { mergeBzIntoOverlay } from './bz-overlay'
 
 describe('mergeBzIntoOverlay', () => {
+  it('uses fresh online images ahead of a manual snapshot and never fills a conflict with it', () => {
+    const historical = { spellIds: [4, 14] as [number, number], starterItemId: 1055 }
+    const imageLoadout = {
+      status: 'ready' as const,
+      catalogVersion: '16.18.1',
+      spellIds: [4, 12] as [number, number],
+      starterItemId: 1054,
+      issues: []
+    }
+    const online = mergeBzIntoOverlay(null, { imageLoadout }, historical)
+    expect(online.overlay).toMatchObject({
+      summoner_spells: [{ ids: [4, 12] }],
+      starter_items: [{ ids: [1054] }]
+    })
+    const conflict = mergeBzIntoOverlay(
+      null,
+      {
+        imageLoadout: {
+          ...imageLoadout,
+          status: 'partial',
+          issues: [{ code: 'overlapping-images', field: 'spells' }]
+        }
+      },
+      historical
+    )
+    expect(conflict.overlay?.summoner_spells).toEqual([])
+    expect(conflict.overlay?.starter_items).toEqual([expect.objectContaining({ ids: [1054] })])
+    expect(mergeBzIntoOverlay(null, { imageLoadout, stale: true }, historical).overlay).toBeNull()
+    expect(
+      mergeBzIntoOverlay(null, { imageLoadout, itemCatalogStale: true }, historical).overlay
+    ).toBeNull()
+  })
   it('promotes multiple core builds in source order and marks only synthesized rows', () => {
     const overlay = {
       core_items: [
