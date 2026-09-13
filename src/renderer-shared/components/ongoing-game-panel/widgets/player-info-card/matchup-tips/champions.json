@@ -1,0 +1,867 @@
+[
+  {
+    "id": 266,
+    "slug": "Aatrox",
+    "name": "亚托克斯"
+  },
+  {
+    "id": 103,
+    "slug": "Ahri",
+    "name": "阿狸"
+  },
+  {
+    "id": 84,
+    "slug": "Akali",
+    "name": "阿卡丽"
+  },
+  {
+    "id": 166,
+    "slug": "Akshan",
+    "name": "阿克尚"
+  },
+  {
+    "id": 12,
+    "slug": "Alistar",
+    "name": "阿利斯塔"
+  },
+  {
+    "id": 799,
+    "slug": "Ambessa",
+    "name": "安蓓萨"
+  },
+  {
+    "id": 32,
+    "slug": "Amumu",
+    "name": "阿木木"
+  },
+  {
+    "id": 34,
+    "slug": "Anivia",
+    "name": "艾尼维亚"
+  },
+  {
+    "id": 1,
+    "slug": "Annie",
+    "name": "安妮"
+  },
+  {
+    "id": 523,
+    "slug": "Aphelios",
+    "name": "厄斐琉斯"
+  },
+  {
+    "id": 22,
+    "slug": "Ashe",
+    "name": "艾希"
+  },
+  {
+    "id": 136,
+    "slug": "AurelionSol",
+    "name": "奥瑞利安·索尔"
+  },
+  {
+    "id": 893,
+    "slug": "Aurora",
+    "name": "阿萝拉"
+  },
+  {
+    "id": 268,
+    "slug": "Azir",
+    "name": "阿兹尔"
+  },
+  {
+    "id": 432,
+    "slug": "Bard",
+    "name": "巴德"
+  },
+  {
+    "id": 200,
+    "slug": "Belveth",
+    "name": "卑尔维斯"
+  },
+  {
+    "id": 53,
+    "slug": "Blitzcrank",
+    "name": "布里茨"
+  },
+  {
+    "id": 63,
+    "slug": "Brand",
+    "name": "布兰德"
+  },
+  {
+    "id": 201,
+    "slug": "Braum",
+    "name": "布隆"
+  },
+  {
+    "id": 233,
+    "slug": "Briar",
+    "name": "贝蕾亚"
+  },
+  {
+    "id": 51,
+    "slug": "Caitlyn",
+    "name": "凯特琳"
+  },
+  {
+    "id": 164,
+    "slug": "Camille",
+    "name": "卡蜜尔"
+  },
+  {
+    "id": 69,
+    "slug": "Cassiopeia",
+    "name": "卡西奥佩娅"
+  },
+  {
+    "id": 31,
+    "slug": "Chogath",
+    "name": "科加斯"
+  },
+  {
+    "id": 42,
+    "slug": "Corki",
+    "name": "库奇"
+  },
+  {
+    "id": 122,
+    "slug": "Darius",
+    "name": "德莱厄斯"
+  },
+  {
+    "id": 131,
+    "slug": "Diana",
+    "name": "黛安娜"
+  },
+  {
+    "id": 119,
+    "slug": "Draven",
+    "name": "德莱文"
+  },
+  {
+    "id": 36,
+    "slug": "DrMundo",
+    "name": "蒙多医生"
+  },
+  {
+    "id": 245,
+    "slug": "Ekko",
+    "name": "艾克"
+  },
+  {
+    "id": 60,
+    "slug": "Elise",
+    "name": "伊莉丝"
+  },
+  {
+    "id": 28,
+    "slug": "Evelynn",
+    "name": "伊芙琳"
+  },
+  {
+    "id": 81,
+    "slug": "Ezreal",
+    "name": "伊泽瑞尔"
+  },
+  {
+    "id": 9,
+    "slug": "Fiddlesticks",
+    "name": "费德提克"
+  },
+  {
+    "id": 114,
+    "slug": "Fiora",
+    "name": "菲奥娜"
+  },
+  {
+    "id": 105,
+    "slug": "Fizz",
+    "name": "菲兹"
+  },
+  {
+    "id": 3,
+    "slug": "Galio",
+    "name": "加里奥"
+  },
+  {
+    "id": 41,
+    "slug": "Gangplank",
+    "name": "普朗克"
+  },
+  {
+    "id": 86,
+    "slug": "Garen",
+    "name": "盖伦"
+  },
+  {
+    "id": 150,
+    "slug": "Gnar",
+    "name": "纳尔"
+  },
+  {
+    "id": 79,
+    "slug": "Gragas",
+    "name": "古拉加斯"
+  },
+  {
+    "id": 104,
+    "slug": "Graves",
+    "name": "格雷福斯"
+  },
+  {
+    "id": 887,
+    "slug": "Gwen",
+    "name": "格温"
+  },
+  {
+    "id": 120,
+    "slug": "Hecarim",
+    "name": "赫卡里姆"
+  },
+  {
+    "id": 74,
+    "slug": "Heimerdinger",
+    "name": "黑默丁格"
+  },
+  {
+    "id": 910,
+    "slug": "Hwei",
+    "name": "彗"
+  },
+  {
+    "id": 420,
+    "slug": "Illaoi",
+    "name": "俄洛伊"
+  },
+  {
+    "id": 39,
+    "slug": "Irelia",
+    "name": "艾瑞莉娅"
+  },
+  {
+    "id": 427,
+    "slug": "Ivern",
+    "name": "艾翁"
+  },
+  {
+    "id": 40,
+    "slug": "Janna",
+    "name": "迦娜"
+  },
+  {
+    "id": 59,
+    "slug": "JarvanIV",
+    "name": "嘉文四世"
+  },
+  {
+    "id": 24,
+    "slug": "Jax",
+    "name": "贾克斯"
+  },
+  {
+    "id": 126,
+    "slug": "Jayce",
+    "name": "杰斯"
+  },
+  {
+    "id": 202,
+    "slug": "Jhin",
+    "name": "烬"
+  },
+  {
+    "id": 222,
+    "slug": "Jinx",
+    "name": "金克丝"
+  },
+  {
+    "id": 145,
+    "slug": "Kaisa",
+    "name": "卡莎"
+  },
+  {
+    "id": 429,
+    "slug": "Kalista",
+    "name": "卡莉丝塔"
+  },
+  {
+    "id": 43,
+    "slug": "Karma",
+    "name": "卡尔玛"
+  },
+  {
+    "id": 30,
+    "slug": "Karthus",
+    "name": "卡尔萨斯"
+  },
+  {
+    "id": 38,
+    "slug": "Kassadin",
+    "name": "卡萨丁"
+  },
+  {
+    "id": 55,
+    "slug": "Katarina",
+    "name": "卡特琳娜"
+  },
+  {
+    "id": 10,
+    "slug": "Kayle",
+    "name": "凯尔"
+  },
+  {
+    "id": 141,
+    "slug": "Kayn",
+    "name": "凯隐"
+  },
+  {
+    "id": 85,
+    "slug": "Kennen",
+    "name": "凯南"
+  },
+  {
+    "id": 121,
+    "slug": "Khazix",
+    "name": "卡兹克"
+  },
+  {
+    "id": 203,
+    "slug": "Kindred",
+    "name": "千珏"
+  },
+  {
+    "id": 240,
+    "slug": "Kled",
+    "name": "克烈"
+  },
+  {
+    "id": 96,
+    "slug": "KogMaw",
+    "name": "克格莫"
+  },
+  {
+    "id": 897,
+    "slug": "KSante",
+    "name": "奎桑提"
+  },
+  {
+    "id": 7,
+    "slug": "Leblanc",
+    "name": "乐芙兰"
+  },
+  {
+    "id": 64,
+    "slug": "LeeSin",
+    "name": "李青"
+  },
+  {
+    "id": 89,
+    "slug": "Leona",
+    "name": "蕾欧娜"
+  },
+  {
+    "id": 876,
+    "slug": "Lillia",
+    "name": "莉莉娅"
+  },
+  {
+    "id": 127,
+    "slug": "Lissandra",
+    "name": "丽桑卓"
+  },
+  {
+    "id": 805,
+    "slug": "Locke",
+    "name": "洛克"
+  },
+  {
+    "id": 236,
+    "slug": "Lucian",
+    "name": "卢锡安"
+  },
+  {
+    "id": 117,
+    "slug": "Lulu",
+    "name": "璐璐"
+  },
+  {
+    "id": 99,
+    "slug": "Lux",
+    "name": "拉克丝"
+  },
+  {
+    "id": 54,
+    "slug": "Malphite",
+    "name": "墨菲特"
+  },
+  {
+    "id": 90,
+    "slug": "Malzahar",
+    "name": "玛尔扎哈"
+  },
+  {
+    "id": 57,
+    "slug": "Maokai",
+    "name": "茂凯"
+  },
+  {
+    "id": 11,
+    "slug": "MasterYi",
+    "name": "易"
+  },
+  {
+    "id": 800,
+    "slug": "Mel",
+    "name": "梅尔"
+  },
+  {
+    "id": 902,
+    "slug": "Milio",
+    "name": "米利欧"
+  },
+  {
+    "id": 21,
+    "slug": "MissFortune",
+    "name": "厄运小姐"
+  },
+  {
+    "id": 62,
+    "slug": "MonkeyKing",
+    "name": "孙悟空"
+  },
+  {
+    "id": 82,
+    "slug": "Mordekaiser",
+    "name": "莫德凯撒"
+  },
+  {
+    "id": 25,
+    "slug": "Morgana",
+    "name": "莫甘娜"
+  },
+  {
+    "id": 950,
+    "slug": "Naafiri",
+    "name": "纳亚菲利"
+  },
+  {
+    "id": 267,
+    "slug": "Nami",
+    "name": "娜美"
+  },
+  {
+    "id": 75,
+    "slug": "Nasus",
+    "name": "内瑟斯"
+  },
+  {
+    "id": 111,
+    "slug": "Nautilus",
+    "name": "诺提勒斯"
+  },
+  {
+    "id": 518,
+    "slug": "Neeko",
+    "name": "妮蔻"
+  },
+  {
+    "id": 76,
+    "slug": "Nidalee",
+    "name": "奈德丽"
+  },
+  {
+    "id": 895,
+    "slug": "Nilah",
+    "name": "尼菈"
+  },
+  {
+    "id": 56,
+    "slug": "Nocturne",
+    "name": "魔腾"
+  },
+  {
+    "id": 20,
+    "slug": "Nunu",
+    "name": "努努和威朗普"
+  },
+  {
+    "id": 2,
+    "slug": "Olaf",
+    "name": "奥拉夫"
+  },
+  {
+    "id": 61,
+    "slug": "Orianna",
+    "name": "奥莉安娜"
+  },
+  {
+    "id": 516,
+    "slug": "Ornn",
+    "name": "奥恩"
+  },
+  {
+    "id": 80,
+    "slug": "Pantheon",
+    "name": "潘森"
+  },
+  {
+    "id": 78,
+    "slug": "Poppy",
+    "name": "波比"
+  },
+  {
+    "id": 555,
+    "slug": "Pyke",
+    "name": "派克"
+  },
+  {
+    "id": 246,
+    "slug": "Qiyana",
+    "name": "奇亚娜"
+  },
+  {
+    "id": 133,
+    "slug": "Quinn",
+    "name": "奎因"
+  },
+  {
+    "id": 497,
+    "slug": "Rakan",
+    "name": "洛"
+  },
+  {
+    "id": 33,
+    "slug": "Rammus",
+    "name": "拉莫斯"
+  },
+  {
+    "id": 421,
+    "slug": "RekSai",
+    "name": "雷克塞"
+  },
+  {
+    "id": 526,
+    "slug": "Rell",
+    "name": "芮尔"
+  },
+  {
+    "id": 888,
+    "slug": "Renata",
+    "name": "烈娜塔 · 戈拉斯克"
+  },
+  {
+    "id": 58,
+    "slug": "Renekton",
+    "name": "雷克顿"
+  },
+  {
+    "id": 107,
+    "slug": "Rengar",
+    "name": "雷恩加尔"
+  },
+  {
+    "id": 92,
+    "slug": "Riven",
+    "name": "锐雯"
+  },
+  {
+    "id": 68,
+    "slug": "Rumble",
+    "name": "兰博"
+  },
+  {
+    "id": 13,
+    "slug": "Ryze",
+    "name": "瑞兹"
+  },
+  {
+    "id": 360,
+    "slug": "Samira",
+    "name": "莎弥拉"
+  },
+  {
+    "id": 113,
+    "slug": "Sejuani",
+    "name": "瑟庄妮"
+  },
+  {
+    "id": 235,
+    "slug": "Senna",
+    "name": "赛娜"
+  },
+  {
+    "id": 147,
+    "slug": "Seraphine",
+    "name": "萨勒芬妮"
+  },
+  {
+    "id": 875,
+    "slug": "Sett",
+    "name": "瑟提"
+  },
+  {
+    "id": 35,
+    "slug": "Shaco",
+    "name": "萨科"
+  },
+  {
+    "id": 98,
+    "slug": "Shen",
+    "name": "慎"
+  },
+  {
+    "id": 102,
+    "slug": "Shyvana",
+    "name": "希瓦娜"
+  },
+  {
+    "id": 27,
+    "slug": "Singed",
+    "name": "辛吉德"
+  },
+  {
+    "id": 14,
+    "slug": "Sion",
+    "name": "赛恩"
+  },
+  {
+    "id": 15,
+    "slug": "Sivir",
+    "name": "希维尔"
+  },
+  {
+    "id": 72,
+    "slug": "Skarner",
+    "name": "斯卡纳"
+  },
+  {
+    "id": 901,
+    "slug": "Smolder",
+    "name": "斯莫德"
+  },
+  {
+    "id": 37,
+    "slug": "Sona",
+    "name": "娑娜"
+  },
+  {
+    "id": 16,
+    "slug": "Soraka",
+    "name": "索拉卡"
+  },
+  {
+    "id": 50,
+    "slug": "Swain",
+    "name": "斯维因"
+  },
+  {
+    "id": 517,
+    "slug": "Sylas",
+    "name": "塞拉斯"
+  },
+  {
+    "id": 134,
+    "slug": "Syndra",
+    "name": "辛德拉"
+  },
+  {
+    "id": 223,
+    "slug": "TahmKench",
+    "name": "塔姆"
+  },
+  {
+    "id": 163,
+    "slug": "Taliyah",
+    "name": "塔莉垭"
+  },
+  {
+    "id": 91,
+    "slug": "Talon",
+    "name": "泰隆"
+  },
+  {
+    "id": 44,
+    "slug": "Taric",
+    "name": "塔里克"
+  },
+  {
+    "id": 17,
+    "slug": "Teemo",
+    "name": "提莫"
+  },
+  {
+    "id": 412,
+    "slug": "Thresh",
+    "name": "锤石"
+  },
+  {
+    "id": 18,
+    "slug": "Tristana",
+    "name": "崔丝塔娜"
+  },
+  {
+    "id": 48,
+    "slug": "Trundle",
+    "name": "特朗德尔"
+  },
+  {
+    "id": 23,
+    "slug": "Tryndamere",
+    "name": "泰达米尔"
+  },
+  {
+    "id": 4,
+    "slug": "TwistedFate",
+    "name": "崔斯特"
+  },
+  {
+    "id": 29,
+    "slug": "Twitch",
+    "name": "图奇"
+  },
+  {
+    "id": 77,
+    "slug": "Udyr",
+    "name": "乌迪尔"
+  },
+  {
+    "id": 6,
+    "slug": "Urgot",
+    "name": "厄加特"
+  },
+  {
+    "id": 110,
+    "slug": "Varus",
+    "name": "韦鲁斯"
+  },
+  {
+    "id": 67,
+    "slug": "Vayne",
+    "name": "薇恩"
+  },
+  {
+    "id": 45,
+    "slug": "Veigar",
+    "name": "维迦"
+  },
+  {
+    "id": 161,
+    "slug": "Velkoz",
+    "name": "维克兹"
+  },
+  {
+    "id": 711,
+    "slug": "Vex",
+    "name": "薇古丝"
+  },
+  {
+    "id": 254,
+    "slug": "Vi",
+    "name": "蔚"
+  },
+  {
+    "id": 234,
+    "slug": "Viego",
+    "name": "佛耶戈"
+  },
+  {
+    "id": 112,
+    "slug": "Viktor",
+    "name": "维克托"
+  },
+  {
+    "id": 8,
+    "slug": "Vladimir",
+    "name": "弗拉基米尔"
+  },
+  {
+    "id": 106,
+    "slug": "Volibear",
+    "name": "沃利贝尔"
+  },
+  {
+    "id": 19,
+    "slug": "Warwick",
+    "name": "沃里克"
+  },
+  {
+    "id": 498,
+    "slug": "Xayah",
+    "name": "霞"
+  },
+  {
+    "id": 101,
+    "slug": "Xerath",
+    "name": "泽拉斯"
+  },
+  {
+    "id": 5,
+    "slug": "XinZhao",
+    "name": "赵信"
+  },
+  {
+    "id": 157,
+    "slug": "Yasuo",
+    "name": "亚索"
+  },
+  {
+    "id": 777,
+    "slug": "Yone",
+    "name": "永恩"
+  },
+  {
+    "id": 83,
+    "slug": "Yorick",
+    "name": "约里克"
+  },
+  {
+    "id": 804,
+    "slug": "Yunara",
+    "name": "芸阿娜"
+  },
+  {
+    "id": 350,
+    "slug": "Yuumi",
+    "name": "悠米"
+  },
+  {
+    "id": 904,
+    "slug": "Zaahen",
+    "name": "亚恒"
+  },
+  {
+    "id": 154,
+    "slug": "Zac",
+    "name": "扎克"
+  },
+  {
+    "id": 238,
+    "slug": "Zed",
+    "name": "劫"
+  },
+  {
+    "id": 221,
+    "slug": "Zeri",
+    "name": "泽丽"
+  },
+  {
+    "id": 115,
+    "slug": "Ziggs",
+    "name": "吉格斯"
+  },
+  {
+    "id": 26,
+    "slug": "Zilean",
+    "name": "基兰"
+  },
+  {
+    "id": 142,
+    "slug": "Zoe",
+    "name": "佐伊"
+  },
+  {
+    "id": 143,
+    "slug": "Zyra",
+    "name": "婕拉"
+  }
+]

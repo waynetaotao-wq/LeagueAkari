@@ -57,6 +57,8 @@
           </NPopover>
         </div>
 
+        <MatchupTipsBadge :puuid="puuid" />
+
         <span v-if="playerActionOptions.length" class="relative inline-flex shrink-0">
           <NPopover v-model:show="isTagEditPopoverShowing" trigger="click" placement="bottom-end">
             <template #trigger>
@@ -159,6 +161,7 @@ import { computed, ref } from 'vue'
 
 import { PREMADE_TEAM_COLORS, PREMADE_TEAM_COLORS_LIGHT, RANKED_MEDAL_MAP } from '../../constants'
 import { useOngoingGamePanel } from '../../context'
+import MatchupTipsBadge from './matchup-tips/MatchupTipsBadge.vue'
 import {
   PLAYER_INFO_CARD_ACTION_KEYS,
   createCollectByChampionInitParams,

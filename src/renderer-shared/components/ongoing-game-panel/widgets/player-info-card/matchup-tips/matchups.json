@@ -1,0 +1,1146 @@
+[
+  {
+    "championId": 13,
+    "opponentId": 103,
+    "positions": ["MIDDLE"],
+    "points": [
+      "通过小兵扩散 E 消耗，保持距离；六级后尤其注意她的突进。",
+      "她上前压人时争取清线主动权，六级前可配合打野找机会。"
+    ],
+    "sourceId": "ryze-young"
+  },
+  {
+    "championId": 13,
+    "opponentId": 55,
+    "positions": ["MIDDLE"],
+    "points": [
+      "围绕匕首落点保持距离，别为追击走进她的拾取范围。",
+      "前期争取主动，把兵线处理好再回城，让她留在线上接兵。"
+    ],
+    "sourceId": "ryze-young"
+  },
+  {
+    "championId": 13,
+    "opponentId": 39,
+    "positions": ["MIDDLE"],
+    "points": [
+      "避开她叠满被动的时间，利用小兵扩散 E 消耗。",
+      "保持距离，别在她有被动层数时强行接持续对拼。"
+    ],
+    "sourceId": "ryze-young"
+  },
+  {
+    "championId": 13,
+    "opponentId": 1,
+    "positions": ["MIDDLE"],
+    "points": ["她没有被动层数时再换血；有层数时通过小兵消耗，避免近身硬换。"],
+    "sourceId": "ryze-young"
+  },
+  {
+    "championId": 13,
+    "opponentId": 157,
+    "positions": ["MIDDLE"],
+    "points": ["借小兵给他挂 E 标记，接近时用 W 控住；风墙交掉后再争取清线或换血。"],
+    "sourceId": "ryze-young"
+  },
+  {
+    "championId": 13,
+    "opponentId": 8,
+    "positions": ["MIDDLE"],
+    "points": [
+      "六级前争取压制和兵线主动权；六级后收敛压制，留意他的爆发距离。",
+      "他上前吸血时用 E 接 W 还击，血池交掉后再考虑追击。"
+    ],
+    "sourceId": "ryze-young"
+  },
+  {
+    "championId": 13,
+    "opponentId": 105,
+    "positions": ["MIDDLE"],
+    "points": [
+      "前期少主动推线，尽量把兵线留在己方塔前，缩短他追击的距离。",
+      "消耗时注意别把小兵仇恨和兵线拉乱；六级后保持能躲鱼的位置。"
+    ],
+    "sourceId": "ryze-trisend3"
+  },
+  {
+    "championId": 105,
+    "opponentId": 13,
+    "positions": ["MIDDLE"],
+    "points": [
+      "前期先应付他的消耗；有大招与一定伤害后，再寻找先手机会。",
+      "瑞兹缺少常规位移，可配合打野施压；拖到他坦度成形后别沿用前期击杀判断。"
+    ],
+    "sourceId": "fizz-esruc"
+  },
+  {
+    "championId": 105,
+    "opponentId": 61,
+    "positions": ["MIDDLE"],
+    "points": ["前两波不能安全补的刀可以让，优先保血，避免三级前就失去换血资格。"],
+    "sourceId": "fizz-gladiore"
+  },
+  {
+    "championId": 105,
+    "opponentId": 91,
+    "positions": ["MIDDLE"],
+    "points": ["二级不要硬拼；换血至少躲掉他 W 的一段，避免被打出被动流血。"],
+    "sourceId": "fizz-gladiore"
+  },
+  {
+    "championId": 105,
+    "opponentId": 4,
+    "positions": ["MIDDLE"],
+    "points": ["把 E 留给黄牌；六级后留意卡牌离线，及时提示他可能开大支援。"],
+    "sourceId": "fizz-gladiore"
+  },
+  {
+    "championId": 105,
+    "opponentId": 518,
+    "positions": ["MIDDLE"],
+    "points": ["她 W 在手且能看见你时，别直接交 R；前期先躲 E，再找换血机会。"],
+    "sourceId": "fizz-gladiore"
+  },
+  {
+    "championId": 105,
+    "opponentId": 246,
+    "positions": ["MIDDLE"],
+    "points": [
+      "留意她用 E 躲你的 E 落地，别只追着落点交伤害。",
+      "她能看见你时别直线丢 R，先考虑她 W 的躲避空间。"
+    ],
+    "sourceId": "fizz-gladiore"
+  },
+  {
+    "championId": 105,
+    "opponentId": 163,
+    "positions": ["MIDDLE"],
+    "points": ["E 落地前继续调整走位，别让她轻易预判 Q；她退得很远时利用线权找支援。"],
+    "sourceId": "fizz-gladiore"
+  },
+  {
+    "championId": 103,
+    "opponentId": 13,
+    "positions": ["MIDDLE"],
+    "points": ["借小兵挡 Q，留意他交 W 后的空档；前期还可利用他的蓝量压力争取主动。"],
+    "sourceId": "ahri-peng"
+  },
+  {
+    "championId": 103,
+    "opponentId": 55,
+    "positions": ["MIDDLE"],
+    "points": ["前期她 E 到匕首后抓短暂空档用魅惑；别急着空交 E，兵线也别留在会被追杀的位置。"],
+    "sourceId": "ahri-peng"
+  },
+  {
+    "championId": 103,
+    "opponentId": 61,
+    "positions": ["MIDDLE"],
+    "points": ["站在球的另一侧；她把球交出去后再上前施压，别和球站在一起接换血。"],
+    "sourceId": "ahri-peng"
+  },
+  {
+    "championId": 103,
+    "opponentId": 8,
+    "positions": ["MIDDLE"],
+    "points": ["强化 Q 快好时先拉开，留意血池交掉后的窗口；六级后可清线取得视野主动权。"],
+    "sourceId": "ahri-peng"
+  },
+  {
+    "championId": 103,
+    "opponentId": 163,
+    "positions": ["MIDDLE"],
+    "points": ["六级后等她交过 E 再找突进机会；也可先清线，借河道和视野盲区施压。"],
+    "sourceId": "ahri-peng"
+  },
+  {
+    "championId": 103,
+    "opponentId": 101,
+    "positions": ["MIDDLE"],
+    "points": ["用 W 的移速调整走位躲技能；可以假装上前普攻，诱使他先交技能。"],
+    "sourceId": "ahri-peng"
+  },
+  {
+    "championId": 8,
+    "opponentId": 103,
+    "positions": ["MIDDLE"],
+    "points": ["持续用 Q 找消耗机会；魅惑躲不开时用血池规避，别白吃控制后的一套伤害。"],
+    "sourceId": "vladimir-elite500"
+  },
+  {
+    "championId": 8,
+    "opponentId": 34,
+    "positions": ["MIDDLE"],
+    "points": [
+      "她的 Q 难躲时用血池；被大招强化的 E 飞来，也可用血池规避。",
+      "她还有蛋时慎重投入全部技能，优先和打野配合。"
+    ],
+    "sourceId": "vladimir-elite500"
+  },
+  {
+    "championId": 8,
+    "opponentId": 164,
+    "positions": ["MIDDLE"],
+    "points": ["血池躲 E，利用射程消耗；上路距离长，她更容易持续追击，不能照搬中路换血节奏。"],
+    "sourceId": "vladimir-elite500"
+  },
+  {
+    "championId": 8,
+    "opponentId": 122,
+    "positions": ["TOP"],
+    "points": ["留意拉人的距离，用血池规避外圈 Q，避免让他靠命中英雄回血。"],
+    "sourceId": "vladimir-elite500"
+  },
+  {
+    "championId": 8,
+    "opponentId": 131,
+    "positions": ["MIDDLE"],
+    "points": ["她护盾在时别硬换；她 Q、E 连着进场时，血池躲掉 Q 可阻止月光标记提供刷新。"],
+    "sourceId": "vladimir-elite500"
+  },
+  {
+    "championId": 24,
+    "opponentId": 84,
+    "positions": ["TOP"],
+    "points": ["先走位骗 Q 消耗她的能量，再逼出烟幕；烟幕仍在时别追着硬打。"],
+    "sourceId": "jax-raider"
+  },
+  {
+    "championId": 24,
+    "opponentId": 85,
+    "positions": ["TOP"],
+    "points": ["看到他 Q 交掉再考虑跳上去短换血；别在他技能齐全时贸然持续追击。"],
+    "sourceId": "jax-raider"
+  },
+  {
+    "championId": 24,
+    "opponentId": 126,
+    "positions": ["TOP"],
+    "points": ["等他交 Q 再接近；E 留到他准备普攻时开，争取在锤形态击退时补出眩晕。"],
+    "sourceId": "jax-raider"
+  },
+  {
+    "championId": 24,
+    "opponentId": 31,
+    "positions": ["TOP"],
+    "points": ["等他 Q 落空后跳上去换血；若先跳，注意躲掉脚下反击的 Q。"],
+    "sourceId": "jax-raider"
+  },
+  {
+    "championId": 24,
+    "opponentId": 133,
+    "positions": ["TOP"],
+    "points": ["先靠走位逼出她的 E，再用 Q 接近；她 E 仍在时不要指望一次跳脸就能黏住。"],
+    "sourceId": "jax-raider"
+  },
+  {
+    "championId": 24,
+    "opponentId": 420,
+    "positions": ["TOP"],
+    "points": [
+      "她 E 拉空是主要进攻窗口；接近后用反击风暴处理她的 W 普攻。",
+      "被拉中灵魂时别照搬同样的对拼计划。"
+    ],
+    "sourceId": "jax-raider"
+  },
+  {
+    "championId": 75,
+    "opponentId": 223,
+    "positions": ["MIDDLE"],
+    "points": [
+      "前期站小兵后躲 Q，免得被减速后接 W；留意草丛内的潜航先手。",
+      "远离敌方塔下的吞吐范围，别被带进塔。"
+    ],
+    "sourceId": "nasus-desperate"
+  },
+  {
+    "championId": 75,
+    "opponentId": 58,
+    "positions": ["MIDDLE"],
+    "points": ["别为补刀付出过多血量；注意他借小兵第一段 E 接近，再用第二段追你。"],
+    "sourceId": "nasus-desperate"
+  },
+  {
+    "championId": 75,
+    "opponentId": 14,
+    "positions": ["MIDDLE"],
+    "points": ["尽量躲掉 E 减速，避免随后吃满蓄力 Q；有条件时把线控在塔前，减少他拆镀层的机会。"],
+    "sourceId": "nasus-desperate"
+  },
+  {
+    "championId": 75,
+    "opponentId": 54,
+    "positions": ["MIDDLE"],
+    "points": [
+      "有叠层和伤害基础后再用 Q 换血，留意双方耗蓝。",
+      "塔下吃完镀层撤退时沿侧面离开，别让他清掉兵线后让塔连续打你。"
+    ],
+    "sourceId": "nasus-desperate"
+  },
+  {
+    "championId": 75,
+    "opponentId": 27,
+    "positions": ["MIDDLE"],
+    "points": ["以叠层和接线为主，别一路追着他跑；他去断线或游走时，先判断是否真有击杀窗口。"],
+    "sourceId": "nasus-desperate"
+  },
+  {
+    "championId": 245,
+    "opponentId": 84,
+    "positions": ["MIDDLE"],
+    "points": [
+      "先用走位逼她交 Q，再争取前几波兵线；别把第二段 E 交进烟幕。",
+      "她 W 或 E 在手时很容易断你的三环，逼掉关键技能后再完成换血。"
+    ],
+    "sourceId": "ekko-v222"
+  },
+  {
+    "championId": 245,
+    "opponentId": 157,
+    "positions": ["MIDDLE"],
+    "points": [
+      "先破护盾，别把兵线推到能被长距离追击的位置。",
+      "等他 E 进来再打三环后撤；风墙在时不要把回程 Q 算作必中的伤害。"
+    ],
+    "sourceId": "ekko-v222"
+  },
+  {
+    "championId": 245,
+    "opponentId": 268,
+    "positions": ["MIDDLE"],
+    "points": [
+      "他用 E 护盾接住换血后，留意位移空档；可抓补刀或放沙兵的动作进攻。",
+      "前期把线留在自己这侧，避免在他的沙兵射程里强行追三环。"
+    ],
+    "sourceId": "ekko-v222"
+  },
+  {
+    "championId": 142,
+    "opponentId": 136,
+    "positions": ["MIDDLE"],
+    "points": ["一级避开持续 Q；之后可在他对兵线喷火时找气泡，或留 E 防他 W 向前。"],
+    "sourceId": "zoe-shok"
+  },
+  {
+    "championId": 142,
+    "opponentId": 268,
+    "positions": ["MIDDLE"],
+    "points": ["他用 Q 把沙兵送远后，观察本体暴露的空档；六级后注意他配合打野的推回。"],
+    "sourceId": "zoe-shok"
+  },
+  {
+    "championId": 142,
+    "opponentId": 69,
+    "positions": ["MIDDLE"],
+    "points": ["用射程消耗，六级后慎用 R 向前，避免被她 R 或 W 留住后追击。"],
+    "sourceId": "zoe-shok"
+  },
+  {
+    "championId": 142,
+    "opponentId": 131,
+    "positions": ["MIDDLE"],
+    "points": ["来回试探骗 Q，把气泡留给她突进，围绕反打换血。"],
+    "sourceId": "zoe-shok"
+  },
+  {
+    "championId": 142,
+    "opponentId": 105,
+    "positions": ["MIDDLE"],
+    "points": ["一、二级争取消耗；三级起收紧站位，别沿用前两级的压制距离。"],
+    "sourceId": "zoe-shok"
+  },
+  {
+    "championId": 142,
+    "opponentId": 39,
+    "positions": ["MIDDLE"],
+    "points": ["尽量把线留在己方一侧；六级后别随意 R 向前，容易被她预判 E。"],
+    "sourceId": "zoe-shok"
+  },
+  {
+    "championId": 142,
+    "opponentId": 55,
+    "positions": ["MIDDLE"],
+    "points": ["避开匕首落点，把气泡留给她进场；她游走时及时提示。"],
+    "sourceId": "zoe-shok"
+  },
+  {
+    "championId": 134,
+    "opponentId": 105,
+    "positions": ["MIDDLE"],
+    "points": ["一、二级施压后找机会把线送进塔，让兵线回推；三级起避免站得太深，重点盯他的 E。"],
+    "sourceId": "syndra-shok"
+  },
+  {
+    "championId": 134,
+    "opponentId": 136,
+    "positions": ["MIDDLE"],
+    "points": ["用 Q、W 消耗，E 留作防守；主动交掉 E 后，防他 W 向前追击。"],
+    "sourceId": "syndra-shok"
+  },
+  {
+    "championId": 134,
+    "opponentId": 39,
+    "positions": ["MIDDLE"],
+    "points": ["控线在己方一侧，E 留着推开；尤其注意二级、六级的追击距离。"],
+    "sourceId": "syndra-shok"
+  },
+  {
+    "championId": 134,
+    "opponentId": 55,
+    "positions": ["MIDDLE"],
+    "points": ["别站匕首旁；六级后尽量保留 E 打断大招，她离线时及时提示。"],
+    "sourceId": "syndra-shok"
+  },
+  {
+    "championId": 134,
+    "opponentId": 7,
+    "positions": ["MIDDLE"],
+    "points": ["她 W 向前时可用 E 打断，换血同时留意敌方打野，别只盯单挑。"],
+    "sourceId": "syndra-shok"
+  },
+  {
+    "championId": 134,
+    "opponentId": 910,
+    "positions": ["MIDDLE"],
+    "points": ["用兵挡 QQ，但别紧贴兵堆，给自己留下躲 QE、EE 的空间。"],
+    "sourceId": "syndra-shok"
+  },
+  {
+    "championId": 516,
+    "opponentId": 114,
+    "positions": ["TOP"],
+    "points": ["W 挂上易碎后，可停一下普攻骗她 W，再侧步处理反击；她开大时靠墙保护破绽。"],
+    "sourceId": "ornn-makkro"
+  },
+  {
+    "championId": 516,
+    "opponentId": 164,
+    "positions": ["TOP"],
+    "points": ["避开二段 Q，等被动护盾结束再换；她 E 进场时用 W 应对，开 R 时留意她用大招躲羊。"],
+    "sourceId": "ornn-makkro"
+  },
+  {
+    "championId": 516,
+    "opponentId": 887,
+    "positions": ["TOP"],
+    "points": ["以短换血为主，先逼出 E、W，再寻找下一轮机会。"],
+    "sourceId": "ornn-makkro"
+  },
+  {
+    "championId": 516,
+    "opponentId": 75,
+    "positions": ["TOP"],
+    "points": ["尽量让线回到己方一侧控住；消耗时把范围技能朝兵线外放，避免打破控线。"],
+    "sourceId": "ornn-makkro"
+  },
+  {
+    "championId": 516,
+    "opponentId": 79,
+    "positions": ["TOP"],
+    "points": ["W 应对肚皮撞；他 E 没交时别贸然用 E 先手，容易被打断后拉开。"],
+    "sourceId": "ornn-makkro"
+  },
+  {
+    "championId": 516,
+    "opponentId": 83,
+    "positions": ["TOP"],
+    "points": ["优先躲 E，把自己的 E 留给他的圈，可以撞碎牢笼脱身。"],
+    "sourceId": "ornn-makkro"
+  },
+  {
+    "championId": 98,
+    "opponentId": 266,
+    "positions": ["TOP"],
+    "points": ["W 挡被动普攻，向 Q 内侧躲；被 W 链住时尽早决定 E 脱离，拖到回拉前才交容易被拉回。"],
+    "sourceId": "shen-xpetu"
+  },
+  {
+    "championId": 98,
+    "opponentId": 114,
+    "positions": ["TOP"],
+    "points": ["W 可挡破绽普攻和 Q；留 E 与她 W 博弈，侧步躲反击，面对大招时靠墙。"],
+    "sourceId": "shen-xpetu"
+  },
+  {
+    "championId": 98,
+    "opponentId": 122,
+    "positions": ["TOP"],
+    "points": ["他 E 在手时慎用嘲讽先手；短换后撤，避免让他叠满被动。"],
+    "sourceId": "shen-xpetu"
+  },
+  {
+    "championId": 98,
+    "opponentId": 86,
+    "positions": ["TOP"],
+    "points": ["W 挡 Q；他转 E 时可向后穿过他嘲讽，拉开持续伤害。"],
+    "sourceId": "shen-xpetu"
+  },
+  {
+    "championId": 98,
+    "opponentId": 887,
+    "positions": ["TOP"],
+    "points": ["W 挡进场普攻，挡不住 Q；做短换血，别在她攒好剪刀时久留。"],
+    "sourceId": "shen-xpetu"
+  },
+  {
+    "championId": 98,
+    "opponentId": 24,
+    "positions": ["TOP"],
+    "points": ["别把强化普攻打进反击风暴；留嘲讽向后穿过他拉开，E 结束后再换血。"],
+    "sourceId": "shen-xpetu"
+  },
+  {
+    "championId": 887,
+    "opponentId": 106,
+    "positions": ["TOP"],
+    "points": ["短换后等 W 标记消失，别让他二次撕咬回血；他 Q 或 E 交掉后再争取换血。"],
+    "sourceId": "gwen-arthapsic"
+  },
+  {
+    "championId": 887,
+    "opponentId": 266,
+    "positions": ["TOP"],
+    "points": ["等他用掉被动普攻再换；E 可躲第三段 Q，或尽早离开 W 的回拉范围。"],
+    "sourceId": "gwen-arthapsic"
+  },
+  {
+    "championId": 887,
+    "opponentId": 240,
+    "positions": ["TOP"],
+    "points": [
+      "观察他是否已在补刀时用掉 W，再上前换；临近下马时先攒满 Q，避免散着交伤害让他重新上马。"
+    ],
+    "sourceId": "gwen-arthapsic"
+  },
+  {
+    "championId": 887,
+    "opponentId": 17,
+    "positions": ["TOP"],
+    "points": ["被致盲时别依赖普攻，优先用 Q 换血；W 可以处理圈外飞来的致盲。"],
+    "sourceId": "gwen-arthapsic"
+  },
+  {
+    "championId": 887,
+    "opponentId": 80,
+    "positions": ["TOP"],
+    "points": ["他被动攒满时少换；面对 E 可绕到背后，或等盾结束再交伤害。"],
+    "sourceId": "gwen-arthapsic"
+  },
+  {
+    "championId": 887,
+    "opponentId": 86,
+    "positions": ["TOP"],
+    "points": ["他抬手 Q 时提前放出自己的 Q，减少沉默期间白吃伤害；别为追击放弃补刀。"],
+    "sourceId": "gwen-arthapsic"
+  },
+  {
+    "championId": 133,
+    "opponentId": 24,
+    "positions": ["TOP"],
+    "points": [
+      "把 E 留给他的 Q 跳脸，抓半空踢开；用过 E 后先退出他的 Q 距离，下一次跳斩可能先转好。",
+      "他开反击风暴时拉开，别为了补一次普攻吃到眩晕。"
+    ],
+    "sourceId": "quinn-marshmallow-jax"
+  },
+  {
+    "championId": 133,
+    "opponentId": 58,
+    "positions": ["TOP"],
+    "points": [
+      "他用第一段 E 接近时先走位，把自己的 E 留给第二段突进。",
+      "尽量站在 Q 范围外，尤其留意高怒气时闪现接 W 的先手。"
+    ],
+    "sourceId": "quinn-marshmallow-renekton"
+  },
+  {
+    "championId": 133,
+    "opponentId": 114,
+    "positions": ["TOP"],
+    "points": [
+      "她 W 在手时慎用 E 先手；靠 Q 和标记移速拉扯，等反击交掉再踢。",
+      "别只关注是否打出眩晕，她 W 的减攻速同样会毁掉后续换血。"
+    ],
+    "sourceId": "quinn-marshmallow-fiora"
+  },
+  {
+    "championId": 432,
+    "opponentId": 89,
+    "positions": ["UTILITY"],
+    "points": ["她 E 会落在目标身后；背靠合适的墙时可向后 Q 找眩晕，别只朝她原来的位置放。"],
+    "sourceId": "bard-lathyrus"
+  },
+  {
+    "championId": 432,
+    "opponentId": 111,
+    "positions": ["UTILITY"],
+    "points": ["用兵线挡钩，提前观察附近墙面，给自己和射手留 E 的撤退路径。"],
+    "sourceId": "bard-lathyrus"
+  },
+  {
+    "championId": 432,
+    "opponentId": 57,
+    "positions": ["UTILITY"],
+    "points": ["附近有安全通道时，可在他 W 跟来时进门带到己方一侧，再衔接 Q；先确认出口安全。"],
+    "sourceId": "bard-lathyrus"
+  },
+  {
+    "championId": 432,
+    "opponentId": 25,
+    "positions": ["UTILITY"],
+    "points": ["Q 的伤害若先打破黑盾，后续连接墙或单位仍有机会眩晕；护盾没破就别按已控住来追。"],
+    "sourceId": "bard-lathyrus"
+  },
+  {
+    "championId": 432,
+    "opponentId": 43,
+    "positions": ["UTILITY"],
+    "points": ["她技能齐全时少走上去硬换；她向射手交技能后，再找反打空档。"],
+    "sourceId": "bard-lathyrus"
+  },
+  {
+    "championId": 432,
+    "opponentId": 40,
+    "positions": ["UTILITY"],
+    "points": ["她移速高，技能不易直接命中；有减速木灵时可先普攻，再找 Q 或 R。"],
+    "sourceId": "bard-lathyrus"
+  },
+  {
+    "championId": 267,
+    "opponentId": 53,
+    "positions": ["UTILITY"],
+    "points": ["钩子还在时别为先手消耗走出安全位置，等他关键技能落空再上前换血。"],
+    "sourceId": "nami-shodesu"
+  },
+  {
+    "championId": 267,
+    "opponentId": 412,
+    "positions": ["UTILITY"],
+    "points": ["先处理钩子威胁；他控制技能落空后再争取消耗，别和技能齐全的锤石硬抢身位。"],
+    "sourceId": "nami-shodesu"
+  },
+  {
+    "championId": 267,
+    "opponentId": 99,
+    "positions": ["UTILITY"],
+    "points": ["她 Q 在手时慎为 W 消耗靠近，容易被禁锢反打；先躲技能、用回复维持血量。"],
+    "sourceId": "nami-shodesu"
+  },
+  {
+    "championId": 267,
+    "opponentId": 40,
+    "positions": ["UTILITY"],
+    "points": ["利用 W 做短换血后退开，避免在她普攻范围里持续挨打。"],
+    "sourceId": "nami-bizzleberry"
+  },
+  {
+    "championId": 121,
+    "opponentId": 60,
+    "positions": ["JUNGLE"],
+    "points": ["先躲结茧；她身边的小蜘蛛会影响孤立判定，别把孤立 Q 伤害直接算满。"],
+    "sourceId": "khazix-tinjus"
+  },
+  {
+    "championId": 121,
+    "opponentId": 76,
+    "positions": ["JUNGLE"],
+    "points": ["优先躲远距离标枪，再考虑接近；吃标后先拉开，别急着反打。"],
+    "sourceId": "khazix-tinjus"
+  },
+  {
+    "championId": 121,
+    "opponentId": 107,
+    "positions": ["JUNGLE"],
+    "points": ["前期别在草丛旁陪他持续打；用 R 和 E 拉扯，围绕 Q、W 的空档输出。"],
+    "sourceId": "khazix-tinjus"
+  },
+  {
+    "championId": 121,
+    "opponentId": 11,
+    "positions": ["JUNGLE"],
+    "points": ["留意冥想是否可用，也确认目标处于孤立；别把整套伤害交进减伤再站着对砍。"],
+    "sourceId": "khazix-tinjus"
+  },
+  {
+    "championId": 121,
+    "opponentId": 77,
+    "positions": ["JUNGLE"],
+    "points": ["六级前慎接单挑；有 R 后用隐身与 E 拉开，减少连续普攻带来的伤害。"],
+    "sourceId": "khazix-tinjus"
+  },
+  {
+    "championId": 121,
+    "opponentId": 104,
+    "positions": ["JUNGLE"],
+    "points": ["用 R 断他的普攻节奏；若 E 跳入而他滑步拉开，提前想好自己还有没有脱身手段。"],
+    "sourceId": "khazix-tinjus"
+  },
+  {
+    "championId": 222,
+    "opponentId": 119,
+    "positions": ["BOTTOM"],
+    "points": [
+      "可借火箭射程和 W 做消耗，但别把线上能换血当作河道也能硬拼；前期小规模接战还要看双方辅助与打野。"
+    ],
+    "sourceId": "jinx-vapora"
+  },
+  {
+    "championId": 222,
+    "opponentId": 81,
+    "positions": ["BOTTOM"],
+    "points": [
+      "他的技能比火箭普攻更远，别只靠射程优势站着压人；先处理远程消耗，再找能安全输出的位置。"
+    ],
+    "sourceId": "jinx-vapora"
+  },
+  {
+    "championId": 222,
+    "opponentId": 18,
+    "positions": ["BOTTOM"],
+    "points": ["她能主动跳近，射程优势不能保证安全；面对强开组合且正面打不过时，让线靠近己方塔。"],
+    "sourceId": "jinx-vapora"
+  },
+  {
+    "championId": 222,
+    "opponentId": 21,
+    "positions": ["BOTTOM"],
+    "points": ["提前给自己留横向撤退空间；你没有即时位移，别等她开 R 后才发现被困在扫射范围。"],
+    "sourceId": "jinx-vapora"
+  },
+  {
+    "championId": 777,
+    "opponentId": 103,
+    "positions": ["MIDDLE"],
+    "points": ["魅惑在手时别直线 Q3 上去；先逼她交 E，再找短换血，注意她用 R 躲你的大招。"],
+    "sourceId": "yone-tempest"
+  },
+  {
+    "championId": 777,
+    "opponentId": 84,
+    "positions": ["MIDDLE"],
+    "points": ["她 E 可躲你的 Q3 并反打，先逼技能；别为一个补刀吃掉大量 Q 消耗。"],
+    "sourceId": "yone-tempest"
+  },
+  {
+    "championId": 777,
+    "opponentId": 166,
+    "positions": ["MIDDLE"],
+    "points": ["别紧贴兵线一起吃 Q，他的回旋镖命中目标会延长距离；保血避免后续被越塔。"],
+    "sourceId": "yone-tempest"
+  },
+  {
+    "championId": 777,
+    "opponentId": 1,
+    "positions": ["MIDDLE"],
+    "points": ["她 Q 飞来时可用 W 护盾抵消部分伤害，等被动眩晕用掉后再进攻。"],
+    "sourceId": "yone-tempest"
+  },
+  {
+    "championId": 777,
+    "opponentId": 136,
+    "positions": ["MIDDLE"],
+    "points": ["他站定喷 Q 时可找 Q3 打断；控线在己方一侧，留出追击空间。"],
+    "sourceId": "yone-tempest"
+  },
+  {
+    "championId": 777,
+    "opponentId": 266,
+    "positions": ["TOP"],
+    "points": ["等他用掉被动普攻再换；被 W 命中后用 E 向侧面离开回拉范围。"],
+    "sourceId": "yone-tempest"
+  },
+  {
+    "championId": 777,
+    "opponentId": 164,
+    "positions": ["TOP"],
+    "points": ["避开墙边和二段 Q，W 应对她 W 消耗，E 留意躲她钩索进场。"],
+    "sourceId": "yone-tempest"
+  },
+  {
+    "championId": 202,
+    "opponentId": 119,
+    "positions": ["BOTTOM"],
+    "points": ["先用 Q 消耗；等辅助控制或打野到场再集火，避免让他持续普攻和吸血。"],
+    "sourceId": "jhin-taco"
+  },
+  {
+    "championId": 202,
+    "opponentId": 81,
+    "positions": ["BOTTOM"],
+    "points": ["用小兵挡 Q；他 E 交掉后再用普攻或 Q 挂标记，接 W 寻找控制。"],
+    "sourceId": "jhin-taco"
+  },
+  {
+    "championId": 202,
+    "opponentId": 51,
+    "positions": ["BOTTOM"],
+    "points": ["用 Q 帮助处理推线；她布好夹子后别贸然迎接先手，进攻要和辅助同步。"],
+    "sourceId": "jhin-taco"
+  },
+  {
+    "championId": 202,
+    "opponentId": 222,
+    "positions": ["BOTTOM"],
+    "points": ["以 Q 或第四发短换后退开；别在装弹时留在她叠好攻速的机枪范围。"],
+    "sourceId": "jhin-taco"
+  },
+  {
+    "championId": 202,
+    "opponentId": 145,
+    "positions": ["BOTTOM"],
+    "points": ["靠近兵线或队友分摊她 Q，别单独吃满；六级后把大招护盾和换位考虑进去。"],
+    "sourceId": "jhin-taco"
+  },
+  {
+    "championId": 202,
+    "opponentId": 429,
+    "positions": ["BOTTOM"],
+    "points": ["别站在插满矛的残血兵后吃穿透 Q；短换后及时退，防减速追击和六级辅助先手。"],
+    "sourceId": "jhin-taco"
+  },
+  {
+    "championId": 114,
+    "opponentId": 24,
+    "positions": ["TOP"],
+    "points": [
+      "先试探正面破绽，骗出 E 再 Q 进；W 不必每次等眩晕，也可用来挡跳脸后的伤害并减攻速。"
+    ],
+    "sourceId": "fiora-potent"
+  },
+  {
+    "championId": 114,
+    "opponentId": 122,
+    "positions": ["TOP"],
+    "points": ["注意他用 E 打断 Q；W 优先考虑他的强化普攻或大招，别在开打前随意交掉。"],
+    "sourceId": "fiora-potent"
+  },
+  {
+    "championId": 114,
+    "opponentId": 6,
+    "positions": ["TOP"],
+    "points": ["优先打前方破绽；用 Q 躲他的 Q，别贸然绕后吃多条腿的被动伤害。"],
+    "sourceId": "fiora-potent"
+  },
+  {
+    "championId": 114,
+    "opponentId": 83,
+    "positions": ["TOP"],
+    "points": ["他有小鬼时留意格挡 E；六级后先处理推线和消耗，别照搬前期直接拼。"],
+    "sourceId": "fiora-potent"
+  },
+  {
+    "championId": 114,
+    "opponentId": 875,
+    "positions": ["TOP"],
+    "points": ["Q 消耗后拉开，留意他用 E 控住再接 W；用自己的 W 挡爆发需要提前判断。"],
+    "sourceId": "fiora-potent"
+  },
+  {
+    "championId": 114,
+    "opponentId": 10,
+    "positions": ["TOP"],
+    "points": ["六级前争取控线限制补刀；她转为远程后换血更难，别沿用近战期的追击距离。"],
+    "sourceId": "fiora-potent"
+  },
+  {
+    "championId": 10,
+    "opponentId": 164,
+    "positions": ["TOP"],
+    "points": ["远离墙边躲 E，注意二段 Q 的爆发；需要 R 保命时，别把无敌过早交给第一段伤害。"],
+    "sourceId": "kayle-kayle1v9"
+  },
+  {
+    "championId": 10,
+    "opponentId": 31,
+    "positions": ["TOP"],
+    "points": ["低血量时防 W 沉默接 R，必要时提前开大；被沉默后才想按 R 会来不及。"],
+    "sourceId": "kayle-kayle1v9"
+  },
+  {
+    "championId": 10,
+    "opponentId": 86,
+    "positions": ["TOP"],
+    "points": ["他的 Q 能解除减速；低血量防 Q 沉默接连招，需要开大时别等沉默落下。"],
+    "sourceId": "kayle-kayle1v9"
+  },
+  {
+    "championId": 10,
+    "opponentId": 41,
+    "positions": ["TOP"],
+    "points": ["用普攻接 E 的重置争取拆桶；别为补刀连续吃 Q 消耗。"],
+    "sourceId": "kayle-kayle1v9"
+  },
+  {
+    "championId": 10,
+    "opponentId": 420,
+    "positions": ["TOP"],
+    "points": ["用小兵挡 E，普攻接 E 可快速拆触手；她开大时优先拉开。"],
+    "sourceId": "kayle-kayle1v9"
+  },
+  {
+    "championId": 10,
+    "opponentId": 887,
+    "positions": ["TOP"],
+    "points": ["把 R 留给满层 Q 或后段大招的集中伤害，别在低伤害试探中提前交掉。"],
+    "sourceId": "kayle-kayle1v9"
+  },
+  {
+    "championId": 10,
+    "opponentId": 103,
+    "positions": ["MIDDLE"],
+    "points": ["借小兵挡魅惑，围绕她 E 的空档换血；先躲 Q，别为了补刀同时吃两段。"],
+    "sourceId": "kayle-kayle1v9"
+  },
+  {
+    "championId": 61,
+    "opponentId": 268,
+    "positions": ["MIDDLE"],
+    "points": ["沙兵被 Q 送远时找本体短换，别站着吃多次沙兵普攻；六级后注意推回配合打野。"],
+    "sourceId": "orianna-shok"
+  },
+  {
+    "championId": 61,
+    "opponentId": 69,
+    "positions": ["MIDDLE"],
+    "points": ["用 Q、W 消耗，尽量把线留在中间或己方一侧；W 用掉时尤其小心中 Q 后被追。"],
+    "sourceId": "orianna-shok"
+  },
+  {
+    "championId": 61,
+    "opponentId": 131,
+    "positions": ["MIDDLE"],
+    "points": ["来回试探骗 Q，在安全距离消耗并留线配合打野，别强接她正面一套。"],
+    "sourceId": "orianna-shok"
+  },
+  {
+    "championId": 61,
+    "opponentId": 245,
+    "positions": ["MIDDLE"],
+    "points": ["站位别让他用同一个 Q 同时清线和打你，抓清线技能用掉后的空档消耗。"],
+    "sourceId": "orianna-shok"
+  },
+  {
+    "championId": 61,
+    "opponentId": 105,
+    "positions": ["MIDDLE"],
+    "points": ["前两级争取施压并把线送塔后回推；三级起少站深，重点观察他 E 清线后的空档。"],
+    "sourceId": "orianna-shok"
+  },
+  {
+    "championId": 84,
+    "opponentId": 103,
+    "positions": ["MIDDLE"],
+    "points": ["借小兵挡魅惑、试探骗 Q；烟幕中要补被动普攻时，用移速侧步躲 E。"],
+    "sourceId": "akali-anguish"
+  },
+  {
+    "championId": 84,
+    "opponentId": 268,
+    "positions": ["MIDDLE"],
+    "points": ["站在他与沙兵之间可拦 E；先挂 E 标记，观察他是否交 R，再决定追第二段。"],
+    "sourceId": "akali-anguish"
+  },
+  {
+    "championId": 84,
+    "opponentId": 105,
+    "positions": ["MIDDLE"],
+    "points": ["用 E 应对他的进场，尤其抓他 E 用掉后的换血窗口；被鱼命中后别指望烟幕遮住你。"],
+    "sourceId": "akali-anguish"
+  },
+  {
+    "championId": 84,
+    "opponentId": 3,
+    "positions": ["MIDDLE"],
+    "points": ["别挤在小兵旁吃被动砸击；他把技能交给兵线后再换，E 可打断你的突进。"],
+    "sourceId": "akali-anguish"
+  },
+  {
+    "championId": 84,
+    "opponentId": 266,
+    "positions": ["TOP"],
+    "points": ["用被动移速和 E 躲 Q 的外沿；前期等第三段 Q 用完，再找换血窗口。"],
+    "sourceId": "akali-anguish"
+  },
+  {
+    "championId": 84,
+    "opponentId": 114,
+    "positions": ["TOP"],
+    "points": ["Q 接被动做短换，没烟幕时别走太深；她开大后可靠墙保护一处破绽。"],
+    "sourceId": "akali-anguish"
+  },
+  {
+    "championId": 157,
+    "opponentId": 103,
+    "positions": ["MIDDLE"],
+    "points": ["阿狸用 Q 清兵后再找近身机会，留风墙挡魅惑；先躲回程 Q，别为了追击冲进塔下。"],
+    "sourceId": "yasuo-tempest"
+  },
+  {
+    "championId": 157,
+    "opponentId": 84,
+    "positions": ["MIDDLE"],
+    "points": ["先逼出烟幕再拉开，等烟幕消失后找机会；不要在烟幕里持续追打。"],
+    "sourceId": "yasuo-tempest"
+  },
+  {
+    "championId": 157,
+    "opponentId": 34,
+    "positions": ["MIDDLE"],
+    "points": ["风墙可挡她的 Q、E。被大招覆盖时找可用小兵 E 出去，别一直站在冰圈里。"],
+    "sourceId": "yasuo-tempest"
+  },
+  {
+    "championId": 157,
+    "opponentId": 1,
+    "positions": ["MIDDLE"],
+    "points": ["她交掉被动眩晕后再找进攻窗口；风墙能挡 Q，挡不了 W。"],
+    "sourceId": "yasuo-tempest"
+  },
+  {
+    "championId": 157,
+    "opponentId": 136,
+    "positions": ["MIDDLE"],
+    "points": ["留第三段 Q 打断他站定喷吐的 Q，再考虑追击。"],
+    "sourceId": "yasuo-tempest"
+  },
+  {
+    "championId": 157,
+    "opponentId": 69,
+    "positions": ["MIDDLE"],
+    "points": ["别沿正面连续 E 冲向她，容易在位移中吃 R；优先从兵线侧面接近。"],
+    "sourceId": "yasuo-tempest"
+  },
+  {
+    "championId": 157,
+    "opponentId": 122,
+    "positions": ["TOP"],
+    "points": ["只做短换血，留 E 避开外圈 Q；流血层数叠高就撤，别硬打到五层。"],
+    "sourceId": "yasuo-tempest"
+  },
+  {
+    "championId": 910,
+    "opponentId": 134,
+    "positions": ["MIDDLE"],
+    "points": ["用 QQ 限制她直接上前，尽量保住距离；队友来抓时再用 EE 配合控制。"],
+    "sourceId": "hwei-shok"
+  },
+  {
+    "championId": 910,
+    "opponentId": 105,
+    "positions": ["MIDDLE"],
+    "points": ["前两级可压补刀，随后让兵线回推；W、E 用掉时别站太深，六级后尤其防鱼人配合抓人。"],
+    "sourceId": "hwei-shok"
+  },
+  {
+    "championId": 910,
+    "opponentId": 38,
+    "positions": ["MIDDLE"],
+    "points": ["六级前趁他补刀消耗；六级后留 E 防他跳脸，别为继续压制先交掉自保技能。"],
+    "sourceId": "hwei-shok"
+  },
+  {
+    "championId": 910,
+    "opponentId": 238,
+    "positions": ["MIDDLE"],
+    "points": ["先躲劫的 W、E、Q 连招；他 W 进入冷却后，再上前补回消耗。"],
+    "sourceId": "hwei-shok"
+  },
+  {
+    "championId": 910,
+    "opponentId": 157,
+    "positions": ["MIDDLE"],
+    "points": ["尽量把兵线留在己方一侧，配合打野抓；别在长兵线上陪他反复贴身换血。"],
+    "sourceId": "hwei-shok"
+  },
+  {
+    "championId": 910,
+    "opponentId": 112,
+    "positions": ["MIDDLE"],
+    "points": ["等他 Q 或 E 用掉再尝试回敬；血量落后时优先安全清线，别硬换。"],
+    "sourceId": "hwei-shok"
+  },
+  {
+    "championId": 7,
+    "opponentId": 34,
+    "positions": ["MIDDLE"],
+    "points": ["W 尽量从侧面接近，别直线踩脸吃 Q；她难以直接击杀时，用锁链配合打野。"],
+    "sourceId": "leblanc-shok"
+  },
+  {
+    "championId": 7,
+    "opponentId": 268,
+    "positions": ["MIDDLE"],
+    "points": ["他把沙兵 Q 到前方后，留意本体与沙兵的距离；抓这个窗口短换血，别陪他持续站撸。"],
+    "sourceId": "leblanc-shok"
+  },
+  {
+    "championId": 7,
+    "opponentId": 69,
+    "positions": ["MIDDLE"],
+    "points": ["等她 Q 用掉再尝试换血；六级后接近时留意面向，防被 R 晕住。"],
+    "sourceId": "leblanc-shok"
+  },
+  {
+    "championId": 7,
+    "opponentId": 245,
+    "positions": ["MIDDLE"],
+    "points": ["Q、W 短换后保留 E；他追到你的回跳位置时，再用锁链限制追击。"],
+    "sourceId": "leblanc-shok"
+  },
+  {
+    "championId": 7,
+    "opponentId": 105,
+    "positions": ["MIDDLE"],
+    "points": ["前两级可压制，三级后收敛；六级后至少留一段位移躲 R 或拉出后续伤害范围。"],
+    "sourceId": "leblanc-shok"
+  },
+  {
+    "championId": 7,
+    "opponentId": 910,
+    "positions": ["MIDDLE"],
+    "points": ["站在兵后防 QQ，同时远离他清线的 QE、EE 范围；等 E 交掉再找换血。"],
+    "sourceId": "leblanc-shok"
+  },
+  {
+    "championId": 163,
+    "opponentId": 103,
+    "positions": ["MIDDLE"],
+    "points": ["站在兵后防魅惑；六级后别一次交光自保技能，尤其在看不到对方打野时。"],
+    "sourceId": "taliyah-shok"
+  },
+  {
+    "championId": 163,
+    "opponentId": 84,
+    "positions": ["MIDDLE"],
+    "points": ["前几波进塔后尽量接回推线，减少她追击距离；等 E、烟幕结束，再利用冷却空当压制。"],
+    "sourceId": "taliyah-shok"
+  },
+  {
+    "championId": 163,
+    "opponentId": 166,
+    "positions": ["MIDDLE"],
+    "points": ["留意他用 E 绕向你；别为消耗交光技能，E 铺石的时机合适可打断他的摆荡。"],
+    "sourceId": "taliyah-shok"
+  },
+  {
+    "championId": 163,
+    "opponentId": 131,
+    "positions": ["MIDDLE"],
+    "points": ["在她 Q 射程边缘进退诱招，别直接硬换；把线留在安全位置，靠远距消耗配合抓人。"],
+    "sourceId": "taliyah-shok"
+  },
+  {
+    "championId": 163,
+    "opponentId": 245,
+    "positions": ["MIDDLE"],
+    "points": ["站位别让他的 Q 同时清兵和打到你；留意一级 E 贴脸，等他清线交 Q 后再消耗。"],
+    "sourceId": "taliyah-shok"
+  },
+  {
+    "championId": 163,
+    "opponentId": 105,
+    "positions": ["MIDDLE"],
+    "points": ["前两级压制后接回推线，三级起别站太深；盯住他的 E，清线交掉后才是较好的反击窗口。"],
+    "sourceId": "taliyah-shok"
+  }
+]
