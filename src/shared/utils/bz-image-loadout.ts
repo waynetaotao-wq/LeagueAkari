@@ -5,7 +5,26 @@ export interface BzRecommendedLoadout {
   starterItemId?: number
 }
 
-/** Both display and build promotion use the same freshness and per-field conflict rules. */
+/** References are readable automatically, but are deliberately excluded by resolveBzImageLoadout. */
+export function resolveBzDisplayedLoadout(
+  row: Pick<BzMatchupRow, 'imageReference' | 'imageLoadout' | 'stale' | 'itemCatalogStale'>
+): BzRecommendedLoadout | null {
+  const reference = row.imageReference
+  if (!reference) return resolveBzImageLoadout(row)
+  const { loadout } = reference
+  return {
+    spellIds: loadout.issues.some((issue) => issue.field === 'spells' || issue.field === 'both')
+      ? undefined
+      : loadout.spellIds,
+    starterItemId: loadout.issues.some(
+      (issue) => issue.field === 'starter' || issue.field === 'both'
+    )
+      ? undefined
+      : loadout.starterItemId
+  }
+}
+
+/** Only fresh, catalog-checked fields qualify for automatic configuration. */
 export function resolveBzImageLoadout(
   row: Pick<BzMatchupRow, 'stale' | 'itemCatalogStale' | 'imageLoadout'>,
   historical?: Readonly<BzRecommendedLoadout> | null

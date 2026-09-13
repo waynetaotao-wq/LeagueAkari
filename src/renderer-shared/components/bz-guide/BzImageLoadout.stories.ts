@@ -1,7 +1,7 @@
 import type { BzMatchupRow } from '@shared/types/counter-intel'
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import { NSelect } from 'naive-ui'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import cleanse from '../../../main/shards/champion-data/bz-guide/fixtures/Cleanse.png?inline'
 import flash from '../../../main/shards/champion-data/bz-guide/fixtures/Flash.png?inline'
@@ -70,6 +70,38 @@ const scenarios: Array<{ label: string; row: BzMatchupRow }> = [
   },
   { label: '旧缓存', row: { ...row, stale: true } }
 ]
+const reference: BzMatchupRow = {
+  ...row,
+  stale: true,
+  refreshing: true,
+  imageReference: {
+    loadout: row.imageLoadout!,
+    fetchedAt: 1789314000000,
+    sourceSheet: row.sourceSheet,
+    sourceRow: row.sourceRow,
+    reason: 'refreshing'
+  }
+}
+scenarios.push(
+  { label: '自动显示记录 · 同步中', row: reference },
+  {
+    label: '自动显示记录 · 网络故障',
+    row: {
+      ...reference,
+      refreshing: false,
+      imageReference: { ...reference.imageReference!, reason: 'source-unavailable' }
+    }
+  },
+  {
+    label: '自动显示记录 · 资源库故障',
+    row: {
+      ...reference,
+      stale: false,
+      refreshing: false,
+      imageReference: { ...reference.imageReference!, reason: 'catalog-unavailable' }
+    }
+  }
+)
 const meta = {
   title: 'Renderer Shared/Champion Data/Bz Images',
   parameters: { akariStoryPanelMaxWidth: 360 },
@@ -95,3 +127,23 @@ export default meta
 type Story = StoryObj<typeof meta>
 export const States: Story = {}
 export const Narrow: Story = { parameters: { akariStoryPanelMaxWidth: 280 } }
+export const AutoRecovery: Story = {
+  render: () => ({
+    components: { BzImageLoadout },
+    setup() {
+      const current = ref(reference)
+      let timer: ReturnType<typeof setTimeout>
+      onMounted(() => {
+        timer = setTimeout(() => {
+          current.value = {
+            ...row,
+            imageLoadout: { ...row.imageLoadout!, starterItemId: 1054 }
+          }
+        }, 5000)
+      })
+      onBeforeUnmount(() => clearTimeout(timer))
+      return { current }
+    },
+    template: `<div class="text-xs"><div class="mb-2 opacity-70">自动恢复演示 · 5 秒后收到新图片</div><BzImageLoadout :row="current" /></div>`
+  })
+}

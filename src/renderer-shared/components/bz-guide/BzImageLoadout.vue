@@ -4,12 +4,19 @@
       <NTag size="tiny" :bordered="false" :type="status === 'ready' ? 'success' : 'warning'">
         {{ t(`opgg.bzImages.status.${status}`) }}
       </NTag>
-      <span v-if="row.sourceRow" class="source">
-        {{ t('opgg.bzImages.location', { sheet: row.sourceSheet, row: row.sourceRow }) }}
+      <span v-if="location.sourceRow" class="source">
+        {{ t('opgg.bzImages.location', { sheet: location.sourceSheet, row: location.sourceRow }) }}
       </span>
       <span v-if="row.imageLoadout?.catalogVersion" class="source">
         {{ t('opgg.bzImages.catalog', { version: row.imageLoadout.catalogVersion }) }}
       </span>
+    </div>
+    <div v-if="row.imageReference" class="source mt-1">
+      {{
+        t('opgg.bzImages.referenceTime', {
+          time: new Date(row.imageReference.fetchedAt).toLocaleString()
+        })
+      }}
     </div>
     <div
       v-if="loadout?.spellIds || loadout?.starterItemId"
@@ -25,7 +32,13 @@
       </template>
     </div>
     <div v-if="status !== 'ready'" class="mt-1 leading-relaxed">
-      {{ status === 'stale' ? t('opgg.bzImages.stale') : issueText }}
+      <template v-if="row.imageReference">
+        {{ t(`opgg.bzImages.referenceReason.${row.imageReference.reason}`) }}
+        {{ t('opgg.bzImages.referenceReading') }}
+      </template>
+      <template v-else-if="status === 'stale'">{{ t('opgg.bzImages.stale') }}</template>
+      <template v-else>{{ issueText }}</template>
+      <div v-if="row.imageReference && issueText">{{ issueText }}</div>
     </div>
     <div v-if="previews.length" class="mt-1.5 flex flex-wrap items-center gap-1.5">
       <span class="source">{{ t('opgg.bzImages.previews') }}</span>
@@ -45,17 +58,26 @@
 import ItemDisplay from '@renderer-shared/components/widgets/ItemDisplay.vue'
 import SummonerSpellDisplay from '@renderer-shared/components/widgets/SummonerSpellDisplay.vue'
 import type { BzMatchupRow } from '@shared/types/counter-intel'
-import { resolveBzImageLoadout } from '@shared/utils/bz-image-loadout'
+import { resolveBzDisplayedLoadout } from '@shared/utils/bz-image-loadout'
 import { useTranslation } from 'i18next-vue'
 import { NImage, NTag } from 'naive-ui'
 import { computed } from 'vue'
 
 const { row } = defineProps<{ row: BzMatchupRow }>()
 const { t } = useTranslation()
-const loadout = computed(() => resolveBzImageLoadout(row))
-const status = computed(() => (row.stale ? 'stale' : (row.imageLoadout?.status ?? 'unavailable')))
+const loadout = computed(() => resolveBzDisplayedLoadout(row))
+const location = computed(() => row.imageReference ?? row)
+const status = computed(() =>
+  row.imageReference
+    ? 'reference'
+    : row.stale
+      ? 'stale'
+      : (row.imageLoadout?.status ?? 'unavailable')
+)
 const issueText = computed(() => {
-  const issues = row.imageLoadout?.issues ?? [{ code: 'source-unavailable', field: 'both' }]
+  const issues = (row.imageReference?.loadout ?? row.imageLoadout)?.issues ?? [
+    { code: 'source-unavailable', field: 'both' }
+  ]
   return [
     ...new Set(
       issues.map((issue) =>

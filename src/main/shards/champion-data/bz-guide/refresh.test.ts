@@ -1,9 +1,19 @@
-import { resolveBzImageLoadout } from '@shared/utils/bz-image-loadout'
+import { resolveBzDisplayedLoadout, resolveBzImageLoadout } from '@shared/utils/bz-image-loadout'
 import type { AxiosInstance } from 'axios'
+import { mkdtemp, rm, rmdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { defaultPictures, workbookFixture } from './fixtures/workbook'
-import { BZ_CACHE_TTL, BZ_CSV_URL, BZ_XLSX_URL, getBzZedMatchup } from './index'
+import {
+  BZ_CACHE_TTL,
+  BZ_CSV_URL,
+  BZ_XLSX_URL,
+  getBzKnownChampionSlug,
+  getBzZedMatchup
+} from './index'
+import bundled from './verified-snapshot.json'
 
 function fixtureClient() {
   const state = {
@@ -55,9 +65,131 @@ function fixtureClient() {
   return { state, get, httpClient: { get } as unknown as AxiosInstance }
 }
 
-afterEach(() => vi.restoreAllMocks())
+const snapshotDirectories: string[] = []
+afterEach(async () => {
+  vi.restoreAllMocks()
+  for (const directory of snapshotDirectories.splice(0)) {
+    await rm(join(directory, 'record.json'), { force: true })
+    await rm(join(directory, 'record.json.tmp'), { force: true })
+    await rmdir(directory)
+  }
+})
 
 describe('Bz image refresh to recommendation flow', () => {
+  it('can identify every bundled opponent and display its own recorded images without OP.GG or Google', async () => {
+    const { state, httpClient } = fixtureClient()
+    state.spellIds = [1, 3, 4, 12, 14]
+    state.failWorkbook = state.failCsv = true
+    const found: string[] = []
+    let completeImages = 0
+    for (const id of Object.keys(bundled.championSlugs)) {
+      const slug = getBzKnownChampionSlug(Number(id))
+      expect(slug).not.toBeNull()
+      const row = await getBzZedMatchup(slug!, { httpClient })
+      expect(row?.imageReference).toBeDefined()
+      found.push(row!.champion)
+      const display = resolveBzDisplayedLoadout(row!)
+      if (display?.spellIds && display.starterItemId) completeImages++
+    }
+    expect(new Set(found)).toEqual(new Set(bundled.rows.map((row) => row.champion)))
+    expect(completeImages).toBe(
+      bundled.rows.filter((row) => row.imageLoadout.status === 'ready').length
+    )
+    expect(getBzKnownChampionSlug(-1)).toBeNull()
+  })
+  it('shows verified images before slow network requests finish, then notifies and replaces them automatically', async () => {
+    const { state, httpClient, get } = fixtureClient()
+    state.workbook = workbookFixture({ pictures: defaultPictures(8, 'DoransShield') })
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const original = get.getMockImplementation()!
+    get.mockImplementation(async (url) => {
+      await gate
+      return original(url)
+    })
+    const onUpdated = vi.fn()
+    const first = await getBzZedMatchup('ahri', { httpClient, backgroundRefresh: true, onUpdated })
+    expect(first).toMatchObject({
+      stale: true,
+      refreshing: true,
+      imageReference: { reason: 'refreshing' }
+    })
+    expect(resolveBzDisplayedLoadout(first!)).toEqual({ spellIds: [4, 14], starterItemId: 1055 })
+    expect(resolveBzImageLoadout(first!)).toBeNull()
+    release()
+    await vi.waitFor(() => expect(onUpdated).toHaveBeenCalledOnce())
+    const current = await getBzZedMatchup('ahri', {
+      httpClient,
+      backgroundRefresh: true,
+      onUpdated
+    })
+    expect(current?.imageReference).toBeUndefined()
+    expect(current).toMatchObject({
+      stale: false,
+      refreshing: false,
+      imageLoadout: { starterItemId: 1054 }
+    })
+    expect(get.mock.calls.filter(([url]) => url === BZ_XLSX_URL)).toHaveLength(1)
+  })
+
+  it('automatically shows the verified snapshot on a first-run outage and recovers after backoff', async () => {
+    let now = bundled.fetchedAt + 60_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const { state, httpClient, get } = fixtureClient()
+    state.failWorkbook = true
+    const failed = await getBzZedMatchup('ahri', { httpClient })
+    expect(failed).toMatchObject({
+      sourceFormat: 'csv',
+      summary: 'New text',
+      imageReference: { fetchedAt: bundled.fetchedAt }
+    })
+    expect(resolveBzDisplayedLoadout(failed!)?.spellIds).toEqual([4, 14])
+    expect(resolveBzImageLoadout(failed!)).toBeNull()
+    await getBzZedMatchup('ahri', { httpClient })
+    expect(get.mock.calls.filter(([url]) => url === BZ_XLSX_URL)).toHaveLength(1)
+    state.failWorkbook = false
+    state.workbook = workbookFixture({ pictures: defaultPictures(8, 'DoransShield') })
+    now += 60_001
+    const recovered = await getBzZedMatchup('ahri', { httpClient })
+    expect(recovered?.imageReference).toBeUndefined()
+    expect(resolveBzImageLoadout(recovered!)?.starterItemId).toBe(1054)
+  })
+
+  it('retains the latest successful image change across restarts, and ignores corrupt cache files', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'akari-bz-'))
+    snapshotDirectories.push(directory)
+    const snapshotFile = join(directory, 'record.json')
+    const { state, httpClient } = fixtureClient()
+    state.workbook = workbookFixture({ pictures: defaultPictures(8, 'DoransShield') })
+    await getBzZedMatchup('ahri', { httpClient, snapshotFile })
+    const offline = fixtureClient()
+    offline.state.failWorkbook = offline.state.failCsv = true
+    const cached = await getBzZedMatchup('ahri', { httpClient: offline.httpClient, snapshotFile })
+    expect(resolveBzDisplayedLoadout(cached!)?.starterItemId).toBe(1054)
+    expect(resolveBzImageLoadout(cached!)).toBeNull()
+    await writeFile(snapshotFile, '{broken')
+    const restarted = fixtureClient()
+    restarted.state.failWorkbook = restarted.state.failCsv = true
+    const fallback = await getBzZedMatchup('ahri', {
+      httpClient: restarted.httpClient,
+      snapshotFile
+    })
+    expect(resolveBzDisplayedLoadout(fallback!)?.starterItemId).toBe(1055)
+  })
+
+  it('never completes an ambiguous live row with the bundled reference', async () => {
+    const { state, httpClient } = fixtureClient()
+    state.workbook = workbookFixture({
+      pictures: [...defaultPictures(8), { ...defaultPictures(8)[1], x: 60 }]
+    })
+    const row = await getBzZedMatchup('ahri', { httpClient })
+    expect(row?.imageLoadout?.status).toBe('partial')
+    expect(row?.imageReference).toBeUndefined()
+    expect(resolveBzDisplayedLoadout(row!)?.spellIds).toBeUndefined()
+  })
+
   it('keeps each table timestamp tied to its own snapshot while another window refreshes', async () => {
     const initialTime = Date.UTC(2026, 8, 12)
     let now = initialTime
@@ -181,6 +313,22 @@ describe('Bz image refresh to recommendation flow', () => {
       spellIds: [4, 14],
       starterItemId: undefined
     })
+  })
+
+  it('does not reintroduce removed spells or items through a saved reference after an image-source outage', async () => {
+    const { state, httpClient } = fixtureClient()
+    await getBzZedMatchup('ahri', { httpClient })
+    state.failWorkbook = true
+    state.version = '16.19.1'
+    state.spellIds = [4]
+    state.itemIds = [1054]
+    const row = await getBzZedMatchup('ahri', { httpClient, force: true })
+    expect(row?.imageReference).toBeDefined()
+    expect(resolveBzDisplayedLoadout(row!)).toEqual({
+      spellIds: undefined,
+      starterItemId: undefined
+    })
+    expect(resolveBzImageLoadout(row!)).toBeNull()
   })
 
   it('rejects stale catalogs but recovers without mutating the cached image recognition', async () => {

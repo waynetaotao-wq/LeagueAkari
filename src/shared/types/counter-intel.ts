@@ -102,6 +102,16 @@ export interface BzMatchupRow {
   sourceSheet?: string
   sourceRow?: number
   imageLoadout?: BzImageLoadout
+  /** 自动展示的已识别记录；仅供阅读，不能参与构筑或自动写入。 */
+  imageReference?: {
+    loadout: BzImageLoadout
+    fetchedAt: number
+    sourceSheet?: string
+    sourceRow?: number
+    reason: 'refreshing' | 'source-unavailable' | 'catalog-unavailable'
+  }
+  /** 后台正在刷新工作簿；完成后通过 bz-guide-updated 事件通知消费者。 */
+  refreshing?: boolean
   /** 成功读取表格的时间；不是作者最后编辑时间。 */
   fetchedAt?: number
   stale?: boolean

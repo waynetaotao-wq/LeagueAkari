@@ -1,6 +1,6 @@
 import type { BzExtras } from '@renderer-shared/components/ongoing-game-panel/widgets/player-info-card/bz-summary-zh'
 import type { BzMatchupRow } from '@shared/types/counter-intel'
-import { resolveBzImageLoadout } from '@shared/utils/bz-image-loadout'
+import { resolveBzDisplayedLoadout, resolveBzImageLoadout } from '@shared/utils/bz-image-loadout'
 
 export type BzOverlaySection = 'summoner_spells' | 'starter_items' | 'core_items' | 'runes'
 
@@ -9,7 +9,7 @@ export type BzRuneFilterStatus =
 
 export interface BzOverlayRecommendation extends Pick<
   BzMatchupRow,
-  'imageLoadout' | 'itemCatalogStale'
+  'imageLoadout' | 'imageReference' | 'itemCatalogStale'
 > {
   stale?: boolean
   champion?: string
@@ -178,7 +178,7 @@ export function mergeBzIntoOverlay(
   const sections: BzOverlaySection[] = []
   let runeFilterStatus: BzRuneFilterStatus = 'not-requested'
 
-  if (!bz || bz.stale) {
+  if (!bz || (bz.stale && !bz.imageReference)) {
     return {
       overlay: overlay ? base : null,
       sections,
@@ -186,7 +186,9 @@ export function mergeBzIntoOverlay(
     }
   }
 
-  const resolvedExtras = resolveBzImageLoadout(bz, extras)
+  const resolvedExtras = bz.imageReference
+    ? resolveBzDisplayedLoadout(bz)
+    : resolveBzImageLoadout(bz, extras)
   if (resolvedExtras) {
     const spellIds = validIds(resolvedExtras.spellIds, 2)
     if (spellIds?.length === 2 && new Set(spellIds).size === 2) {
@@ -201,7 +203,14 @@ export function mergeBzIntoOverlay(
       base.starter_items = starterItems.rows
       if (starterItems.changed) sections.push('starter_items')
     }
+    if (bz.imageReference && (spellIds || starterItemIds)) {
+      // Show the recorded advice automatically. Automatic LCU writes require fresh source data.
+      base.__bzReference = true
+    }
   }
+
+  if (bz.stale)
+    return { overlay: overlay || sections.length ? base : null, sections, runeFilterStatus }
 
   const builds = bz.itemCatalogStale ? [] : coreItemBuilds(bz)
   if (builds.length > 0) {

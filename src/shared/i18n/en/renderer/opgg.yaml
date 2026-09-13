@@ -5,6 +5,13 @@ opgg:
       partial: Images need review
       unavailable: Images unavailable
       stale: Old images disabled
+      reference: Verified record shown automatically
+    referenceTime: 'Images checked: {{time}}'
+    referenceReading: This record is for reference; automatic client writes require an up-to-date table and resource catalog.
+    referenceReason:
+      refreshing: Syncing in the background. The page will update automatically.
+      source-unavailable: The image source is unavailable and will be retried automatically. This record may not reflect the author's latest edits.
+      catalog-unavailable: Icons were identified, but the current game resource catalog could not be checked. Retrying automatically.
     location: '{{sheet}} · Row {{row}}'
     catalog: 'Resource version {{version}}'
     stale: The table could not be refreshed. Old images are excluded from recommendations.

@@ -5,6 +5,13 @@ opgg:
       partial: 图片需核对
       unavailable: 图片暂不可用
       stale: 旧图片已停用
+      reference: 已自动显示核对记录
+    referenceTime: '图片核对时间：{{time}}'
+    referenceReading: 此记录供阅读；在线表格及资源库核对完成前，不用它自动写入客户端。
+    referenceReason:
+      refreshing: 正在后台同步，完成后自动替换。
+      source-unavailable: 图片源暂时无法读取，将自动重试。这份记录不代表作者最新修改。
+      catalog-unavailable: 图标已识别，当前游戏资源库暂时无法核对，将自动重试。
     location: '{{sheet}} · 第 {{row}} 行'
     catalog: '资源版本 {{version}}'
     stale: 表格更新失败，旧图片不参与配置推荐。

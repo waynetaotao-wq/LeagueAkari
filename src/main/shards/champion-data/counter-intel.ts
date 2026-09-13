@@ -15,7 +15,7 @@ import type { AxiosInstance } from 'axios'
 
 import type { AkariIpcMain } from '../ipc'
 import type { AkariLogger } from '../logger-factory'
-import { getBzZedMatchup } from './bz-guide'
+import { getBzKnownChampionSlug, getBzZedMatchup } from './bz-guide'
 import {
   type ChampionSlugInfo,
   LANE_KILL_TARGET_COUNT,
@@ -73,12 +73,14 @@ export class ChampionDataCounterIntel {
   private _intelCache = new Map<string, CacheEntry<CounterIntelResult>>()
   private _matchupCache = new Map<string, CacheEntry<MatchupBuildResult>>()
   private _inflight = new Map<number, AbortController>()
+  private _disposed = false
 
   constructor(
     private readonly _deps: {
       logger: AkariLogger
       opggApi: OpggHttpApiAxiosHelper
       web: AxiosInstance
+      bzSnapshotFile?: string
     }
   ) {}
 
@@ -106,7 +108,9 @@ export class ChampionDataCounterIntel {
           reason: 'invalid-opponent'
         } satisfies BzGuideResult
       }
-      const slug = await this.getChampionSlug(opponentChampionId)
+      const slug =
+        getBzKnownChampionSlug(opponentChampionId) ??
+        (await this.getChampionSlug(opponentChampionId))
       if (!slug) {
         this._deps.logger.warn(`[BzGuide] 未找到英雄 ${opponentChampionId} 的 slug`)
         return {
@@ -121,6 +125,11 @@ export class ChampionDataCounterIntel {
           includeCoreItems: params?.includeCoreItems !== false,
           includeImages: params?.includeImages !== false,
           force: params?.force === true,
+          backgroundRefresh: true,
+          snapshotFile: this._deps.bzSnapshotFile,
+          onUpdated: () => {
+            if (!this._disposed) ipc.sendEvent(namespace, 'bz-guide-updated')
+          },
           onWarn: (message) => this._deps.logger.warn(`[BzGuide] ${message}`)
         })
         return {
@@ -146,6 +155,7 @@ export class ChampionDataCounterIntel {
   }
 
   dispose() {
+    this._disposed = true
     for (const controller of this._inflight.values()) {
       controller.abort()
     }

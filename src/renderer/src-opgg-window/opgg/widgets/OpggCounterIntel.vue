@@ -96,7 +96,8 @@
       <!-- Bz（欧服第一劫）攻略卡：命中时优先展示，与下方 OP.GG 量化数据共存 -->
       <div v-if="bzRow" class="mt-2 rounded border border-black/10 p-2 dark:border-[#37373c]">
         <div class="mb-1 text-xs" :class="bzRow.stale ? 'text-amber-600' : 'text-gray-500'">
-          {{ bzRow.stale ? '更新失败 · 旧表仅供阅读，未应用到构筑' : '已核对在线表格' }}
+          {{ bzRow.stale ? '已自动显示最近核对记录' : '已核对在线表格文字' }}
+          <span v-if="bzRow.refreshing"> · 后台同步中</span>
           <span v-if="bzRow.fetchedAt"> · {{ new Date(bzRow.fetchedAt).toLocaleString() }}</span>
         </div>
         <div
@@ -124,18 +125,6 @@
           </span>
         </div>
         <BzImageLoadout :row="bzRow" />
-        <div v-if="bzExtras" class="mb-1 flex flex-wrap items-center gap-2">
-          <span class="text-xs text-amber-600">历史人工补充</span>
-          <span class="text-xs text-[#666666] dark:text-[#b2b2b2]">召唤师</span>
-          <SummonerSpellDisplay
-            v-for="(sid, i) of bzExtras.spellIds"
-            :key="i"
-            :spell-id="sid"
-            :size="20"
-          />
-          <span class="ml-1 text-xs text-[#666666] dark:text-[#b2b2b2]">出门</span>
-          <ItemDisplay :item-id="bzExtras.starterItemId" :size="20" />
-        </div>
         <div v-if="bzRow.rune" class="text-xs whitespace-pre-line">
           <span class="text-[#666666] dark:text-[#b2b2b2]">符文：</span>{{ bzRow.rune }}
         </div>
@@ -148,18 +137,6 @@
         >
           {{ getBzSummaryZh(bzRow.champion, bzRow.summary) || bzRow.summary }}
         </div>
-        <NCheckbox
-          v-if="
-            (!bzRow.imageLoadout || bzRow.imageLoadout.status === 'unavailable') &&
-            getBzExtras(bzRow.champion)
-          "
-          size="small"
-          v-model:checked="useHistoricalBzExtras"
-          class="mt-2"
-          :disabled="bzRow.stale || bzRow.itemCatalogStale"
-        >
-          临时使用历史人工补充（不代表作者当前图片推荐）
-        </NCheckbox>
         <div class="mt-1 text-[10px] text-[#666666]/80 dark:text-[#b2b2b2]/70">
           <template
             v-if="
@@ -169,7 +146,9 @@
           >
             核心装已按 Bz 推荐置顶至下方“核心装备”区（人工推荐行不显示虚假胜率）；
           </template>
-          <template v-if="bzExtras">历史人工补充已置顶；</template>
+          <template v-if="bzRow.imageReference"
+            >技能和出门装会自动展示至下方；此记录不参与自动写入；</template
+          >
           <template v-else-if="!bzRow.stale && bzRow.imageLoadout?.catalogVersion">
             <template v-if="bzRow.imageLoadout.spellIds">图片中的召唤师技能已置顶；</template>
             <template v-if="bzRow.imageLoadout.starterItemId">图片中的出门装已置顶；</template>
@@ -188,7 +167,7 @@
               未找到匹配 Bz 基石的 OP.GG 完整符文页，本次未应用符文筛选；
             </template>
           </template>
-          文字和已识别图片随作者更新；缓存有效期 10 分钟，当前页面每分钟检查，手动刷新立即重读。
+          文字和已识别图片自动同步；缓存有效期 10 分钟，失败后每分钟自动重试，读取完成立即更新页面。
           新英文内容未经校对时显示原文；未收录的对线回落 OP.GG。
         </div>
       </div>
@@ -318,13 +297,8 @@
 
 <script setup lang="ts">
 import BzImageLoadout from '@renderer-shared/components/bz-guide/BzImageLoadout.vue'
-import {
-  getBzExtras,
-  getBzSummaryZh
-} from '@renderer-shared/components/ongoing-game-panel/widgets/player-info-card/bz-summary-zh'
+import { getBzSummaryZh } from '@renderer-shared/components/ongoing-game-panel/widgets/player-info-card/bz-summary-zh'
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
-import ItemDisplay from '@renderer-shared/components/widgets/ItemDisplay.vue'
-import SummonerSpellDisplay from '@renderer-shared/components/widgets/SummonerSpellDisplay.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
 import { useInstance } from '@renderer-shared/shards'
 import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
@@ -340,7 +314,7 @@ import type {
 } from '@shared/types/counter-intel'
 import { type LaneName, resolveLaneOpponent } from '@shared/utils/lane-assignment'
 import { RefreshSharp } from '@vicons/ionicons5'
-import { NButton, NCheckbox, NIcon, NScrollbar, NSelect, NSpin, NSwitch } from 'naive-ui'
+import { NButton, NIcon, NScrollbar, NSelect, NSpin, NSwitch } from 'naive-ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { useOpgg } from '../context'
@@ -738,17 +712,7 @@ function sameLockedIdentity(
 const ZED_ID = 238
 const bzRow = ref<BzMatchupRow | null>(null)
 const bzSourceUnavailable = ref(false)
-const useHistoricalBzExtras = ref(false)
 const bzRuneFilterStatus = ref<BzRuneFilterStatus>('not-requested')
-const bzExtras = computed(() =>
-  bzRow.value &&
-  useHistoricalBzExtras.value &&
-  !bzRow.value.stale &&
-  !bzRow.value.itemCatalogStale &&
-  (!bzRow.value.imageLoadout || bzRow.value.imageLoadout.status === 'unavailable')
-    ? getBzExtras(bzRow.value.champion)
-    : null
-)
 
 /** 流水线内查询：仅劫生效；源故障单独标记，不中断 OP.GG 主链路。 */
 async function fetchBzRow(
@@ -767,6 +731,7 @@ async function fetchBzRow(
       row: res?.found ? res.row : null,
       sourceUnavailable:
         res?.reason === 'source-unavailable' ||
+        !!res?.row?.imageReference ||
         res?.row?.stale === true ||
         res?.row?.imageLoadout?.status === 'unavailable'
     }
@@ -847,6 +812,8 @@ const inGameMatchupKey = computed(() => {
 })
 
 const summaryText = computed(() => {
+  if (bzRow.value?.imageReference)
+    return `Bz 记录已自动展示 vs ${bzRow.value.champion} · ${bzRow.value.refreshing ? '在线同步中' : '等待自动重试'}`
   if (bzRow.value && !bzRow.value.stale) {
     return `Bz 推荐已就绪 vs ${bzRow.value.champion}${matchupStatus.value ? ` · ${matchupStatus.value}` : ''}`
   }
@@ -895,7 +862,6 @@ function resetScopedMatchupState(status = '') {
   requestSeq++
   updateManualTarget(0)
   manualLane.value = ''
-  useHistoricalBzExtras.value = false
   hoverNotice.value = ''
   intel.value = null
   isLoading.value = false
@@ -941,7 +907,13 @@ async function loadMatchupForIdentity(
       })
       .then((result) => ({ result, error: null }))
       .catch((error: unknown) => ({ result: null, error })),
-    fetchBzRow(me, opp, options.force)
+    fetchBzRow(me, opp, options.force).then((outcome) => {
+      if (seq === matchupSeq && isCurrentMatchupRequest(options.requestToken, matchupLifecycle)) {
+        bzRow.value = outcome.row
+        bzSourceUnavailable.value = outcome.sourceUnavailable
+      }
+      return outcome
+    })
   ])
   const identity: MatchupOverlayIdentity = {
     gameId: options.requestToken.owner.gameId!,
@@ -986,7 +958,7 @@ async function loadMatchupForIdentity(
   setMatchupLoadoutPending(false)
   bzSourceUnavailable.value = bzOutcome.sourceUnavailable
   bzRow.value = bz
-  const merged = mergeBzIntoOverlay(result?.overlay ?? null, bz, bzExtras.value)
+  const merged = mergeBzIntoOverlay(result?.overlay ?? null, bz)
   bzRuneFilterStatus.value = merged.runeFilterStatus
   matchupSections.value = [...new Set([...(result?.parsedSections ?? []), ...merged.sections])]
 
@@ -1000,7 +972,8 @@ async function loadMatchupForIdentity(
       metaText,
       identity,
       result?.meta ? { ...result.meta, sourceVersion: result.sourceVersion } : null,
-      resolveMatchupLoadoutSource(!!result?.overlay, !!bz && !bz.stale) ?? 'OP.GG'
+      resolveMatchupLoadoutSource(!!result?.overlay, !!bz && (!bz.stale || !!bz.imageReference)) ??
+        'OP.GG'
     )
     const previousLock = matchupLock.value
     matchupLock.value = {
@@ -1030,7 +1003,9 @@ async function loadMatchupForIdentity(
       : resultError
         ? 'OP.GG 获取失败，已降级'
         : 'OP.GG 该对位样本不足'
-    if (bz && !bz.stale) {
+    if (bz?.imageReference) {
+      matchupStatus.value = `Bz 已核对记录已自动展示 vs ${opponentText} · ${bz.refreshing ? '后台同步中' : '等待自动重试'}${autoApplyNotice}`
+    } else if (bz && !bz.stale) {
       const changedLabels = merged.sections.map((section) => SECTION_LABELS[section] ?? section)
       const bzAction = changedLabels.length
         ? `Bz 推荐已处理（${changedLabels.join('/')}）`
@@ -1065,7 +1040,7 @@ async function loadMatchupForIdentity(
         ? '该对位暂无 OP.GG 样本，且 BZ 数据源暂不可用，显示通用构筑'
         : '该对位样本不足，显示通用构筑'
   )
-  // 旧表仍可阅读，但不能再进入推荐或自动应用链路。
+  // 无可展示构筑时仍保留攻略文字；参考记录不能授权自动写入。
   bzRow.value = bz
   bzSourceUnavailable.value = bzOutcome.sourceUnavailable
   return false
@@ -1088,7 +1063,7 @@ function resolveMatchupRequestIdentity() {
   }
 }
 
-async function refreshMatchupOverlay(force = false) {
+async function refreshMatchupOverlay(force = false, acceptCachedUpdate = false) {
   const { me, opp, lane, validated } = resolveMatchupRequestIdentity()
   const requestToken = createMatchupRequestToken(matchupLifecycle)
   const query = currentMatchupQuery()
@@ -1137,7 +1112,11 @@ async function refreshMatchupOverlay(force = false) {
     lane: matchupLane,
     ...query
   }
-  if (!force && matchesMatchupOverlayIdentity(me, matchupOverlayIdentity.value, expectedIdentity)) {
+  if (
+    !force &&
+    !acceptCachedUpdate &&
+    matchesMatchupOverlayIdentity(me, matchupOverlayIdentity.value, expectedIdentity)
+  ) {
     setMatchupLoadoutPending(false)
     return
   }
@@ -1221,7 +1200,17 @@ watch(
 
 // 原版顶部刷新成功后也强制刷新克制表与对位数据，不能只更新通用英雄详情。
 watch(matchupRefreshGeneration, () => refreshAll())
-watch(useHistoricalBzExtras, () => scheduleMatchupOverlay(true))
+function refreshVisibleBz() {
+  if (
+    document.visibilityState === 'visible' &&
+    observedMatchupSession.value &&
+    resolveMatchupRequestIdentity().me === ZED_ID
+  ) {
+    void refreshMatchupOverlay(false, true)
+  }
+}
+ipc.onEventVue(CHAMPION_DATA_MAIN_NAMESPACE, 'bz-guide-updated', refreshVisibleBz)
+document.addEventListener('visibilitychange', refreshVisibleBz)
 
 // Keep an open page current; do not poll hidden windows or non-match contexts.
 const freshnessTimer = setInterval(() => {
@@ -1229,8 +1218,12 @@ const freshnessTimer = setInterval(() => {
     return
   const bzExpired = bzRow.value?.fetchedAt && Date.now() - bzRow.value.fetchedAt >= 10 * 60_000
   const intelExpired = intel.value && Date.now() - Date.parse(intel.value.updatedAt) >= 8 * 60_000
-  if (bzExpired || intelExpired || errorText.value || bzSourceUnavailable.value) refreshAll()
-  else void ensurePriors()
+  if (intelExpired || errorText.value) {
+    void ensurePriors(true)
+    refresh(true, true)
+  } else void ensurePriors()
+  if (bzExpired || intelExpired || bzSourceUnavailable.value)
+    void refreshMatchupOverlay(false, true)
 }, 60_000)
 
 /** 进入加载/对局后：用真实双方阵容校验选人期的对位推测，必要时精确重定或诚实回退 */
@@ -1353,6 +1346,7 @@ watch(
 
 onBeforeUnmount(() => {
   clearInterval(freshnessTimer)
+  document.removeEventListener('visibilitychange', refreshVisibleBz)
   resetScopedMatchupState()
 })
 

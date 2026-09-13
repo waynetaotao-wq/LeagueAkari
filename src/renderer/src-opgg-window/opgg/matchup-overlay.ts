@@ -178,7 +178,11 @@ function hasValidRows(
  * UI 仍可诚实展示已有的部分对位数据，手动按钮也只出现在有数据的区块。
  */
 export function hasCompleteMatchupLoadout(patch: Record<string, unknown> | null): boolean {
-  if (!patch || !MATCHUP_LOADOUT_REQUIRED_SECTIONS.every((section) => section in patch))
+  if (
+    !patch ||
+    patch.__bzReference === true ||
+    !MATCHUP_LOADOUT_REQUIRED_SECTIONS.every((section) => section in patch)
+  )
     return false
 
   const spellsValid = hasValidRows(

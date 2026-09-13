@@ -15,7 +15,8 @@
     </template>
     <div class="text-xs">
       <div v-if="bzRow.fetchedAt" class="mb-1 text-[10px] text-gray-500">
-        {{ bzRow.stale ? '旧表缓存 · 更新失败' : '表格读取时间' }} ·
+        {{ bzRow.stale ? '已核对记录' : '表格读取时间' }} ·
+        <span v-if="bzRow.refreshing">自动同步中 · </span>
         {{ new Date(bzRow.fetchedAt).toLocaleString() }}
       </div>
       <div class="mb-1 font-bold">
@@ -26,7 +27,10 @@
       </div>
       <div class="leading-relaxed whitespace-pre-line">{{ displayText }}</div>
       <BzImageLoadout :row="bzRow" />
-      <div v-if="!zhText" class="mt-1 text-[10px] text-[#666666] dark:text-[#b2b2b2]">
+      <div
+        v-if="!zhText && bzRow.summary"
+        class="mt-1 text-[10px] text-[#666666] dark:text-[#b2b2b2]"
+      >
         （当前内容暂未翻译，显示原文）
       </div>
     </div>
@@ -67,6 +71,7 @@ const targetChampionId = computed(() => ongoingGame.value.championSelections?.[p
 
 const BZ_RETRY_DELAYS_MS = [750, 2000] as const
 const bzRow = ref<BzMatchupRow | null>(null)
+const eligibleOpponentId = ref<number | null>(null)
 let seq = 0
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -85,7 +90,7 @@ function isUsableRow(
     response?.found === true &&
     typeof response.row?.champion === 'string' &&
     typeof response.row.summary === 'string' &&
-    response.row.summary.trim().length > 0
+    (response.row.summary.trim().length > 0 || !!response.row.imageReference)
   )
 }
 
@@ -125,7 +130,10 @@ async function loadBzRow(requestSeq: number, opponentChampionId: number, attempt
 
 function refreshOnOpen(show: boolean) {
   if (!show || !targetChampionId.value || !bzRow.value?.fetchedAt) return
-  const retrySoon = bzRow.value.stale || bzRow.value.imageLoadout?.status === 'unavailable'
+  const retrySoon =
+    bzRow.value.stale ||
+    !!bzRow.value.imageReference ||
+    bzRow.value.imageLoadout?.status === 'unavailable'
   if (Date.now() - bzRow.value.fetchedAt < (retrySoon ? 60_000 : 10 * 60_000)) return
   invalidateRequest()
   void loadBzRow(seq, targetChampionId.value, 0)
@@ -144,6 +152,7 @@ watch(
   ([selfPuuid, selfChampionId, selfPosition, opponentPosition, opponentChampionId, teams]) => {
     invalidateRequest()
     bzRow.value = null
+    eligibleOpponentId.value = null
 
     const eligible = isBzLaneOpponent({
       teams,
@@ -154,13 +163,25 @@ watch(
       targetPosition: opponentPosition
     })
     if (!eligible || !opponentChampionId) return
+    eligibleOpponentId.value = opponentChampionId
 
     void loadBzRow(seq, opponentChampionId, 0)
   },
   { immediate: true }
 )
 
+function refreshCurrentRecord() {
+  if (document.visibilityState !== 'visible' || !eligibleOpponentId.value) return
+  invalidateRequest()
+  void loadBzRow(seq, eligibleOpponentId.value, 0)
+}
+ipc.onEventVue(CHAMPION_DATA_MAIN_NAMESPACE, 'bz-guide-updated', refreshCurrentRecord)
+document.addEventListener('visibilitychange', refreshCurrentRecord)
+const freshnessTimer = setInterval(refreshCurrentRecord, 60_000)
+
 onBeforeUnmount(() => {
+  clearInterval(freshnessTimer)
+  document.removeEventListener('visibilitychange', refreshCurrentRecord)
   invalidateRequest()
   bzRow.value = null
 })

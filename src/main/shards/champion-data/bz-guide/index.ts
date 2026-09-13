@@ -15,7 +15,7 @@ import {
   normalizeName,
   parseCsv
 } from './table'
-import { BZ_WORKBOOK_MAX_BYTES, parseBzWorkbook } from './workbook'
+import { readBzWorkbook } from './workbook-source'
 
 export {
   BzGuideDataValidationError,
@@ -28,6 +28,7 @@ export {
 } from './table'
 
 export type { BzMatchupRow }
+export { getBzKnownChampionSlug } from './snapshot'
 
 // ============================ 可调区 ============================
 
@@ -52,6 +53,10 @@ export interface GetBzZedMatchupOptions {
   /** false 为轻量 CSV 文字模式，默认读取完整工作簿和图片。 */
   includeImages?: boolean
   force?: boolean
+  /** UI consumers show the saved reference immediately and receive an update event afterwards. */
+  backgroundRefresh?: boolean
+  snapshotFile?: string
+  onUpdated?: () => void
   /** 装备库失败不会丢弃已获取的文字攻略；通过此回调交给上层 logger 留痕。 */
   onWarn?: (message: string) => void
 }
@@ -289,7 +294,6 @@ export function resolveBuildItems(coreBuild: string, byName: Map<string, number>
 // ============================ 拉取与查询 ========================
 
 const _tableCaches = new WeakMap<AxiosInstance, CachedResource<Map<string, BzMatchupRow>>>()
-const _workbookCaches = new WeakMap<AxiosInstance, CachedResource<Map<string, BzMatchupRow>>>()
 
 async function loadTable(httpClient: AxiosInstance): Promise<Map<string, BzMatchupRow>> {
   const { data } = await httpClient.get<unknown>(BZ_CSV_URL, {
@@ -316,48 +320,10 @@ async function loadTable(httpClient: AxiosInstance): Promise<Map<string, BzMatch
 
 async function ensureTable(
   httpClient: AxiosInstance,
-  images: boolean,
-  force = false,
-  onWarn?: (message: string) => void
+  force = false
 ): Promise<Map<string, BzMatchupRow>> {
-  const cache = getClientCache(images ? _workbookCaches : _tableCaches, httpClient)
-  const value = await readThroughCache(
-    cache,
-    BZ_CACHE_TTL,
-    async () => {
-      if (!images) return loadTable(httpClient)
-      try {
-        const { data } = await httpClient.get<ArrayBuffer>(BZ_XLSX_URL, {
-          responseType: 'arraybuffer',
-          timeout: 15000,
-          maxContentLength: BZ_WORKBOOK_MAX_BYTES,
-          'axios-retry': { retries: 0 }
-        })
-        const bytes = Buffer.isBuffer(data)
-          ? data
-          : data instanceof ArrayBuffer
-            ? new Uint8Array(data)
-            : null
-        if (!bytes) throw new BzGuideDataValidationError('BZ Excel response is not binary')
-        return new Map(parseBzWorkbook(bytes).map((row) => [canonicalName(row.champion), row]))
-      } catch (error) {
-        onWarn?.(
-          `图片表读取失败，尝试 CSV 文字回退: ${error instanceof Error ? error.message : String(error)}`
-        )
-        const textRows = await loadTable(httpClient)
-        for (const row of textRows.values())
-          row.imageLoadout = {
-            status: 'unavailable',
-            issues: [{ code: 'source-unavailable', field: 'both' }]
-          }
-        return textRows
-      }
-    },
-    force
-  )
-  if (images && [...value.values()].some((row) => row.imageLoadout?.status === 'unavailable'))
-    cache.expiresAt = Math.min(cache.expiresAt, Date.now() + STALE_RETRY_TTL)
-  return value
+  const cache = getClientCache(_tableCaches, httpClient)
+  return readThroughCache(cache, BZ_CACHE_TTL, () => loadTable(httpClient), force)
 }
 
 /**
@@ -373,14 +339,22 @@ export async function getBzZedMatchup(
   const httpClient = options.httpClient ?? axios
   const images = options.includeImages !== false
   const needsCatalog = images || options.includeCoreItems !== false
-  const resources = await Promise.all([
-    ensureTable(httpClient, images, options.force, options.onWarn).then((table) => {
-      const { fetchedAt, stale } = getClientCache(
-        images ? _workbookCaches : _tableCaches,
-        httpClient
-      )
-      return { table, fetchedAt, stale }
-    }),
+  const resources = [
+    images
+      ? readBzWorkbook(httpClient, {
+          url: BZ_XLSX_URL,
+          ttl: BZ_CACHE_TTL,
+          force: options.force,
+          background: options.backgroundRefresh,
+          snapshotFile: options.snapshotFile,
+          loadText: () => loadTable(httpClient),
+          onWarn: options.onWarn,
+          onUpdated: options.onUpdated
+        })
+      : ensureTable(httpClient, options.force).then((table) => {
+          const { fetchedAt, stale } = getClientCache(_tableCaches, httpClient)
+          return { table, fetchedAt, stale, refreshing: false, reference: undefined }
+        }),
     !needsCatalog
       ? Promise.resolve(null)
       : ensureItemNameMap(httpClient, options.force)
@@ -396,20 +370,61 @@ export async function getBzZedMatchup(
             )
             return null
           })
-  ])
+  ] as const
   // Capture metadata with each response: another window can force a refresh while a catalog waits.
-  const [snapshot, catalogSnapshot] = resources
+  const snapshot = await resources[0]
   const { table } = snapshot
-  const catalog = catalogSnapshot?.catalog
-  const byName = catalog?.byName
   const key = canonicalName(opponentSlug)
   const found = table.get(key) ?? prefixLookup(table, key)
   if (!found) return null
+  const referenceTable =
+    snapshot.reference &&
+    new Map(snapshot.reference.rows.map((row) => [canonicalName(row.champion), row]))
+  const reference = referenceTable && (referenceTable.get(key) ?? prefixLookup(referenceTable, key))
   const row: BzMatchupRow = {
     ...found,
     fetchedAt: snapshot.fetchedAt,
     stale: snapshot.stale === true,
-    itemCatalogStale: needsCatalog && (!byName || catalogSnapshot?.stale === true)
+    refreshing: snapshot.refreshing
+  }
+  if (
+    reference?.imageLoadout &&
+    snapshot.reference &&
+    (row.stale || row.imageLoadout?.status === 'unavailable')
+  ) {
+    row.imageReference = {
+      loadout: reference.imageLoadout,
+      fetchedAt: snapshot.reference.fetchedAt,
+      sourceRow: reference.sourceRow,
+      sourceSheet: reference.sourceSheet,
+      reason: snapshot.refreshing ? 'refreshing' : 'source-unavailable'
+    }
+  }
+  // Offline reading does not wait for the game resource catalog. Its result is never auto-applied.
+  if (options.backgroundRefresh && row.stale) return row
+  const catalogSnapshot = await resources[1]
+  const catalog = catalogSnapshot?.catalog
+  const byName = catalog?.byName
+  row.itemCatalogStale = needsCatalog && (!byName || catalogSnapshot?.stale === true)
+  if (row.imageReference && catalog && !row.itemCatalogStale) {
+    const readable = {
+      ...row.imageReference.loadout,
+      issues: [...row.imageReference.loadout.issues]
+    }
+    row.imageReference = { ...row.imageReference, loadout: readable }
+    if (readable.starterItemId && ![...catalog.byName.values()].includes(readable.starterItemId)) {
+      delete readable.starterItemId
+      readable.issues.push({ code: 'unavailable-in-patch', field: 'starter' })
+    }
+    if (readable.spellIds) {
+      const spells = await ensureSpells(httpClient, catalog.version, options.force).catch(
+        () => null
+      )
+      if (spells && !readable.spellIds.every((id) => spells.has(id))) {
+        delete readable.spellIds
+        readable.issues.push({ code: 'unavailable-in-patch', field: 'spells' })
+      }
+    }
   }
   if (row.stale) options.onWarn?.('表格刷新失败，当前展示的是旧缓存，禁止自动应用')
   if (row.imageLoadout && row.imageLoadout.status !== 'unavailable' && !row.stale) {
@@ -444,6 +459,21 @@ export async function getBzZedMatchup(
       }
     }
     loadout.status = loadout.spellIds && loadout.starterItemId ? 'ready' : 'partial'
+    if (loadout.issues.some((issue) => issue.code === 'catalog-unavailable')) {
+      row.imageReference = {
+        loadout: {
+          ...found.imageLoadout!,
+          issues: [
+            ...found.imageLoadout!.issues,
+            ...loadout.issues.filter((issue) => issue.code === 'unavailable-in-patch')
+          ]
+        },
+        fetchedAt: row.fetchedAt!,
+        sourceRow: row.sourceRow,
+        sourceSheet: row.sourceSheet,
+        reason: 'catalog-unavailable'
+      }
+    }
   }
   if (options.includeCoreItems === false) return row
   if (!byName || !found.coreBuild || row.stale || row.itemCatalogStale) return row

@@ -5,6 +5,8 @@ import { OpggHttpApiAxiosHelper } from '@shared/http-api-axios-helper/opgg'
 import { Qq101HttpApiAxiosHelper } from '@shared/http-api-axios-helper/qq101'
 import axios, { type AxiosInstance } from 'axios'
 import type { AxiosRetry } from 'axios-retry'
+import { app } from 'electron'
+import { join } from 'node:path'
 import { z } from 'zod'
 
 import { AppCommonMain } from '../app-common'
@@ -93,7 +95,8 @@ export class ChampionDataMain implements IAkariShardInitDispose {
     this._counterIntel = new ChampionDataCounterIntel({
       logger: this._logger,
       opggApi,
-      web: this._opggWebHttpClient
+      web: this._opggWebHttpClient,
+      bzSnapshotFile: join(app.getPath('userData'), 'champion-data', 'bz-workbook.json')
     })
     this._sourceLoader = new ChampionDataMainSourceLoader(
       this._logger,

@@ -1,0 +1,1214 @@
+{
+  "schema": 1,
+  "sheetId": "1FInDZ2JhIyto2y-FnCcgCVlAYcjRaF7egcpsV41Spic",
+  "fetchedAt": 1789314721839,
+  "championSlugs": {
+    "1": "Annie",
+    "3": "Galio",
+    "4": "TwistedFate",
+    "7": "Leblanc",
+    "8": "Vladimir",
+    "10": "Kayle",
+    "13": "Ryze",
+    "18": "Tristana",
+    "23": "Tryndamere",
+    "31": "Chogath",
+    "34": "Anivia",
+    "38": "Kassadin",
+    "39": "Irelia",
+    "42": "Corki",
+    "43": "Karma",
+    "45": "Veigar",
+    "50": "Swain",
+    "54": "Malphite",
+    "55": "Katarina",
+    "61": "Orianna",
+    "63": "Brand",
+    "69": "Cassiopeia",
+    "75": "Nasus",
+    "79": "Gragas",
+    "80": "Pantheon",
+    "84": "Akali",
+    "85": "Kennen",
+    "86": "Garen",
+    "90": "Malzahar",
+    "91": "Talon",
+    "92": "Riven",
+    "99": "Lux",
+    "101": "Xerath",
+    "103": "Ahri",
+    "105": "Fizz",
+    "112": "Viktor",
+    "115": "Ziggs",
+    "126": "Jayce",
+    "127": "Lissandra",
+    "131": "Diana",
+    "134": "Syndra",
+    "136": "AurelionSol",
+    "142": "Zoe",
+    "143": "Zyra",
+    "147": "Seraphine",
+    "157": "Yasuo",
+    "161": "Velkoz",
+    "163": "Taliyah",
+    "166": "Akshan",
+    "245": "Ekko",
+    "246": "Qiyana",
+    "268": "Azir",
+    "517": "Sylas",
+    "518": "Neeko",
+    "711": "Vex",
+    "777": "Yone",
+    "799": "Ambessa",
+    "800": "Mel",
+    "805": "Locke",
+    "893": "Aurora",
+    "901": "Smolder",
+    "910": "Hwei",
+    "950": "Naafiri"
+  },
+  "rows": [
+    {
+      "champion": "Ahri",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 8,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "9362bbad8c745591eef2698416494b1ff1a8fff2afcc5f7de8d10382a215bde3"
+      }
+    },
+    {
+      "champion": "Akali",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "FF",
+      "coreBuild": "Eclipse → Voltaic→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 9,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "e8172239f9705dda9775e2f328bd3ea454ad326365900195ce4d5b99d3545364"
+      }
+    },
+    {
+      "champion": "Akshan",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 10,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "19d34620349312549d8f3724581e3a4679aca35c72b74b7dd49e327173a48a95"
+      }
+    },
+    {
+      "champion": "Ambessa",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Serpents → LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 11,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "c912f8bd871ffde8a17f02dc7744a2a2001b923f9929095414b21333f781c5f5"
+      }
+    },
+    {
+      "champion": "Annie",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "FF",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 12,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "5b13388720164a276f0d42d3a06bbca45c53cc4cd41f8d7c79e8c5b0d5cae4d8"
+      }
+    },
+    {
+      "champion": "Anivia",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "FF",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 13,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "c30f6ee1ef0bca33b37ad5ff849ce3cc791cbdaac9f41f396aef3b42a17600a5"
+      }
+    },
+    {
+      "champion": "Aurora",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 14,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1054,
+        "fingerprint": "799c4eedc4d5fd2769d8082a2c0abab6df1c1a825199d67ca180ddf2e8afb23c"
+      }
+    },
+    {
+      "champion": "Aurelion",
+      "rune": "Conqueror\nSorcery",
+      "difficulty": "Very Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8010,
+      "sourceRow": 15,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "48b424010e0084ab13fe9f1dae5120c7df92d562dc945a4724230aefca1cb7cf"
+      }
+    },
+    {
+      "champion": "Azir",
+      "rune": "Conqueror\nSorcery",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8010,
+      "sourceRow": 16,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "e5c2493b7daac31f27fa3d61ba0b0f8f496af14105e97e62c95756400425f785"
+      }
+    },
+    {
+      "champion": "Brand",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 17,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "d851e5be9d644ee2343259988e244d726ff3906b87dea21003f32446187c4466"
+      }
+    },
+    {
+      "champion": "Cassio",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 18,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "c819ca28f8205454a08924b3c61dc810d624bdcc924db958adc5d6528ac909e7"
+      }
+    },
+    {
+      "champion": "Cho'Gath",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 19,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "aa7f8e6a51380092cfc77c37ceb091c1da21db175fc611049063b237786b4972"
+      }
+    },
+    {
+      "champion": "Corki",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Very Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 20,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "4770b1caae478f6fd8f19895301493d13a783ebc8c58b6b66d3e8e3465f8745e"
+      }
+    },
+    {
+      "champion": "Diana",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Eclipse → Voltaic→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 21,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "b73cc38073161c69881e99869349b336d5362c7eba35c8e3347bd3ae6ec181cf"
+      }
+    },
+    {
+      "champion": "Ekko",
+      "rune": "First Strike\nResolve",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 22,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "27202c69a3b216665e58a3eb5f82744c8ea2d580abd6088f011690e016843819"
+      }
+    },
+    {
+      "champion": "Fizz",
+      "rune": "First Strike\nResolve",
+      "difficulty": "Medium",
+      "coreBuild": "Eclipse → Voltaic→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 23,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "76f16320260aa57825009d588221af0cc6ad515f6951bc5ddbe267c10e478c6e"
+      }
+    },
+    {
+      "champion": "Galio",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Very Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 24,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "dda60062d814ae59e82cb1225e6e3c6c5ae29097fe07bb6d29fe8a18c0b96add"
+      }
+    },
+    {
+      "champion": "GAREN",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 25,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "18c76a3d77261370fdbc72be7efee79f9d33607b16c69718e5969412f559ea2b"
+      }
+    },
+    {
+      "champion": "Gragas",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 26,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "b3e16146e216eb5747d043368b3c16ab17dd970f2adbaf08bd809384555b1308"
+      }
+    },
+    {
+      "champion": "Hwei",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 27,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "822722508dbfa49c2414f6029b95c511aca09c8a50536d95f74e0503a57802cd"
+      }
+    },
+    {
+      "champion": "Irelia",
+      "rune": "Conqueror\nResolve",
+      "difficulty": "FF",
+      "coreBuild": "Eclipse → Voltaic→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8010,
+      "sourceRow": 28,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "7d686374cf7e6e05131d9859152a176c5027d05b32337d31643976eef476873a"
+      }
+    },
+    {
+      "champion": "Jayce",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 29,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "f692119fc1509fa522df744dc5b9b8529f01dfa08781d664d8c9b73cd33f782a"
+      }
+    },
+    {
+      "champion": "Kassadin",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Very Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 30,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "4977f8179022cb2f9b701aff4e2609deb4994858f421779cb036b1e0e6becb01"
+      }
+    },
+    {
+      "champion": "Karma",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 31,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "8dd65da21ea7da905b57d9f3eed9dcf452332da4c56435ed2be35341490afac1"
+      }
+    },
+    {
+      "champion": "Katarina",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 32,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "cbab22afdbcca1889765bc9016d8cca662897797d9ccff3ddf4ed797ec9446e8"
+      }
+    },
+    {
+      "champion": "Kayle",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 33,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "b56b1133c6bc10b2e543932058c7ef675647a2916e931cfc1918cf0cab717d75"
+      }
+    },
+    {
+      "champion": "Kennen",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 34,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "bebe7f10e137ff93bfc26ddfa6e3c1c81004b571820e90d84935a00fac92083d"
+      }
+    },
+    {
+      "champion": "LeBlanc",
+      "rune": "Electrocute\nResolve",
+      "difficulty": "FF",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8112,
+      "sourceRow": 35,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "0705223c0ef814d9f21d0def26f25af36a022bf24b517d112fb7317d7ef91f51"
+      }
+    },
+    {
+      "champion": "Lissandr",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 36,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "partial",
+        "issues": [
+          {
+            "code": "overlapping-images",
+            "field": "spells"
+          },
+          {
+            "code": "ambiguous-spells",
+            "field": "spells"
+          }
+        ],
+        "starterItemId": 1055,
+        "fingerprint": "b2ee44ddd4b838f0ed261f1c5abef1c3d01383b3bd65b53237df45ec3870492d"
+      }
+    },
+    {
+      "champion": "LOCKE",
+      "rune": "Conqueror\nResolve",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8010,
+      "sourceRow": 37,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "65bfcb5014c78a4a9fbd0093feb6f522173368692d51c406a0113135dc52170c"
+      }
+    },
+    {
+      "champion": "Lux",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 38,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 1],
+        "starterItemId": 1055,
+        "fingerprint": "3d270ee68dbe79268f7e484a0db26932ea05b13d97651e82a9bfc9add8acc8b6"
+      }
+    },
+    {
+      "champion": "Malzaha",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 39,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "162bb3f6d3e10554ed7a2c517486381d21080dfb28bc4788bff474ebfdf85dea"
+      }
+    },
+    {
+      "champion": "Malphite",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "FF",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 40,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 12],
+        "starterItemId": 1054,
+        "fingerprint": "fafa74cd5cee20b70c992be324d3e24e73bddecae82c266104794ba0dfdbf059"
+      }
+    },
+    {
+      "champion": "Mel",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "FF",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 41,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "0af3f961331f244df0f22d603c5e38ea048d950a32027c287b1d92bba53b1888"
+      }
+    },
+    {
+      "champion": "Naafiri",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 42,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "4cc260eb76b261b6e33caa962789b6ac5179668059a4faf5b9ba5038d37fb7c5"
+      }
+    },
+    {
+      "champion": "Neeko",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 43,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "2b0e460407419ead2ce1980a40946f22f2c5d539e09d412cfd2ff7255db1d4af"
+      }
+    },
+    {
+      "champion": "Nasus",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 44,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "1f8c8d6e83c78cfdf1da53b041ee661c6a1cc8053440316fb2771c6b704ac8f6"
+      }
+    },
+    {
+      "champion": "Orianna",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 45,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "a76dcd9b9dbfe9f9be8141aa91fd6c4e463e437a2c43ef4ac4348cb0f7769ae3"
+      }
+    },
+    {
+      "champion": "Panth",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 46,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "b085e79e29cbb90c3985a6725c794358e782f43814a77818d0364b9722275c6c"
+      }
+    },
+    {
+      "champion": "Qiyana",
+      "rune": "First Strike\nResolve",
+      "difficulty": "FF",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 47,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 3],
+        "starterItemId": 1055,
+        "fingerprint": "c62f8b7a54793d8cf183e2411bcb958955572bdbc99f802fc24d08857a3de34b"
+      }
+    },
+    {
+      "champion": "Riven",
+      "rune": "First Strike\nResolve",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic → Serpents → LDR → Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 48,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 3],
+        "starterItemId": 1055,
+        "fingerprint": "61efbc0c96ee6286dba737589ffb3c85ec195f8675ea9d71c5acbcaa018df3cf"
+      }
+    },
+    {
+      "champion": "Ryze",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 49,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "bb5737725f466dcf32998a7b613ca0693e2e439bd23aa1619abd9bb2f7cd639d"
+      }
+    },
+    {
+      "champion": "Seraphin",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Very Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 50,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "58f9f9142006d8cee4a9e821aaf4d3134c805eeb16588cef6159a30ba0a3ceb8"
+      }
+    },
+    {
+      "champion": "Smolder",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Very Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 51,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "a7e364bc560f8d97f80ffa5b6e036f55211591e752a9110cd82a8077cb9eabba"
+      }
+    },
+    {
+      "champion": "Swain",
+      "rune": "Conqueror\nSorcery",
+      "difficulty": "Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8010,
+      "sourceRow": 52,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "0f06ce7edbddec19731fc7a58901b52281dd1e314167b49859b8d6c6d6f2fed5"
+      }
+    },
+    {
+      "champion": "Sylas",
+      "rune": "First Strike\nResolve",
+      "difficulty": "Hard",
+      "coreBuild": "Eclipse → Voltaic → LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 53,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "20bc1121e11212b9415009e73c766e1de49e368d4f2ef65903302365051a4a53"
+      }
+    },
+    {
+      "champion": "Syndra",
+      "rune": "Conqueror\nSorcery",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8010,
+      "sourceRow": 54,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1054,
+        "fingerprint": "df60cd87e10e10756c1511b9dfb08cead7c60cbfa42690dd43a704cfcb865bcf"
+      }
+    },
+    {
+      "champion": "Taliyah",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Very Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 55,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "dee363274d846ad8040109a622dbe54f4d5c99abbb28aa99c94dc6c86137ffbb"
+      }
+    },
+    {
+      "champion": "Talon",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 56,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "bc98f61e34e286797cb308ac8a7c338fb64776b8d487f57c01a119a32709ec44"
+      }
+    },
+    {
+      "champion": "Trist",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 57,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "c0698a15edff67242b68c1a7572068f00a6012fa5ea14f8081860cf8c464fd95"
+      }
+    },
+    {
+      "champion": "Trynd",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "FF",
+      "coreBuild": "Voltaic/Profane → Bastion→ LDR → Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 58,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 12],
+        "starterItemId": 1055,
+        "fingerprint": "dc78b9427044a78053bdcdb254e8a2c3233447c48b7378153340cf45641c0ac6"
+      }
+    },
+    {
+      "champion": "Twisted",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 59,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "6b50443402c4d966fbf971f1a37a8188eeeddf7cbd9b7de17322176153d6d6dd"
+      }
+    },
+    {
+      "champion": "Veigar",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Very Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 60,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "7ece644eea9a0ff4e9cf73d5f1dea3bb2e2164584107620d46de3c1884c4bf8c"
+      }
+    },
+    {
+      "champion": "Vel'Koz",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 61,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "cc4f5eaed567082ac5fecef5fbaf3ae16bbf74a7f10b1f2e0693a87a1abe3ff2"
+      }
+    },
+    {
+      "champion": "Vex",
+      "rune": "First Strike\nResolve",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 62,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "12a74e5c863211cefa6025f0328f44afdcb07f53926cee9e9cd687ce5370d029"
+      }
+    },
+    {
+      "champion": "Viktor",
+      "rune": "Conqueror\nResolve",
+      "difficulty": "FF",
+      "coreBuild": "Eclipse → Voltaic → LDR → Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8010,
+      "sourceRow": 63,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1054,
+        "fingerprint": "63f0941a9745aa830ace6439e1856d98a0c09a232e971bb4f277d1e25831d01d"
+      }
+    },
+    {
+      "champion": "Vladimir",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 64,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "d64da82fc68e849206b4cbc0c92c92a99bc97bb5e8f08aab05a175dde10cefb3"
+      }
+    },
+    {
+      "champion": "Xerath",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 65,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "6329c765dbecc43c0f735342c7d23197fe0ed19a0d222ec003c3ae21f43691ae"
+      }
+    },
+    {
+      "champion": "Yasuo",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic → Serpents→ LDR → Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 66,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "1d6ced5a002da05dd9cf583ef0955dcb5ef213808a81af231d8d3979ab383d02"
+      }
+    },
+    {
+      "champion": "Yone",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 67,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "ac821edaa96b7f71b26025b913c70eb7e21b4dfb613f579755eb4620ef66f0ec"
+      }
+    },
+    {
+      "champion": "Ziggs",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Medium",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 68,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "1b8ce4139dec618b8dfd162606d9a42e38f849129c3dba127effa832ee16c02f"
+      }
+    },
+    {
+      "champion": "Zoe",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Hard",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 69,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 1],
+        "starterItemId": 1055,
+        "fingerprint": "73a973fdc6a930b186ee80f2df9f82f137aa18dc22f2a5d4423bacfb2e116e33"
+      }
+    },
+    {
+      "champion": "Zyra",
+      "rune": "First Strike\nPrecision",
+      "difficulty": "Easy",
+      "coreBuild": "Voltaic→ Bastion→ LDR→ Endless Hunger",
+      "summary": "",
+      "keystonePerkId": 8369,
+      "sourceRow": 70,
+      "sourceSheet": "Zed Matchups",
+      "sourceFormat": "xlsx",
+      "imageLoadout": {
+        "status": "ready",
+        "issues": [],
+        "spellIds": [4, 14],
+        "starterItemId": 1055,
+        "fingerprint": "f6acc39f15dbff3908960f19eae1aed5edbe88dea264e7644a4e49979aedf603"
+      }
+    }
+  ]
+}

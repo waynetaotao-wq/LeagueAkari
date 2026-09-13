@@ -1,8 +1,57 @@
 import { describe, expect, it } from 'vitest'
 
 import { mergeBzIntoOverlay } from './bz-overlay'
+import { hasCompleteMatchupLoadout } from './matchup-overlay'
 
 describe('mergeBzIntoOverlay', () => {
+  it('automatically displays a verified reference, but cannot treat it as a complete automatic loadout', () => {
+    const stats = { play: 20, win: 10, pick_rate: 0.5 }
+    const complete = {
+      summoner_spells: [{ ...stats, ids: [4, 14] }],
+      starter_items: [{ ...stats, ids: [1055] }],
+      boots: [{ ...stats, ids: [3158] }],
+      core_items: [{ ...stats, ids: [6692, 3142] }],
+      last_items: [{ ...stats, ids: [6694] }],
+      runes: [
+        {
+          ...stats,
+          primary_page_id: 8100,
+          secondary_page_id: 8200,
+          primary_rune_ids: [8112, 8143, 8138, 8106],
+          secondary_rune_ids: [8210, 8236],
+          stat_mod_ids: [5008, 5008, 5001]
+        }
+      ]
+    }
+    expect(hasCompleteMatchupLoadout(complete)).toBe(true)
+    const loadout = {
+      status: 'ready' as const,
+      spellIds: [4, 12] as [number, number],
+      starterItemId: 1054,
+      issues: []
+    }
+    const reference = mergeBzIntoOverlay(complete, {
+      stale: true,
+      imageReference: { loadout, fetchedAt: 1789300000000, reason: 'source-unavailable' },
+      coreItemIds: [3000, 3001]
+    })
+    expect(reference.overlay).toMatchObject({
+      summoner_spells: [
+        { ids: [4, 12], is_bz_recommendation: true },
+        { ids: [4, 14], ...stats }
+      ],
+      starter_items: [
+        { ids: [1054], is_bz_recommendation: true },
+        { ids: [1055], ...stats }
+      ],
+      core_items: complete.core_items
+    })
+    expect(hasCompleteMatchupLoadout(reference.overlay)).toBe(false)
+    const live = mergeBzIntoOverlay(complete, {
+      imageLoadout: { ...loadout, catalogVersion: '16.18.1' }
+    })
+    expect(hasCompleteMatchupLoadout(live.overlay)).toBe(true)
+  })
   it('uses fresh online images ahead of a manual snapshot and never fills a conflict with it', () => {
     const historical = { spellIds: [4, 14] as [number, number], starterItemId: 1055 }
     const imageLoadout = {
