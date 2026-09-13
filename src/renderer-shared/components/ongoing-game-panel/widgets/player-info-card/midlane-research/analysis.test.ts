@@ -8,7 +8,7 @@ import {
   classifyLaneCorridor,
   collectVersionLadder,
   extractMidLite
-} from './midlane-research'
+} from './analysis'
 
 const SELF = 3
 const ENEMY_MID = 8

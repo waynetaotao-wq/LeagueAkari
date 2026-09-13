@@ -1,23 +1,35 @@
 <template>
   <div class="mb-1 flex">
-    <div
-      class="relative mr-2 cursor-pointer transition-[filter] hover:brightness-110"
-      @click.stop="() => navigateToSummonerByPuuid(puuid)"
+    <MidlaneResearchPopover
+      v-slot="{ open, close, blur, focusDetails, setTrigger, enabled, expanded }"
     >
-      <ChampionIcon
-        :champion-id="championId || -1"
-        round
-        ring
-        ring-color="rgba(255, 255, 255, 0.31)"
-        class="size-10.5"
-      />
-      <div
-        v-if="summoner"
-        class="absolute right-0 bottom-0 translate-x-[35%] rounded bg-black/50 px-1 text-[10px] text-white"
+      <NButton
+        :ref="setTrigger"
+        quaternary
+        class="player-champion-trigger relative transition-[filter] hover:brightness-110"
+        :aria-label="enabled ? '查看玩家战绩，悬停查看中单研究' : '查看玩家战绩'"
+        :aria-expanded="enabled ? expanded : undefined"
+        @focus="open"
+        @blur="blur"
+        @keydown.down.prevent="focusDetails"
+        @keydown.esc.stop="close"
+        @click.stop="() => navigateToSummonerByPuuid(puuid)"
       >
-        {{ summoner.summonerLevel }}
-      </div>
-    </div>
+        <ChampionIcon
+          :champion-id="championId || -1"
+          round
+          ring
+          ring-color="rgba(255, 255, 255, 0.31)"
+          class="size-10.5"
+        />
+        <div
+          v-if="summoner"
+          class="absolute right-0 bottom-0 translate-x-[35%] rounded bg-black/50 px-1 text-[10px] text-white"
+        >
+          {{ summoner.summonerLevel }}
+        </div>
+      </NButton>
+    </MidlaneResearchPopover>
 
     <div class="flex w-0 flex-1 flex-col justify-center gap-1">
       <div class="flex items-center gap-1">
@@ -162,6 +174,7 @@ import { computed, ref } from 'vue'
 import { PREMADE_TEAM_COLORS, PREMADE_TEAM_COLORS_LIGHT, RANKED_MEDAL_MAP } from '../../constants'
 import { useOngoingGamePanel } from '../../context'
 import MatchupTipsBadge from './matchup-tips/MatchupTipsBadge.vue'
+import MidlaneResearchPopover from './midlane-research/MidlaneResearchPopover.vue'
 import {
   PLAYER_INFO_CARD_ACTION_KEYS,
   createCollectByChampionInitParams,
@@ -354,3 +367,13 @@ const isUnrankedTier = (tier: string | undefined | null) => {
   return !tier || tier === 'NA' || tier === 'NONE'
 }
 </script>
+
+<style scoped>
+.player-champion-trigger {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  margin-right: 8px;
+  padding: 0;
+}
+</style>

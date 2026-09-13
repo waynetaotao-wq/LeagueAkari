@@ -78,7 +78,7 @@
 | **默认地区/段位 = 韩国·翡翠+**              | OP.GG 窗口顶部下拉                                       | 一次性迁移                   | `champion-data/{state,index}.ts`、`renderer-shared/shards/champion-data/store.ts`                                                                                                              |
 | **大乱斗换取推荐**                          | 大乱斗选人期 OP.GG 窗口                                  | 自动                         | `opgg/widgets/OpggMayhemPicker.vue`、`opgg/utils/mayhem-picker.ts`                                                                                                                             |
 | **绝活研究**                                | 战绩页侧栏                                               | 手动开始                     | `player-tab/mastery-research.ts`、`widgets/MasteryResearch.vue`                                                                                                                                |
-| **中单研究 v2**                             | 对局面板中单卡片，悬停展开                               | 自动（SGP + 中单位）         | `player-info-card/midlane-research.ts`、`PlayerInfoCardMidlaneResearch.vue`                                                                                                                    |
+| **中单研究速读**                            | 中单头像/研究条悬停，先看队友提醒                        | 自动（SGP + 中单位）         | `player-info-card/midlane-research/`                                                                                                                                                           |
 | **对局评分（评分/MVP/SVP/标签/名次/成就）** | 战绩卡片、展开表、赛后弹窗                               | 无开关；权重可校准           | `match-card/utils/akari-score*.ts`、`widgets/AkariScoreBadge.vue`、`AchievementIcon.vue`、`shards/match-rating`                                                                                |
 | **评分权重校准**                            | 设置 → 杂项 → 对局评分；战绩页侧栏"评分权重校准"         | 按钮                         | `utils/akari-score-calibration.ts`、`akari-score-calibrate-runner.ts`、`use-rating-calibration.ts`、`RatingCalibrateFromPlayer.vue`                                                            |
 | **赛后小结弹窗**                            | 结算时屏幕右下角                                         | 设置 → 杂项 → 赛后小结弹窗   | `window-manager/post-game-window/`、`src/renderer/src-post-game-window/`                                                                                                                       |
@@ -155,17 +155,21 @@
 
 - 拉目标玩家该英雄近 100 场（版本下拉来自实际战绩，新分析复位为全部版本），5 路并发时间线；序列守卫 + AbortController；卸载即中止。
 
-### 3.5 中单研究 v2（`midlane-research.ts` / `PlayerInfoCardMidlaneResearch.vue`）
+### 3.5 中单研究：头像悬停速读（`player-info-card/midlane-research/`，2026-09-13）
 
-- 触发：SGP 可用 + 该玩家位置 MIDDLE + 有英雄。缓存 key `puuid:champion:sgpServerId`，TTL 30 分钟；依赖变化/隐藏/卸载中止在途（5 路并发不再后台空转）。
-- 数据：版本梯队（当前 + 前两版，目标 500 场，翻页上限 60）→ 最近 60 场时间线。只收目标英雄、本人 teamPosition=MIDDLE、CLASSIC/map11/常规队列、≥300 秒且未提前结束的双方各 5 人局；队伍来自摘要 participantTeams，不用 participantId 范围猜。attemptedGames 是尝试数，deepGames 是有效时间线数，timelineFailures 单列失败；缺本人位置或早期窗口不完整不算「零游走」。
-- **准确性边界**：时间线每 60 秒一帧坐标，只有击杀/建筑/野怪事件带精确坐标。首次游走精度 ±1 分钟，一分钟内往返的短游走可能漏。
-- **游走判定（从严）**：只有身处严格边路走廊才算（上：x<3000∧y>5000 或 y>12000∧x<11000；下：y<3000∧x>4000 或 x>12000∧y<10500；龙坑/男爵坑/河道草排除）；连续同走廊帧合并为一段；走廊内本人参与的击杀不在任何段 ±60s 内则单独成段；成功 = 段 ±90s 内有本人参与击杀。起算 90 秒（`ROAM_START_MS`），统计到 14 分钟（`EARLY_MS`）。
-- 其它统计：2–14 分钟位置点与击杀参与点（热力图，官方三分区）、分区权重、10:00 帧相对敌方中单（`enemyMidPid` 由 teamPosition=MIDDLE）的补刀差/经济差/领先率、单杀（无助攻主杀）、被单杀（仅中路带内）、14 分钟前参团率。
-- 界面：打野研究同款——触发行热力小图 + "N 场 · 游走型/对线型/均衡（偏上/偏下）" + 分区权重 + 10 分钟经济差；悬停面板 140px 地图 + 地图偏好/游走/对线/前期参团四区块 + 算法与精度说明。复用官方 `GankMap`、`JunglePathingSection`。
-- 画像规则：场均游走 ≥1.2 或中路占比 <62% → 游走型；场均 <0.6 且中路 ≥75% → 对线型；去向某一侧 ≥60% 标"偏上/偏下"。
-- 已上传修复口径：10 分钟对线差仅接受 10:00 ±5 秒的有效双方快照；事件点需附近本人坐标佐证才支持游走判定，远程助攻不能证明到场；死亡/基地快照不进入地图偏好。首次单杀等级结合 LEVEL_UP 及同时间戳事件顺序，不能将击杀后的升级倒算。
-- 测试：`midlane-research-v2.test.ts`、`midlane-research-abort.test.ts`；旧 4/2 项计数已过时，本轮与评分/赛后合计 80 项回归。
+- **使用方式**：对局卡片悬停中单头像或紫色研究条，首先显示一句可以直接告诉队友的提醒，例如「这人前期常往下走；中路消失，下路先防。」首屏最多三个重点，附实际样本场次；地图、分区比例、游走/对线/参团完整统计及口径折叠到「查看数据与地图」。头像点击仍查询该玩家战绩；键盘聚焦可打开，向下键进入详情按钮，Esc 关闭。弹窗按触发位置的可用高度滚动，避免展开后越出窗口。
+- **敌我区别**：只有能从当前队伍名单确认是对手时，才显示「先提醒队友」及防范建议；己方或队伍未知时只展示历史表现，不提醒队友防范自己人。
+- 触发：客户端连接 + SGP 战绩能力可用 + 该玩家位置 MIDDLE + 有英雄。每张玩家卡片由 `MidlaneResearchProvider.vue` 统一加载，头像和研究条共享结果，悬停不发起新请求。缓存 key `puuid:champion:sgpServerId`，TTL 30 分钟；依赖变化/隐藏/卸载中止在途请求，断开时清除显示。玩家、英雄、服务器、对局身份变化会关闭旧弹窗。
+- 数据：按该玩家**最近玩过的三个版本**收集，目标 500 场、列表翻页上限 60，再详析最近 60 场时间线；这不保证样本就是当前游戏版本。只收目标英雄、本人 teamPosition=MIDDLE、CLASSIC/map11/常规队列、≥300 秒且未提前结束的双方各 5 人局。attemptedGames 是尝试数，deepGames 是有效时间线数，timelineFailures 单列失败；缺本人位置或早期窗口不完整不算「零游走」。继续保持每 10 场渐进展示及全局共享 5 路并发；中间结果标「仍在分析」。
+- **提醒筛选（`briefing.ts`）**：至少 10 场有效时间线，且失败/不完整记录占已完成请求不超过 30%，才提炼行为重点。未达门槛不贴行为标签；符合门槛但没有突出信号时明确显示「暂未发现突出倾向」。
+- 游走提醒要求有游走的对局 ≥8 场且占有效样本 ≥50%。偏上/偏下以**每局首次游走**计数：对应方向 ≥5 场且占有游走对局 ≥65%；避免一局多次游走放大某侧。没有明显方向则提醒两条边路。完整统计仍保留全部游走片段去向，名称与首屏分母区分。
+- 单杀提醒要求前 14 分钟有单杀的对局 ≥5 场且占有效样本 ≥40%。仅当某首次单杀等级桶独占最高、≥4 场且占全部有单杀对局 ≥50% 时提示等级；等级缺失或并列不硬选一个。单杀不限对手，不据此声称一定能单杀本局对位。
+- 经济提醒同时要求约 10 分钟对线快照 ≥10 场、覆盖有效时间线 ≥60%、其中经济领先场次 ≥65%、平均领先 ≥300 金。缺失不补零，不单凭一场极端领先判断玩家对线强弱。
+- 上述门槛是**展示规则**，不是经过实战校准的预测准确率。不再由「中路位置占比低」直接贴游走型标签；不由零游走推断不会支援，也不生成「爱压线、容易抓」等当前数据不能证明的判断。
+- **游走判定（`analysis.ts`，保持原统计口径）**：本人坐标进入严格边路走廊才计入，排除河道、龙坑、男爵坑；连续同侧坐标帧合并片段。击杀事件须有最近 60 秒内同走廊、相距 3000 地图单位以内的最近本人快照佐证，不能用远程助攻推定到场；参与击杀按片段前后 90 秒内的上述参与计。起算 90 秒，统计到 14 分钟；死亡/基地快照不进入地图偏好。
+- 其它统计：2–14 分钟位置点与击杀参与点、分区权重；10:00 ±5 秒最近有效双方快照相对敌方中单的补刀差/经济差/领先率；前 14 分钟单杀、首次单杀等级、被单杀（仅中路带内）及参团率。首次单杀等级结合 LEVEL_UP 及同时间戳事件顺序，不把击杀后升级倒算。
+- **精度边界**：分钟级坐标不能重建完整走位；一分钟内往返的短游走可能漏计，首次游走时间约 ±1 分钟。提醒只描述历史，不代表这局一定发生；真实客户端与玩家习惯预测效果须分别验证。
+- 验证入口：同目录 `analysis.test.ts`、`abort.test.ts`、`briefing.test.ts`；Storybook「Renderer Shared / Ongoing Game / Midlane Research」覆盖敌我、加载、失败、小样本、渐进结果、窗口边缘等场景。实际执行结果随本次交付报告，合成预览不代替国服真实客户端验收。
 
 ### 3.6 对局评分系统
 
@@ -468,8 +472,8 @@
 | `MIN_UNANCHORED_MATCHUP_GAMES`                                                   | matchup-build.ts                     | 5                                                                                                         | 冷门对位最小样本 |
 | `GAME_REFOCUS_LEAD_SECONDS / POLL_ALIVE_MS / POLL_DEAD_MS / MIN_ACTIVATE_GAP_MS` | game-refocus/context.ts              | 2 / 1000 / 500 / 5000                                                                                     | 复活切回         |
 | 赛后弹窗尺寸 / 自动收起                                                          | post-game-window/window.ts, state.ts | 440×780 / 120s                                                                                            | 弹窗             |
-| `TARGET_GAMES / DEEP_GAMES / EARLY_MS / ROAM_START_MS`                           | midlane-research.ts                  | 500 / 60 / 14min / 90s                                                                                    | 中单研究         |
-| `MIDLANE_CACHE_TTL`                                                              | PlayerInfoCardMidlaneResearch.vue    | 30 分钟                                                                                                   | 缓存             |
+| `TARGET_GAMES / DEEP_GAMES / EARLY_MS / ROAM_START_MS`                           | midlane-research/analysis.ts         | 500 / 60 / 14min / 90s                                                                                    | 中单研究         |
+| `MIDLANE_CACHE_TTL`                                                              | MidlaneResearchProvider.vue          | 30 分钟                                                                                                   | 缓存             |
 | `BZ_SHEET_ID` / gid                                                              | bz-guide/index.ts                    | 1FInDZ2… / 1026317672                                                                                     | Bz 源            |
 | 默认地区/段位                                                                    | champion-data/state.ts               | kr / emerald_plus                                                                                         | OP.GG 窗口       |
 

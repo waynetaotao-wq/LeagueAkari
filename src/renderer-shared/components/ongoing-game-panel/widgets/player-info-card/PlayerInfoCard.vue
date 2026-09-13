@@ -16,15 +16,17 @@
       }"
     />
 
-    <PlayerInfoCardHeader :puuid="puuid" />
-    <PlayerInfoCardStats :puuid="puuid" />
-    <PlayerInfoCardJunglePathing :puuid="puuid" />
-    <PlayerInfoCardMidlaneResearch :puuid="puuid" />
-    <BzSummaryBadge :puuid="puuid" />
+    <MidlaneResearchProvider :puuid="puuid">
+      <PlayerInfoCardHeader :puuid="puuid" />
+      <PlayerInfoCardStats :puuid="puuid" />
+      <PlayerInfoCardJunglePathing :puuid="puuid" />
+      <MidlaneResearchBar />
+      <BzSummaryBadge :puuid="puuid" />
 
-    <PlayerCardTagsArea :puuid="puuid" />
-    <PlayerInfoCardChampionUsage :puuid="puuid" />
-    <PlayerInfoCardMatchHistory :puuid="puuid" />
+      <PlayerCardTagsArea :puuid="puuid" />
+      <PlayerInfoCardChampionUsage :puuid="puuid" />
+      <PlayerInfoCardMatchHistory :puuid="puuid" />
+    </MidlaneResearchProvider>
   </div>
 </template>
 
@@ -44,7 +46,8 @@ import PlayerInfoCardHeader from './PlayerInfoCardHeader.vue'
 import PlayerInfoCardJunglePathing from './PlayerInfoCardJunglePathing.vue'
 import PlayerInfoCardMatchHistory from './PlayerInfoCardMatchHistory.vue'
 import BzSummaryBadge from './BzSummaryBadge.vue'
-import PlayerInfoCardMidlaneResearch from './PlayerInfoCardMidlaneResearch.vue'
+import MidlaneResearchBar from './midlane-research/MidlaneResearchBar.vue'
+import MidlaneResearchProvider from './midlane-research/MidlaneResearchProvider.vue'
 import PlayerInfoCardStats from './PlayerInfoCardStats.vue'
 
 const { puuid } = defineProps<{

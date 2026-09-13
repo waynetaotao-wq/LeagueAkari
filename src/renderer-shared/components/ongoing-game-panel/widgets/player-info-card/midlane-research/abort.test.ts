@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { type MidLiteGame, analyzeDeep, collectVersionLadder } from './midlane-research'
+import { type MidLiteGame, analyzeDeep, collectVersionLadder } from './analysis'
 
 const participantTeams = Object.fromEntries(
   Array.from({ length: 10 }, (_, i) => [i + 1, i < 5 ? 100 : 200])
