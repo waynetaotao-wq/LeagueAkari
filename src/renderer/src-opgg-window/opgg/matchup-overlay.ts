@@ -181,6 +181,7 @@ export function hasCompleteMatchupLoadout(patch: Record<string, unknown> | null)
   if (
     !patch ||
     patch.__bzReference === true ||
+    patch.__matchupPreviewOnly === true ||
     !MATCHUP_LOADOUT_REQUIRED_SECTIONS.every((section) => section in patch)
   )
     return false
@@ -242,6 +243,13 @@ export function setMatchupOverlay(
   matchupOverlayMeta.value = nextPatch && identity && meta ? { ...meta } : null
   matchupOverlay.value = nextPatch
   matchupOverlayLabel.value = nextPatch ? label : ''
+}
+
+/** 同一候选的倾向变化无需重取构筑；同步更新写入资格，保留正在阅读的数据。 */
+export function setMatchupOverlayPreviewOnly(previewOnly: boolean) {
+  const patch = matchupOverlay.value
+  if (!patch || (patch.__matchupPreviewOnly === true) === previewOnly) return
+  matchupOverlay.value = { ...patch, __matchupPreviewOnly: previewOnly }
 }
 
 export function matchesMatchupOverlayIdentity(

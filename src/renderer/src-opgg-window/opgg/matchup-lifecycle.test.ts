@@ -124,20 +124,30 @@ describe('matchup session lifecycle', () => {
 })
 
 describe('match-scoped target and request guards', () => {
-  it('does not replace builds for a low-confidence automatic lane guess', () => {
+  it('keeps even very unlikely selected champions available for progressive draft previews', () => {
     expect(
       resolveScopedMatchupTarget({
         currentSession: sessionA,
         manualTarget: null,
         enemyChampionIds: [238],
-        automaticResolution: { championId: 238, probability: 0.25 }
+        automaticResolution: { championId: 238, probability: 0.002 }
       })
-    ).toBeNull()
+    ).toEqual({ championId: 238, probability: 0.002, source: 'automatic' })
     expect(
       resolveAssignedLaneOpponent(
         [{ championId: 0, championPickIntent: 238, assignedPosition: 'middle' }],
         'middle'
       )
+    ).toBeNull()
+  })
+  it.each([0, -0.1, 1.01, Number.NaN, Infinity])('rejects invalid tendency %s', (probability) => {
+    expect(
+      resolveScopedMatchupTarget({
+        currentSession: sessionA,
+        manualTarget: null,
+        enemyChampionIds: [238],
+        automaticResolution: { championId: 238, probability }
+      })
     ).toBeNull()
   })
   it('honors a manual target only in its owning session', () => {

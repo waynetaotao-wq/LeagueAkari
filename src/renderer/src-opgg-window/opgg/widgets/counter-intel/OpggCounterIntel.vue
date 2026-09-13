@@ -23,6 +23,26 @@
       </NSwitch>
     </div>
 
+    <div
+      v-if="session && statusText"
+      role="status"
+      class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+    >
+      <span :class="draftPreviewOnly ? 'text-amber-600 dark:text-amber-400' : ''">
+        {{ statusText }}
+      </span>
+      <span class="text-[#666666] dark:text-[#bebebe]">
+        敌方已选 {{ enemyChampionIds.length }}/5
+        <template v-if="targetResolution?.source === 'automatic'"> · 随选人自动更新</template>
+      </span>
+      <span
+        v-if="draftPreviewOnly"
+        class="basis-full text-[10px] text-[#666666] dark:text-[#bebebe]"
+      >
+        先查看该候选的对位资料；自动配置暂用通用构筑。
+      </span>
+    </div>
+
     <template v-if="expanded">
       <!-- 控制行 -->
       <div class="mt-2 flex flex-wrap items-center gap-1.5">
@@ -48,9 +68,6 @@
             <NIcon><RefreshSharp /></NIcon>
           </template>
         </NButton>
-        <span class="ml-auto min-w-0 truncate text-xs text-[#666666] dark:text-[#bebebe]">
-          {{ statusText }}
-        </span>
       </div>
 
       <!-- 对位替换（官方绿红开关样式） -->
@@ -67,7 +84,7 @@
           <template #unchecked>关</template>
         </NSwitch>
         <span class="ml-auto min-w-0 truncate text-[#666666] dark:text-[#bebebe]">
-          {{ matchupStatus }}
+          {{ displayMatchupStatus }}
         </span>
       </div>
 
@@ -317,9 +334,10 @@ import { RefreshSharp } from '@vicons/ionicons5'
 import { NButton, NIcon, NScrollbar, NSelect, NSpin, NSwitch } from 'naive-ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
-import { useOpgg } from '../context'
-import { type BzRuneFilterStatus, mergeBzIntoOverlay } from '../bz-overlay'
+import { useOpgg } from '../../context'
+import { type BzRuneFilterStatus, mergeBzIntoOverlay } from '../../bz-overlay'
 import {
+  MATCHUP_AUTO_APPLY_MIN_PROBABILITY,
   areSameMatchupSession,
   createMatchupRequestToken,
   isCurrentMatchupGameData,
@@ -334,14 +352,15 @@ import {
   type MatchupLifecycleState,
   type MatchupRequestToken,
   type MatchupSessionIdentity
-} from '../matchup-lifecycle'
+} from '../../matchup-lifecycle'
 import {
   type MatchupOverlayIdentity,
   hasCompleteMatchupLoadout,
   matchesMatchupOverlayIdentity,
   opggPositionToMatchupLane,
+  setMatchupOverlayPreviewOnly,
   useMatchupOverlay
-} from '../matchup-overlay'
+} from '../../matchup-overlay'
 
 const LANES: readonly LaneName[] = ['top', 'jungle', 'middle', 'bottom', 'utility']
 const LANE_LABELS: Record<LaneName, string> = {
@@ -596,6 +615,15 @@ const targetResolution = computed(() =>
 
 const resolvedTargetId = computed<number | null>(() => targetResolution.value?.championId ?? null)
 
+const draftPreviewOnly = computed(() => {
+  const target = targetResolution.value
+  return (
+    String(lcs.gameflow.phase) === 'ChampSelect' &&
+    target?.source === 'automatic' &&
+    (target.probability ?? 0) < MATCHUP_AUTO_APPLY_MIN_PROBABILITY
+  )
+})
+
 const statusText = computed(() => {
   const resolution = targetResolution.value
   if (!resolution) return ''
@@ -605,19 +633,23 @@ const statusText = computed(() => {
   if (autoResolution.value?.exactPosition) {
     return `自动判定：${championName(resolution.championId)}（客户端分路）`
   }
-  return `推测对位：${championName(resolution.championId)}（分路倾向 ${Math.round((resolution.probability ?? 0) * 100)}%，非实测准确率）`
+  const percent = (resolution.probability ?? 0) * 100
+  const tendency = percent < 1 ? '<1' : String(Math.round(percent))
+  return `${draftPreviewOnly.value ? '初步推测' : '推测对位'}：${championName(resolution.championId)}（分路倾向 ${tendency}%，非实测准确率）`
 })
 
 const placeholderText = computed(() => {
   if (!effectiveLane.value) return '未获取到你的分路，请在上方选择'
   if (enemyChampionIds.value.length === 0) return '等待对面选择英雄…'
-  return '对位尚不明确，可手动指定；不根据低可信推测自动替换构筑'
+  if (!priors.value) return '正在获取分路数据，完成后自动推测；暂不可用时会自动重试'
+  return '暂无可用对位数据，可在上方手动指定'
 })
 
 // ===== [lolps] 对位数据整窗替换 =====
 // 识别到对位后拉取官方形状 overlay 写入共享状态；OpggView 就近 provide 覆盖 champion，
 // 原界面所有区块（符文/召唤师/技能/出装）与"应用"按钮自动切换为对位版数据。
 const {
+  matchupOverlay,
   matchupOverlayIdentity,
   matchupRefreshGeneration,
   resolveMatchupLoadoutSource,
@@ -628,6 +660,10 @@ const expanded = ref(false)
 
 const matchupOn = ref(true)
 const matchupStatus = ref('')
+const displayMatchupStatus = computed(() => {
+  const fallback = matchupOverlay.value && !hasCompleteMatchupLoadout(matchupOverlay.value)
+  return `${matchupStatus.value}${fallback ? ' · 自动配置暂用通用构筑' : ''}`
+})
 
 /** 区块键 → 中文标签（诊断行用） */
 const SECTION_LABELS: Record<string, string> = {
@@ -668,7 +704,7 @@ const errorText = ref('')
 let requestSeq = 0
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-/** [lolps] 对位锁定态：选人期挂上对位构筑后，整个对局周期内保持不还原 */
+/** [lolps] 选人期随候选更新；进入加载后保留本局身份，等待真实分路校验。 */
 const matchupLock = ref<{
   owner: MatchupSessionIdentity
   myChampionId: number
@@ -800,7 +836,7 @@ const inGameMatchup = computed<{
     [...new Set(enemyIds)].map((id) => ({ championId: id, roleRates: priors.value?.[id] ?? {} })),
     lane
   )
-  return inferred.championId && inferred.probability >= 0.6
+  return inferred.championId && inferred.probability >= MATCHUP_AUTO_APPLY_MIN_PROBABILITY
     ? { me, opp: inferred.championId, lane, validated: false }
     : null
 })
@@ -815,9 +851,9 @@ const summaryText = computed(() => {
   if (bzRow.value?.imageReference)
     return `Bz 记录已自动展示 vs ${bzRow.value.champion} · ${bzRow.value.refreshing ? '在线同步中' : '等待自动重试'}`
   if (bzRow.value && !bzRow.value.stale) {
-    return `Bz 推荐已就绪 vs ${bzRow.value.champion}${matchupStatus.value ? ` · ${matchupStatus.value}` : ''}`
+    return `Bz 推荐已就绪 vs ${bzRow.value.champion}${displayMatchupStatus.value ? ` · ${displayMatchupStatus.value}` : ''}`
   }
-  if (matchupStatus.value) return matchupStatus.value
+  if (displayMatchupStatus.value) return displayMatchupStatus.value
   if (resolvedTargetId.value && statusText.value) return statusText.value
   return '等待对位确认'
 })
@@ -968,7 +1004,7 @@ async function loadMatchupForIdentity(
         ? `${result.meta.play} 场 · 胜率 ${((result.meta.win / result.meta.play) * 100).toFixed(1)}%`
         : ''
     setMatchupOverlay(
-      merged.overlay,
+      { ...merged.overlay, __matchupPreviewOnly: draftPreviewOnly.value },
       metaText,
       identity,
       result?.meta ? { ...result.meta, sourceVersion: result.sourceVersion } : null,
@@ -995,16 +1031,13 @@ async function loadMatchupForIdentity(
 
     const opponentText = championName(opp)
     const sectionText = `${matchupSections.value.length}/${ALL_SECTIONS.length} 项`
-    const autoApplyNotice = hasCompleteMatchupLoadout(merged.overlay)
-      ? ''
-      : ' · 自动应用回退当前通用构筑'
     const opggText = result?.overlay
       ? `OP.GG${metaText ? ` · ${metaText}` : ''} · ${sectionText}`
       : resultError
         ? 'OP.GG 获取失败，已降级'
         : 'OP.GG 该对位样本不足'
     if (bz?.imageReference) {
-      matchupStatus.value = `Bz 已核对记录已自动展示 vs ${opponentText} · ${bz.refreshing ? '后台同步中' : '等待自动重试'}${autoApplyNotice}`
+      matchupStatus.value = `Bz 已核对记录已自动展示 vs ${opponentText} · ${bz.refreshing ? '后台同步中' : '等待自动重试'}`
     } else if (bz && !bz.stale) {
       const changedLabels = merged.sections.map((section) => SECTION_LABELS[section] ?? section)
       const bzAction = changedLabels.length
@@ -1017,8 +1050,8 @@ async function loadMatchupForIdentity(
             ? ' · 暂无可筛选的完整符文页'
             : ''
       matchupStatus.value = options.corrected
-        ? `已按真实阵容修正对位 vs ${opponentText} · ${bzAction}（${opggText}）${runeNotice}${autoApplyNotice}`
-        : `${bzAction} · 对位构筑 vs ${opponentText}（${opggText}）${runeNotice}${autoApplyNotice}`
+        ? `已按真实阵容修正对位 vs ${opponentText} · ${bzAction}（${opggText}）${runeNotice}`
+        : `${bzAction} · 对位构筑 vs ${opponentText}（${opggText}）${runeNotice}`
     } else {
       const bzNotice = bzSourceUnavailable.value ? ' · BZ 数据源暂不可用' : ''
       const switchText =
@@ -1026,8 +1059,8 @@ async function loadMatchupForIdentity(
           ? '已切换完整对位构筑'
           : `已切换部分对位构筑（${sectionText}）`
       matchupStatus.value = options.corrected
-        ? `已按真实阵容修正对位 vs ${opponentText}（${opggText}）${bzNotice}${autoApplyNotice}`
-        : `${switchText} vs ${opponentText}（${opggText}）${bzNotice}${autoApplyNotice}`
+        ? `已按真实阵容修正对位 vs ${opponentText}（${opggText}）${bzNotice}`
+        : `${switchText} vs ${opponentText}（${opggText}）${bzNotice}`
     }
     return true
   }
@@ -1196,6 +1229,27 @@ watch(
   ],
   () => scheduleMatchupOverlay(),
   { immediate: true }
+)
+
+// 同一候选也可能随其余选择变得更明确或更摇摆；不重取网络数据即可更新自动配置资格。
+watch(
+  draftPreviewOnly,
+  (previewOnly) => {
+    const { me, opp, lane } = resolveMatchupRequestIdentity()
+    if (
+      String(lcs.gameflow.phase) !== 'ChampSelect' ||
+      !matchesMatchupOverlayIdentity(me, matchupOverlayIdentity.value, {
+        gameId: observedMatchupSession.value?.gameId ?? null,
+        opponentChampionId: opp,
+        lane,
+        ...currentMatchupQuery()
+      })
+    )
+      return
+    setMatchupOverlayPreviewOnly(previewOnly)
+    syncAutomaticLoadout()
+  },
+  { flush: 'sync' }
 )
 
 // 原版顶部刷新成功后也强制刷新克制表与对位数据，不能只更新通用英雄详情。

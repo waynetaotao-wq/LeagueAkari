@@ -13,7 +13,8 @@ import {
   opggPositionToMatchupLane,
   requestMatchupRefresh,
   resolveMatchupLoadoutSource,
-  setMatchupOverlay
+  setMatchupOverlay,
+  setMatchupOverlayPreviewOnly
 } from './matchup-overlay'
 
 const identity: MatchupOverlayIdentity = {
@@ -198,6 +199,18 @@ describe('applyMatchupOverlay', () => {
     }
 
     expect(hasCompleteMatchupLoadout(complete)).toBe(true)
+    setMatchupOverlay({ ...complete, __matchupPreviewOnly: true }, '', identity)
+    const preview = applyMatchupOverlay(baseChampion, matchupOverlay.value, identity)
+    expect(preview?.data.core_items).toEqual(complete.core_items)
+    expect(hasCompleteMatchupLoadout(matchupOverlay.value)).toBe(false)
+    setMatchupOverlayPreviewOnly(false)
+    expect(hasCompleteMatchupLoadout(matchupOverlay.value)).toBe(true)
+    setMatchupOverlayPreviewOnly(true)
+    expect(hasCompleteMatchupLoadout(matchupOverlay.value)).toBe(false)
+    setMatchupOverlay({ ...complete, __bzReference: true }, '', identity)
+    setMatchupOverlayPreviewOnly(false)
+    expect(hasCompleteMatchupLoadout(matchupOverlay.value)).toBe(false)
+    setMatchupOverlay(null)
     expect(hasCompleteMatchupLoadout({ ...complete, runes: [] })).toBe(false)
     expect(
       hasCompleteMatchupLoadout({

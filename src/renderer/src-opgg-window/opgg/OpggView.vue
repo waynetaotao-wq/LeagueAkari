@@ -42,7 +42,7 @@ import {
   opggPositionToMatchupLane,
   useMatchupOverlay
 } from './matchup-overlay'
-import OpggCounterIntel from './widgets/OpggCounterIntel.vue'
+import OpggCounterIntel from './widgets/counter-intel/OpggCounterIntel.vue'
 import OpggMayhemPicker from './widgets/OpggMayhemPicker.vue'
 import SessionChampions from './widgets/SessionChampions.vue'
 

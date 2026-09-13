@@ -2,6 +2,9 @@ import type { LaneName } from '@shared/utils/lane-assignment'
 
 const IN_GAME_PHASES = new Set(['GameStart', 'InProgress', 'Reconnect'])
 
+/** 仅约束自动写入；选人预览始终展示当前最可能的已选英雄。 */
+export const MATCHUP_AUTO_APPLY_MIN_PROBABILITY = 0.6
+
 export interface MatchupSessionIdentity {
   sessionId: string | null
   gameId: number | null
@@ -205,7 +208,7 @@ export function resolveScopedMatchupTarget(input: {
     automatic?.championId &&
     enemies.has(automatic.championId) &&
     Number.isFinite(automatic.probability) &&
-    automatic.probability >= 0.6 &&
+    automatic.probability > 0 &&
     automatic.probability <= 1
   ) {
     return {
