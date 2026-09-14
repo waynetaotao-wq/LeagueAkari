@@ -17,18 +17,25 @@ export class FriendRequestTestIpcHandlers {
   register() {
     this._ipc.onCall(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'start', (event, options) => {
       const result = this._controller.start(options)
-      if (result.started) {
-        this._releaseOwner()
-        this._owner = event.sender
-        this._owner.on('destroyed', this._onGone)
-        this._owner.on('render-process-gone', this._onGone)
-        this._owner.on('did-start-loading', this._onReload)
-      }
+      if (result.started) this._claimOwner(event.sender)
+      return result
+    })
+    this._ipc.onCall(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'withdrawPending', (event, options) => {
+      const result = this._controller.start(options, 'withdraw-only')
+      if (result.started) this._claimOwner(event.sender)
       return result
     })
     this._ipc.onCall(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'pause', () => this._controller.pause())
     this._ipc.onCall(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'resume', () => this._controller.resume())
     this._ipc.onCall(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'stop', () => this._controller.stop())
+  }
+
+  private _claimOwner(owner: WebContents) {
+    this._releaseOwner()
+    this._owner = owner
+    owner.on('destroyed', this._onGone)
+    owner.on('render-process-gone', this._onGone)
+    owner.on('did-start-loading', this._onReload)
   }
 
   private _releaseOwner() {

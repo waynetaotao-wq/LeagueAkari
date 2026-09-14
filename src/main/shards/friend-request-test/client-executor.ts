@@ -1,4 +1,7 @@
-import type { FriendRequestTestTarget } from '@shared/shards/friend-request-test'
+import type {
+  FriendRequestTestChatError,
+  FriendRequestTestTarget
+} from '@shared/shards/friend-request-test'
 import type { AxiosRequestConfig } from 'axios'
 import { z } from 'zod'
 
@@ -19,9 +22,31 @@ const requestsSchema = z.array(
     direction: z.enum(['in', 'out', 'both'])
   })
 )
+const chatErrorEventSchema = z.object({
+  eventType: z.literal('Create'),
+  data: z.object({
+    code: z.number().int().min(0).max(9999),
+    message: z.string()
+  })
+})
+const chatErrorCategorySchema = z.enum(['wait', 'cancel', 'modify', 'auth', 'continue'])
 
 export class FriendRequestTestClientExecutor implements FriendRequestTestApi {
-  constructor(private readonly _leagueClient: Pick<LeagueClientMain, 'request'>) {}
+  constructor(private readonly _leagueClient: Pick<LeagueClientMain, 'request' | 'events'>) {}
+
+  watchChatErrors(listener: (error: FriendRequestTestChatError) => void) {
+    // The client UI consumes this error queue. Listen for new events instead of polling
+    // old errors or deleting them. These are diagnostic hints, not target-specific proof.
+    return this._leagueClient.events.on('/lol-chat/v1/errors/:id', (event: unknown) => {
+      const parsed = chatErrorEventSchema.safeParse(event)
+      if (!parsed.success) return
+      const category = chatErrorCategorySchema.safeParse(parsed.data.data.message)
+      listener({
+        code: parsed.data.data.code,
+        category: category.success ? category.data : 'unknown'
+      })
+    })
+  }
 
   private async _request(config: AxiosRequestConfig, signal: AbortSignal) {
     // Do not retry ambiguous writes, including network errors, in either Axios layer.

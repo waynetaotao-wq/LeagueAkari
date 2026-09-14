@@ -59,3 +59,32 @@ export const RateLimited: Story = {
   }
 }
 export const Narrow: Story = { ...RateLimited, parameters: { akariStoryPanelMaxWidth: 420 } }
+
+export const DelayedChatFailure: Story = {
+  args: {
+    snapshot: {
+      ...RateLimited.args!.snapshot!,
+      sent: 22,
+      withdrawn: 21,
+      removed: 0,
+      reason: 'removal-not-confirmed',
+      lastOperation: 'withdraw',
+      httpStatus: null,
+      chatError: { code: 500, category: 'wait' }
+    }
+  }
+}
+export const WithdrawalCompleted: Story = {
+  args: {
+    snapshot: {
+      ...DelayedChatFailure.args!.snapshot!,
+      mode: 'withdraw-only',
+      phase: 'completed',
+      reason: 'withdrawn-only',
+      sent: 0,
+      withdrawn: 1,
+      mayHaveRelationship: false,
+      chatError: null
+    }
+  }
+}

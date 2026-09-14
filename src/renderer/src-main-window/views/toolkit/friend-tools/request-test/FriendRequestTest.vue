@@ -4,7 +4,8 @@
     :available="available && !disabled"
     :busy="busy"
     :start-error="startError"
-    @start="start"
+    @start="start($event, 'start')"
+    @withdraw-pending="start($event, 'withdrawPending')"
     @pause="command('pause')"
     @resume="command('resume')"
     @stop="command('stop')"
@@ -41,11 +42,11 @@ const available = computed(
     client.chat.me?.puuid === client.summoner.me.puuid &&
     ['None', 'Lobby'].includes(client.gameflow.phase ?? '')
 )
-async function start(options: FriendRequestTestOptions) {
+async function start(options: FriendRequestTestOptions, action: 'start' | 'withdrawPending') {
   busy.value = true
   startError.value = null
   try {
-    const result = await shard.start(options)
+    const result = await shard[action](options)
     if (!result.started) startError.value = result.reason
   } catch {
     startError.value = 'request-failed'

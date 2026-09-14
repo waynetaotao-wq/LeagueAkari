@@ -30,6 +30,10 @@ export class FriendRequestTestRenderer {
     return this._ipc.call(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'start', options)
   }
 
+  withdrawPending(options: FriendRequestTestOptions): Promise<FriendRequestTestStartResult> {
+    return this._ipc.call(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'withdrawPending', options)
+  }
+
   pause() {
     return this._ipc.call(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'pause')
   }

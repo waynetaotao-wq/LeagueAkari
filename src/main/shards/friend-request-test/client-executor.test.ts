@@ -1,3 +1,4 @@
+import { RadixEventEmitter } from '@shared/utils/event-emitter'
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios'
 import axiosRetry from 'axios-retry'
 import { describe, expect, it, vi } from 'vitest'
@@ -6,6 +7,7 @@ import { FriendRequestTestClientExecutor } from './client-executor'
 
 const target = { gameName: '测试小号', tagLine: 'TEST', puuid: 'target/puuid' }
 function harness(respond: (config: AxiosRequestConfig) => unknown) {
+  const events = new RadixEventEmitter()
   const requests: AxiosRequestConfig[] = []
   const http = axios.create({
     adapter: async (config) => {
@@ -15,12 +17,38 @@ function harness(respond: (config: AxiosRequestConfig) => unknown) {
   })
   axiosRetry(http, { retries: 2, retryDelay: () => 0 })
   const executor = new FriendRequestTestClientExecutor({
+    events,
     request: (config: AxiosRequestConfig) => http.request(config)
   } as never)
-  return { executor, requests, signal: new AbortController().signal }
+  return { executor, requests, events, signal: new AbortController().signal }
 }
 
 describe('friend test LCU protocol', () => {
+  it('observes new chat errors without consuming the client queue or exposing arbitrary error text', () => {
+    const h = harness(() => null)
+    const listener = vi.fn()
+    const dispose = h.executor.watchChatErrors(listener)
+    const uri = '/lol-chat/v1/errors/e_test'
+    h.events.emit(uri, { eventType: 'Delete', data: { code: 500, message: 'wait' } })
+    h.events.emit(uri, { eventType: 'Create', data: { code: 'invalid', message: 'wait' } })
+    expect(listener).not.toHaveBeenCalled()
+    h.events.emit(uri, {
+      eventType: 'Create',
+      data: { code: 500, message: 'wait', text: 'private' }
+    })
+    h.events.emit(uri, {
+      eventType: 'Create',
+      data: { code: 400, message: 'arbitrary private text' }
+    })
+    expect(listener.mock.calls).toEqual([
+      [{ code: 500, category: 'wait' }],
+      [{ code: 400, category: 'unknown' }]
+    ])
+    dispose()
+    h.events.emit(uri, { eventType: 'Create', data: { code: 500, message: 'wait' } })
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(h.requests).toHaveLength(0)
+  })
   it('resolves the exact name and tag instead of trusting the first returned alias', async () => {
     const { executor, requests, signal } = harness(() => [
       { ...target, puuid: 'other', tagLine: 'OTHER' },

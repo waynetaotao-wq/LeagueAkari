@@ -1,4 +1,7 @@
-import type { FriendRequestTestTarget } from '@shared/shards/friend-request-test'
+import type {
+  FriendRequestTestChatError,
+  FriendRequestTestTarget
+} from '@shared/shards/friend-request-test'
 
 import type { AkariLogger } from '../logger-factory'
 import type { FriendRequestTestState } from './state'
@@ -9,6 +12,7 @@ export interface FriendTestRelationship {
 }
 
 export interface FriendRequestTestApi {
+  watchChatErrors(listener: (error: FriendRequestTestChatError) => void): () => void
   resolve(
     gameName: string,
     tagLine: string,

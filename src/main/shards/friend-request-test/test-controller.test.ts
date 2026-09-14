@@ -1,4 +1,7 @@
-import type { FriendRequestTestOptions } from '@shared/shards/friend-request-test'
+import type {
+  FriendRequestTestChatError,
+  FriendRequestTestOptions
+} from '@shared/shards/friend-request-test'
 import { AxiosError } from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -33,7 +36,15 @@ const httpError = (status: number) =>
 function harness(initial = empty()) {
   let relationship = initial
   let session: FriendRequestTestSession | null = { connection: {}, selfPuuid: 'self-puuid' }
+  let chatListener: ((error: FriendRequestTestChatError) => void) | null = null
+  const stopWatching = vi.fn(() => {
+    chatListener = null
+  })
   const api = {
+    watchChatErrors: vi.fn<FriendRequestTestApi['watchChatErrors']>((listener) => {
+      chatListener = listener
+      return stopWatching
+    }),
     resolve: vi.fn<FriendRequestTestApi['resolve']>(async () => target),
     relationship: vi.fn<FriendRequestTestApi['relationship']>(async () =>
       structuredClone(relationship)
@@ -59,6 +70,8 @@ function harness(initial = empty()) {
     api,
     state,
     controller,
+    chatError: (error: FriendRequestTestChatError) => chatListener?.(error),
+    stopWatching,
     setRelationship: (value: FriendTestRelationship) => {
       relationship = value
     },
@@ -135,7 +148,7 @@ describe('timed friend request lifecycle', () => {
     await vi.advanceTimersByTimeAsync(0)
     h.controller.pause()
     await vi.advanceTimersByTimeAsync(60_000)
-    expect(h.state.snapshot).toMatchObject({ paused: true, sent: 1, remainingMs: 60_000 })
+    expect(h.state.snapshot).toMatchObject({ paused: true, sent: 0, remainingMs: 60_000 })
     expect(h.api.withdraw).not.toHaveBeenCalled()
     h.controller.resume()
     await vi.advanceTimersByTimeAsync(61_000)
@@ -335,7 +348,7 @@ describe('timed friend request lifecycle', () => {
   })
 
   it.each([0, 0.05, 0.5, 1])(
-    'honors a %s-second interval without a hidden floor, then stops at the first 429',
+    'preserves a %s-second interval, includes confirmation time, then stops at the first 429',
     async (intervalSeconds) => {
       const h = harness()
       let calls = 0
@@ -346,7 +359,7 @@ describe('timed friend request lifecycle', () => {
         h.setRelationship(pending())
       })
       h.controller.start({ ...options, intervalSeconds })
-      await vi.advanceTimersByTimeAsync(3000)
+      await vi.advanceTimersByTimeAsync(5000)
       expect(h.api.send).toHaveBeenCalledTimes(3)
       expect(h.state.snapshot).toMatchObject({
         active: false,
@@ -356,10 +369,131 @@ describe('timed friend request lifecycle', () => {
         lastOperation: 'send'
       })
       expect(h.state.snapshot.lastSendIntervalMs).toBeCloseTo(
-        Math.max(20, intervalSeconds * 1000),
+        Math.max(20, intervalSeconds * 1000) + 500,
         0
       )
-      expect(h.state.snapshot.remainingMs).toBeGreaterThan(57_000)
+      expect(h.state.snapshot.options?.intervalSeconds).toBe(intervalSeconds)
+      expect(h.state.snapshot.remainingMs).toBeGreaterThan(55_000)
     }
   )
+
+  it('confirms a delayed server withdrawal after the old five-second timeout without resending', async () => {
+    const h = harness()
+    h.api.withdraw.mockImplementationOnce(async () => {
+      setTimeout(() => h.setRelationship(empty()), 8000)
+    })
+    h.controller.start({ ...options, intervalSeconds: 60 })
+    await vi.advanceTimersByTimeAsync(66_000)
+    expect(h.state.snapshot).toMatchObject({ active: true, withdrawn: 0, sent: 1 })
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(h.state.snapshot).toMatchObject({ active: false, withdrawn: 1, reason: 'finished' })
+    expect(h.api.withdraw).toHaveBeenCalledTimes(1)
+    expect(h.api.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not count a transient empty list as a completed withdrawal', async () => {
+    const h = harness(pending())
+    h.api.withdraw.mockImplementationOnce(async () => {
+      h.setRelationship(empty())
+      setTimeout(() => h.setRelationship(pending()), 100)
+      setTimeout(() => h.setRelationship(empty()), 7000)
+    })
+    h.controller.start(options, 'withdraw-only')
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(h.state.snapshot).toMatchObject({ active: true, withdrawn: 0 })
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(h.state.snapshot).toMatchObject({ reason: 'withdrawn-only', withdrawn: 1, sent: 0 })
+    expect(h.api.withdraw).toHaveBeenCalledTimes(1)
+    expect(h.api.send).not.toHaveBeenCalled()
+  })
+
+  it('discards an empty observation from before a pause', async () => {
+    const h = harness(pending())
+    h.controller.start(options, 'withdraw-only')
+    await vi.advanceTimersByTimeAsync(100)
+    h.controller.pause()
+    h.setRelationship(pending())
+    await vi.advanceTimersByTimeAsync(60_000)
+    h.controller.resume()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(h.state.snapshot).toMatchObject({ active: true, withdrawn: 0 })
+    h.setRelationship(empty())
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(h.state.snapshot).toMatchObject({ active: false, withdrawn: 1 })
+    expect(h.api.withdraw).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps an asynchronous chat error separate from HTTP status and permits a later single cleanup', async () => {
+    const h = harness(pending())
+    h.chatError({ code: 400, category: 'cancel' })
+    h.api.withdraw.mockImplementationOnce(async () => {
+      setTimeout(() => h.chatError({ code: 500, category: 'wait' }), 100)
+    })
+    h.controller.start(options, 'withdraw-only')
+    await vi.advanceTimersByTimeAsync(16_000)
+    expect(h.state.snapshot).toMatchObject({
+      active: false,
+      reason: 'removal-not-confirmed',
+      lastOperation: 'withdraw',
+      httpStatus: null,
+      chatError: { code: 500, category: 'wait' },
+      sent: 0,
+      withdrawn: 0,
+      mayHaveRelationship: true
+    })
+    expect(h.stopWatching).toHaveBeenCalledTimes(1)
+    expect(h.api.withdraw).toHaveBeenCalledTimes(1)
+    h.controller.start(options, 'withdraw-only')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(h.state.snapshot).toMatchObject({
+      reason: 'withdrawn-only',
+      withdrawn: 1,
+      chatError: null,
+      mayHaveRelationship: false
+    })
+    expect(h.api.withdraw).toHaveBeenCalledTimes(2)
+    expect(h.api.send).not.toHaveBeenCalled()
+  })
+
+  it('does not call a send confirmed when only the HTTP acknowledgement succeeded', async () => {
+    const h = harness()
+    h.api.send.mockResolvedValue(undefined)
+    h.controller.start(options)
+    await vi.advanceTimersByTimeAsync(16_000)
+    expect(h.state.snapshot).toMatchObject({
+      active: false,
+      sent: 0,
+      reason: 'request-not-confirmed',
+      lastOperation: 'send'
+    })
+    expect(h.api.send).toHaveBeenCalledTimes(1)
+    expect(h.api.withdraw).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    empty(),
+    accepted(),
+    { friend: null, request: { puuid: target.puuid, direction: 'in' as const } }
+  ])(
+    'single withdrawal never deletes a friendship, incoming request, or missing request %#',
+    async (relationship) => {
+      const h = harness(relationship)
+      h.controller.start({ ...options, removeAccepted: true }, 'withdraw-only')
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(h.state.snapshot.active).toBe(false)
+      expect(h.api.send).not.toHaveBeenCalled()
+      expect(h.api.withdraw).not.toHaveBeenCalled()
+      expect(h.api.remove).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps a friendship accepted during single withdrawal even if the loop removal option is enabled', async () => {
+    const h = harness(pending())
+    h.api.withdraw.mockImplementationOnce(async () => h.setRelationship(accepted()))
+    h.controller.start({ ...options, removeAccepted: true }, 'withdraw-only')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(h.state.snapshot).toMatchObject({ reason: 'accepted-kept', withdrawn: 0, removed: 0 })
+    expect(h.api.send).not.toHaveBeenCalled()
+    expect(h.api.remove).not.toHaveBeenCalled()
+  })
 })

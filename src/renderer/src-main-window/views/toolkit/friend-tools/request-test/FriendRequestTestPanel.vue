@@ -58,7 +58,7 @@
           size="small"
           :loading="busy"
           :disabled="!canStart"
-          @click="start"
+          @click="start('start')"
           >{{ t('start') }}</NButton
         >
         <NButton
@@ -84,6 +84,16 @@
           @click="$emit('stop')"
           >{{ t('stop') }}</NButton
         >
+        <NButton
+          v-if="!snapshot.active"
+          size="small"
+          :disabled="!canStart"
+          @click="start('withdrawPending')"
+          >{{ t('withdrawPending') }}</NButton
+        >
+      </div>
+      <div v-if="!snapshot.active" class="mt-2 text-xs text-black/60 dark:text-white/60">
+        {{ t('withdrawPendingHint') }}
       </div>
       <div
         v-if="!available && !snapshot.active"
@@ -102,7 +112,10 @@
           <span class="font-semibold" role="status" aria-live="polite">{{
             snapshot.paused ? t('paused') : t(`phases.${snapshot.phase}`)
           }}</span>
-          <span class="font-mono text-sm">{{
+          <span v-if="snapshot.mode === 'withdraw-only'" class="text-xs">{{
+            t('withdrawOnlyTask')
+          }}</span>
+          <span v-else class="font-mono text-sm">{{
             t('remaining', { time: formatTime(snapshot.remainingMs) })
           }}</span>
         </div>
@@ -132,6 +145,14 @@
           }}
         </div>
         <div v-if="snapshot.reason" class="mt-2 text-xs">{{ t(`reasons.${snapshot.reason}`) }}</div>
+        <div v-if="snapshot.chatError" class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          {{
+            t('chatFailure', {
+              code: snapshot.chatError.code,
+              category: snapshot.chatError.category
+            })
+          }}
+        </div>
         <div
           v-if="snapshot.paused || (!snapshot.active && snapshot.mayHaveRelationship)"
           class="mt-2 text-xs text-amber-700 dark:text-amber-300"
@@ -164,6 +185,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   start: [options: FriendRequestTestOptions]
+  withdrawPending: [options: FriendRequestTestOptions]
   pause: []
   resume: []
   stop: []
@@ -204,13 +226,16 @@ watch(
   },
   { immediate: true }
 )
-const start = () => {
-  if (canStart.value)
-    emit('start', {
+const start = (action: 'start' | 'withdrawPending') => {
+  if (canStart.value) {
+    const payload = {
       ...options,
       durationMinutes: duration.value!,
       intervalSeconds: interval.value!
-    })
+    }
+    if (action === 'start') emit('start', payload)
+    else emit('withdrawPending', payload)
+  }
 }
 const formatTime = (milliseconds: number) => {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1000))

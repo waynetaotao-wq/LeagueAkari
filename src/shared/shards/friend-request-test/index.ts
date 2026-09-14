@@ -19,6 +19,13 @@ export interface FriendRequestTestTarget {
   tagLine: string
 }
 
+export type FriendRequestTestMode = 'test' | 'withdraw-only'
+
+export interface FriendRequestTestChatError {
+  code: number
+  category: 'wait' | 'cancel' | 'modify' | 'auth' | 'continue' | 'unknown'
+}
+
 export type FriendRequestTestPhase =
   | 'idle'
   | 'checking'
@@ -51,9 +58,12 @@ export type FriendRequestTestReason =
   | 'request-failed'
   | 'user-stopped'
   | 'window-closed'
+  | 'withdrawn-only'
+  | 'no-outgoing-request'
   | 'finished'
 
 export interface FriendRequestTestSnapshot {
+  mode: FriendRequestTestMode
   active: boolean
   paused: boolean
   phase: FriendRequestTestPhase
@@ -69,10 +79,12 @@ export interface FriendRequestTestSnapshot {
   lastSendIntervalMs: number | null
   lastOperation: FriendRequestTestOperation | null
   httpStatus: number | null
+  chatError: FriendRequestTestChatError | null
 }
 
 export function createFriendRequestTestSnapshot(): FriendRequestTestSnapshot {
   return {
+    mode: 'test',
     active: false,
     paused: false,
     phase: 'idle',
@@ -87,7 +99,8 @@ export function createFriendRequestTestSnapshot(): FriendRequestTestSnapshot {
     mayHaveRelationship: false,
     lastSendIntervalMs: null,
     lastOperation: null,
-    httpStatus: null
+    httpStatus: null,
+    chatError: null
   }
 }
 
