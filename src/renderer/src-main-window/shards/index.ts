@@ -10,6 +10,7 @@ import { AutoSelectRenderer } from '@renderer-shared/shards/auto-select'
 import { ClientInstallationRenderer } from '@renderer-shared/shards/client-installation'
 import { ExtraAssetsRenderer } from '@renderer-shared/shards/extra-assets'
 import { FeatureGatingRenderer } from '@renderer-shared/shards/feature-gating'
+import { FriendRequestTestRenderer } from '@renderer-shared/shards/friend-request-test'
 import { GameClientRenderer } from '@renderer-shared/shards/game-client'
 import { GameRefocusRenderer } from '@renderer-shared/shards/game-refocus'
 import { InGameSendRenderer } from '@renderer-shared/shards/in-game-send'
@@ -53,6 +54,7 @@ manager.use(AutoMiscRenderer)
 manager.use(ClientInstallationRenderer)
 manager.use(ExtraAssetsRenderer)
 manager.use(FeatureGatingRenderer)
+manager.use(FriendRequestTestRenderer)
 manager.use(GameClientRenderer)
 manager.use(InGameSendRenderer)
 manager.use(KeyboardShortcutsRenderer)

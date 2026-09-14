@@ -2,12 +2,20 @@
   <div class="h-full w-full">
     <NScrollbar class="relative h-full max-w-full">
       <div class="mx-auto max-w-200 p-6">
+        <FriendRequestTest
+          class="mb-6"
+          :disabled="isDeleting"
+          @active-change="requestTestActive = $event"
+          @relationship-change="updateFriends()"
+        />
         <SettingsSection :title="t('toolkit.friends.title')">
           <div class="p-3">
             <div class="mb-2 flex flex-wrap gap-1">
               <NPopconfirm
                 @positive-click="deleteSelectedFriends"
-                :disabled="isLoading || !selectedFriendCount || !lcs.isConnected"
+                :disabled="
+                  isLoading || requestTestActive || !selectedFriendCount || !lcs.isConnected
+                "
                 :positive-text="t('toolkit.friends.deleteButton')"
                 :positive-button-props="{
                   size: 'tiny',
@@ -19,7 +27,9 @@
               >
                 <template #trigger>
                   <NButton
-                    :disabled="isLoading || !selectedFriendCount || !lcs.isConnected"
+                    :disabled="
+                      isLoading || requestTestActive || !selectedFriendCount || !lcs.isConnected
+                    "
                     size="small"
                     type="error"
                     secondary
@@ -118,6 +128,8 @@ import { computed, ref, shallowRef, watch } from 'vue'
 
 import { PlayerTabsRenderer } from '@main-window/shards/player-tabs'
 
+import FriendRequestTest from './request-test/FriendRequestTest.vue'
+
 const { t } = useTranslation()
 const componentName = useComponentName()
 
@@ -140,6 +152,7 @@ const expandedRowKeys = ref<number[]>([])
 
 const isLoading = ref(false)
 const isDeleting = ref(false)
+const requestTestActive = ref(false)
 const {
   inputValue: friendSearchInput,
   committedValue: friendSearchQuery,
@@ -412,7 +425,7 @@ const updateFriends = async (manually = false) => {
 }
 
 const deleteSelectedFriends = async () => {
-  if (isLoading.value) {
+  if (isLoading.value || requestTestActive.value) {
     return
   }
 

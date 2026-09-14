@@ -571,6 +571,72 @@ toolkit:
       groupName: Friend Group
       lastGameDate: Last Game Date
       friendSince: Friend Since
+  friendRequestTest:
+    title: Friend Request Flow Test
+    footer: Runs only in the client home or lobby. Leaving this page pauses the test; disconnecting, switching accounts, or entering matchmaking or a game stops it. Pausing keeps existing requests. Resume rechecks the relationship. Review any remaining request or friendship in the client after stopping.
+    target: Test account Riot ID
+    targetHint: Enter the full name and tag for the current client region. Existing friendships or pending requests must be handled manually first.
+    placeholder: Test account#TAG
+    timing: Run time
+    timingHint: Duration is 1–60 minutes; interval is 0–3600 seconds, including decimals. Zero continues immediately after the current cycle completes. Actual send intervals also include checks and withdrawal time. Paused time is excluded; expiration finishes the current cleanup.
+    duration: Duration (minutes)
+    interval: Interval (seconds)
+    accepted: Remove accepted test friendship and continue
+    acceptedHint: Only removes a friendship newly established after this test sends its request. When disabled, acceptance ends the test and keeps the friendship.
+    consent: I control this account, or its owner has explicitly agreed to this test
+    start: Start test
+    pause: Pause
+    resume: Resume
+    stop: Stop
+    paused: Paused
+    unavailable: Connect the client and stay in the home or lobby. Bulk friend deletion must also be inactive.
+    remaining: '{{time}} remaining'
+    nextAction: 'Next step in {{time}}'
+    sent_one: '{{count}} request sent'
+    sent_other: '{{count}} requests sent'
+    withdrawn_one: '{{count}} request withdrawn'
+    withdrawn_other: '{{count}} requests withdrawn'
+    removed_one: '{{count}} test friendship removed'
+    removed_other: '{{count}} test friendships removed'
+    actualInterval: 'Last two sends were {{seconds}} seconds apart (including pauses and request time)'
+    httpFailure: 'HTTP {{status}} while {{operation}}'
+    operations:
+      resolve: looking up the account
+      relationship: checking friends and requests
+      send: sending the request
+      withdraw: withdrawing the request
+      remove: removing the test friendship
+    relationshipLeft: A sent request or established friendship may remain. Pausing or stopping cannot undo a submitted operation; please check the client.
+    phases:
+      idle: Not started
+      checking: Checking account and relationship
+      sending: Sending request
+      waiting: Waiting for interval
+      removing: Withdrawing request or removing test friendship
+      confirming: Checking client result
+      stopping: Stopping
+      completed: Test ended
+      stopped: Stopped
+      failed: Test interrupted
+    reasons:
+      invalid-options: Enter a complete name#tag, valid timing, and confirm that the account is within the agreed test scope.
+      busy: A test is still active. Stop or resume the current task first.
+      not-ready: The client is not ready or is outside the home or lobby.
+      session-changed: The connection, account, or game phase changed. The test stopped.
+      target-not-found: No exact account match in the current region. Check the name and tag.
+      self-target: Use another test account; the target cannot be the currently logged-in account.
+      existing-relationship: A friendship or pending request already exists and was left untouched. Handle it in the client before restarting.
+      invalid-response: Relationship data is incomplete or conflicting. The test stopped.
+      request-not-confirmed: The submitted request could not be confirmed. The test stopped; please check the client.
+      request-disappeared: The request disappeared, possibly after rejection or manual withdrawal. The test ended without resending.
+      incoming-request: An incoming request was detected. The test ended; handle it manually.
+      accepted-kept: The request was accepted. The friendship was kept and the test ended as configured.
+      removal-not-confirmed: Removal could not be confirmed. The test stopped without sending another request.
+      rate-limited: The client or server limited the request rate. The test stopped without retrying.
+      request-failed: A client request did not complete. The test stopped without retrying; check the client.
+      user-stopped: Stopped at your request. No further requests or removals will be initiated.
+      window-closed: The test window closed or became unavailable. The task stopped.
+      finished: The run time ended and the current request cleanup completed.
   loot:
     title: Loot Tools
     refreshSuccess: Refreshed

@@ -14,6 +14,7 @@ import { ClientInstallationMain } from '@main/shards/client-installation'
 import { ConfigMigrateMain } from '@main/shards/config-migrate'
 import { ExtraAssetsMain } from '@main/shards/extra-assets'
 import { FeatureGatingMain } from '@main/shards/feature-gating'
+import { FriendRequestTestMain } from '@main/shards/friend-request-test'
 import { GameClientMain } from '@main/shards/game-client'
 import { GameRefocusMain } from '@main/shards/game-refocus'
 import { InGameSendMain } from '@main/shards/in-game-send'
@@ -342,6 +343,7 @@ export function bootstrap() {
     manager.use(AutoMiscMain)
     manager.use(AutoSelectMain)
     manager.use(ChampionDataMain)
+    manager.use(FriendRequestTestMain)
     manager.use(InGameSendMain)
     manager.use(OngoingGameMain)
     manager.use(RespawnTimerMain)

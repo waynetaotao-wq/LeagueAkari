@@ -570,6 +570,69 @@ toolkit:
       groupName: 好友分组
       lastGameDate: 最后对局日期
       friendSince: 成为好友时间
+  friendRequestTest:
+    title: 好友申请流程测试
+    footer: 仅在大厅或房间中运行。离开本页会暂停；断线、换号、进入匹配或对局会停止。暂停不会撤回申请，继续后会重新核对关系；停止后如有剩余申请或好友，请在客户端处理。
+    target: 测试账号 Riot ID
+    targetHint: 输入完整的名字和标签，在当前客户端大区查询。原有好友或待处理申请需要先手动处理。
+    placeholder: 测试小号#标签
+    timing: 运行时间
+    timingHint: 时长 1–60 分钟，间隔 0–3600 秒，支持小数。0 表示本轮完成后立即继续；实际发送间隔还包含核对和撤回耗时。暂停时间不计入总时长，到时收尾当前申请。
+    duration: 时长（分钟）
+    interval: 间隔（秒）
+    accepted: 接受后删除并继续
+    acceptedHint: 开启后，仅删除本次发送申请后新建立的好友关系。关闭时，对方接受就结束测试并保留好友。
+    consent: 目标是本人控制，或已明确同意参与测试的账号
+    start: 开始测试
+    pause: 暂停
+    resume: 继续
+    stop: 停止
+    paused: 已暂停
+    unavailable: 连接客户端并停留在大厅或房间后可开始；同时不能运行批量删除好友。
+    remaining: '剩余 {{time}}'
+    nextAction: '距下一步 {{time}}'
+    sent: '已发送 {{count}} 次'
+    withdrawn: '已撤回 {{count}} 次'
+    removed: '已删除测试好友 {{count}} 次'
+    actualInterval: '最近两次发送实际相隔 {{seconds}} 秒（含暂停及接口耗时）'
+    httpFailure: '{{operation}}时返回 HTTP {{status}}'
+    operations:
+      resolve: 查询账号
+      relationship: 核对好友和申请
+      send: 发送申请
+      withdraw: 撤回申请
+      remove: 删除测试好友
+    relationshipLeft: 已发出的申请或已经建立的好友关系可能仍保留。暂停或停止不能撤销已提交的操作，请在客户端核对。
+    phases:
+      idle: 尚未开始
+      checking: 核对账号和现有关系
+      sending: 正在发送申请
+      waiting: 等待间隔
+      removing: 正在撤回申请或删除测试好友
+      confirming: 核对客户端结果
+      stopping: 正在停止
+      completed: 测试结束
+      stopped: 已停止
+      failed: 测试中断
+    reasons:
+      invalid-options: 请填写完整的名字#标签、有效时长和间隔，并确认测试账号范围。
+      busy: 当前测试尚未结束，请先停止或继续当前任务。
+      not-ready: 当前客户端尚未就绪，或不在大厅/房间。
+      session-changed: 客户端连接、登录账号或游戏阶段已改变，测试已停止。
+      target-not-found: 当前大区未找到完全匹配的账号，请核对名字和标签。
+      self-target: 不能向当前登录的账号发送申请，请填写另一个测试账号。
+      existing-relationship: 已存在好友关系或待处理申请，本次不会修改。请在客户端处理后重新开始。
+      invalid-response: 客户端返回的关系数据不完整或有冲突，已停止操作。
+      request-not-confirmed: 发送后未能确认对应申请，已停止，请在客户端核对。
+      request-disappeared: 申请已消失，可能已被拒绝或手动撤回，测试结束且不再重发。
+      incoming-request: 检测到对方发来的申请，测试结束，请手动处理。
+      accepted-kept: 对方已接受申请，按设置保留好友，测试结束。
+      removal-not-confirmed: 未能确认申请或好友已清除，已停止，不会重复发送。
+      rate-limited: 客户端或服务器限制了请求频率，测试已停止，不会自动重试。
+      request-failed: 客户端请求未完成，测试已停止。请检查客户端状态；本次不会自动重试。
+      user-stopped: 已按你的操作停止，不再发送或删除。
+      window-closed: 测试窗口已关闭或无法响应，任务已停止。
+      finished: 运行时长已结束，本次申请已处理完毕。
   loot:
     title: 战利品工具
     refreshSuccess: 已刷新
