@@ -15,7 +15,6 @@ export class ExtraAssetsRefreshController {
   constructor(private readonly context: ExtraAssetsMainContext) {}
 
   start() {
-    this._registerHttpProxy()
     void this._updateGtimgHeroList()
     void this._updateGtimgKiwiAugments()
     void this._updateOpggAramBalance()
@@ -64,29 +63,5 @@ export class ExtraAssetsRefreshController {
     } finally {
       this._opggAramBalanceTask.start({ delay: OPGG_ARAM_BALANCE_UPDATE_INTERVAL })
     }
-  }
-
-  private _registerHttpProxy() {
-    const { appCommon, gtimgApi, mobxUtils, opggHttpClient } = this.context
-
-    mobxUtils.reaction(
-      () => appCommon.settings.httpProxy,
-      (httpProxy) => {
-        if (httpProxy.strategy === 'force') {
-          gtimgApi.http.defaults.proxy = {
-            host: httpProxy.host,
-            port: httpProxy.port
-          }
-          opggHttpClient.defaults.proxy = {
-            host: httpProxy.host,
-            port: httpProxy.port
-          }
-        } else if (httpProxy.strategy === 'disable') {
-          gtimgApi.http.defaults.proxy = false
-          opggHttpClient.defaults.proxy = false
-        }
-      },
-      { fireImmediately: true }
-    )
   }
 }

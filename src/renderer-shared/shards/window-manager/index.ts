@@ -1,4 +1,5 @@
 import { Dep, IAkariShardInitDispose, Shard } from '@shared/akari-shard'
+import type { BackgroundMaterialSetting } from '@shared/shards/window-manager'
 
 import { AkariIpcRenderer } from '../ipc'
 import { LoggerRenderer } from '../logger'
@@ -14,10 +15,10 @@ import {
   AkariAuxWindow,
   AkariCdTimerWindow,
   AkariDraftgapWindow,
-  AkariPostGameWindow,
   AkariMainWindow,
   AkariOngoingGameWindow,
-  AkariOpggWindow
+  AkariOpggWindow,
+  AkariPostGameWindow
 } from './windows'
 
 export {
@@ -79,7 +80,7 @@ export class WindowManagerRenderer implements IAkariShardInitDispose {
     await this.postGameWindow.onInit()
   }
 
-  setBackgroundMaterial(value: string) {
+  setBackgroundMaterial(value: BackgroundMaterialSetting) {
     return this.context.setting.set(MAIN_SHARD_NAMESPACE, 'backgroundMaterial', value)
   }
 

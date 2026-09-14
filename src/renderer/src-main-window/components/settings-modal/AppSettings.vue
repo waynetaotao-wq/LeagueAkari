@@ -402,6 +402,55 @@
           </NButton>
         </SettingsRow>
       </SettingsSection>
+      <SettingsSection setting-id="app.http-proxy" :title="t('settings.app.httpProxy.title')">
+        <SettingsRow
+          setting-id="app.misc.http-proxy.strategy"
+          :label="t('settings.app.httpProxy.strategy.label')"
+          :label-description="t('settings.app.httpProxy.strategy.description')"
+          :label-width="400"
+        >
+          <NSelect
+            :options="httpProxyStrategies"
+            class="w-40!"
+            size="small"
+            :value="networkStore.settings.httpProxy.strategy"
+            @update:value="(val) => updateHttpProxySettings({ strategy: val })"
+          />
+        </SettingsRow>
+        <NCollapseTransition :show="networkStore.settings.httpProxy.strategy === 'fixed-servers'">
+          <SettingsRow
+            setting-id="app.misc.http-proxy.host"
+            :label="t('settings.app.httpProxy.host.label')"
+            :label-description="t('settings.app.httpProxy.host.description')"
+            :label-width="400"
+          >
+            <NInput
+              :value="networkStore.settings.httpProxy.host"
+              class="w-40!"
+              size="small"
+              placeholder="Host"
+              :status="networkStore.settings.httpProxy.host.trim() ? 'success' : 'warning'"
+              @update:value="(val) => updateHttpProxySettings({ host: val })"
+            />
+          </SettingsRow>
+          <SettingsRow
+            setting-id="app.misc.http-proxy.port"
+            :label="t('settings.app.httpProxy.port.label')"
+            :label-description="t('settings.app.httpProxy.port.description')"
+            :label-width="400"
+          >
+            <NInputNumber
+              :show-button="false"
+              :min="1"
+              :max="65535"
+              :value="networkStore.settings.httpProxy.port"
+              class="w-40!"
+              size="small"
+              @update:value="(val) => updateHttpProxySettings({ port: val || 1 })"
+            />
+          </SettingsRow>
+        </NCollapseTransition>
+      </SettingsSection>
       <SettingsSection setting-id="app.misc" :title="t('settings.app.misc.title')">
         <SettingsRow
           setting-id="app.misc.log-level"
@@ -417,53 +466,6 @@
             :options="logLevels"
           />
         </SettingsRow>
-        <SettingsRow
-          setting-id="app.misc.http-proxy.strategy"
-          :label="t('settings.app.misc.httpProxy.strategy.label')"
-          :label-description="t('settings.app.misc.httpProxy.strategy.description')"
-          :label-width="400"
-        >
-          <NSelect
-            :options="httpProxyStrategies"
-            class="w-40!"
-            size="small"
-            :value="as.settings.httpProxy.strategy"
-            @update:value="(val) => updateHttpProxySettings({ strategy: val })"
-          />
-        </SettingsRow>
-        <NCollapseTransition :show="as.settings.httpProxy.strategy === 'force'">
-          <SettingsRow
-            setting-id="app.misc.http-proxy.host"
-            :label="t('settings.app.misc.httpProxy.host.label')"
-            :label-description="t('settings.app.misc.httpProxy.host.description')"
-            :label-width="400"
-          >
-            <NInput
-              :value="as.settings.httpProxy.host"
-              class="w-40!"
-              size="small"
-              placeholder="Host"
-              :status="as.settings.httpProxy.host.trim() ? 'success' : 'warning'"
-              @update:value="(val) => updateHttpProxySettings({ host: val })"
-            />
-          </SettingsRow>
-          <SettingsRow
-            setting-id="app.misc.http-proxy.port"
-            :label="t('settings.app.misc.httpProxy.port.label')"
-            :label-description="t('settings.app.misc.httpProxy.port.description')"
-            :label-width="400"
-          >
-            <NInputNumber
-              :show-button="false"
-              :min="1"
-              :max="65535"
-              :value="as.settings.httpProxy.port"
-              class="w-40!"
-              size="small"
-              @update:value="(val) => updateHttpProxySettings({ port: val || 1 })"
-            />
-          </SettingsRow>
-        </NCollapseTransition>
         <SettingsRow
           setting-id="app.misc.disable-hardware-acceleration"
           :label="t('settings.app.misc.disableHardwareAcceleration.label')"
@@ -497,13 +499,16 @@ import SettingsSection from '@main-window/settings-navigation/NavigableSettingsS
 import { useInstance } from '@renderer-shared/shards'
 import { useAkariNavigationStep } from '@renderer-shared/shards/akari-navigation'
 import { AppCommonRenderer } from '@renderer-shared/shards/app-common'
-import { HttpProxySetting, useAppCommonStore } from '@renderer-shared/shards/app-common/store'
+import { useAppCommonStore } from '@renderer-shared/shards/app-common/store'
 import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
 import { LeagueClientUxRenderer } from '@renderer-shared/shards/league-client-ux'
 import { useLeagueClientUxStore } from '@renderer-shared/shards/league-client-ux/store'
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import { LoggerRenderer } from '@renderer-shared/shards/logger'
 import { useLoggerStore } from '@renderer-shared/shards/logger/store'
+import { NetworkRenderer } from '@renderer-shared/shards/network'
+import { useNetworkStore } from '@renderer-shared/shards/network/store'
+import type { HttpProxySetting } from '@shared/shards/network'
 import { SelfUpdateRenderer } from '@renderer-shared/shards/self-update'
 import { useSelfUpdateStore } from '@renderer-shared/shards/self-update/store'
 import { useSgpStore } from '@renderer-shared/shards/sgp/store'
@@ -558,12 +563,14 @@ const sus = useSelfUpdateStore()
 const sgps = useSgpStore()
 const wms = useWindowManagerStore()
 const as = useAppCommonStore()
+const networkStore = useNetworkStore()
 const mws = useMainWindowStore()
 const ls = useLoggerStore()
 const su = useInstance(SelfUpdateRenderer)
 const wm = useInstance(WindowManagerRenderer)
 const mui = useInstance(MainWindowUiRenderer)
 const app = useInstance(AppCommonRenderer)
+const network = useInstance(NetworkRenderer)
 const lcu = useInstance(LeagueClientUxRenderer)
 const lc = useInstance(LeagueClientRenderer)
 const lg = useInstance(LoggerRenderer)
@@ -575,7 +582,10 @@ useAkariNavigationStep<AppSettingsNavigationPayload>({
     if (payload === 'windows-only' && !as.isWindows) {
       return { status: 'unavailable', reason: 'windows-only-setting' }
     }
-    if (payload === 'forced-http-proxy' && as.settings.httpProxy.strategy !== 'force') {
+    if (
+      payload === 'forced-http-proxy' &&
+      networkStore.settings.httpProxy.strategy !== 'fixed-servers'
+    ) {
       return { status: 'unavailable', reason: 'http-proxy-fields-hidden' }
     }
 
@@ -663,10 +673,10 @@ const mainWindowBackgroundModeOptions = computed(() => {
       value: 'none'
     },
     {
-      label: t('settings.app.mainWindowUi.background.options.mica'),
-      value: 'mica',
-      tooltip: t('settings.app.mainWindowUi.background.tooltips.mica'),
-      disabled: !wms.supportsMica
+      label: t('settings.app.mainWindowUi.background.options.system'),
+      value: 'system',
+      tooltip: t('settings.app.mainWindowUi.background.tooltips.system'),
+      disabled: !wms.supportsSystemBackgroundMaterial
     }
   ]
 })
@@ -708,23 +718,23 @@ const handleUninstallApp = () => {
 
 const httpProxyStrategies = computed(() => {
   return [
-    // {
-    //   label: t('settings.app.misc.httpProxy.strategy.options.auto'),
-    //   value: 'auto'
-    // },
     {
-      label: t('settings.app.misc.httpProxy.strategy.options.disable'),
-      value: 'disable'
+      label: t('settings.app.httpProxy.strategy.options.system'),
+      value: 'system'
     },
     {
-      label: t('settings.app.misc.httpProxy.strategy.options.force'),
-      value: 'force'
+      label: t('settings.app.httpProxy.strategy.options.direct'),
+      value: 'direct'
+    },
+    {
+      label: t('settings.app.httpProxy.strategy.options.fixed-servers'),
+      value: 'fixed-servers'
     }
   ]
 })
 
 const updateHttpProxySettings = (obj: Partial<HttpProxySetting>) => {
-  app.setHttpProxy({ ...as.settings.httpProxy, ...obj })
+  network.setHttpProxy({ ...networkStore.settings.httpProxy, ...obj })
 }
 
 const message = useMessage()

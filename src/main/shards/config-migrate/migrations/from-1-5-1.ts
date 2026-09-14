@@ -4,12 +4,15 @@ import { Equal } from 'typeorm'
 import { Setting } from '../../storage/entities/Settings'
 import { type MigrationContext, hasMigration, markMigration } from './context'
 
-export const MIGRATION_FROM_151 = 'akari-migration-from-1.5.1_champion-data-window'
+export const MIGRATION_FROM_151 = 'akari-migration-from-1.5.1'
 export const LEGACY_OPGG_PREFERENCES_KEY = 'opgg-renderer/savedPreferences'
 export const CHAMPION_DATA_PREFERENCES_KEY = 'champion-data-main/preferences'
 export const LEGACY_AUX_SHOW_SKIN_SELECTOR_KEY = 'window-manager-main/aux-window/showSkinSelector'
 export const OPGG_SHOW_SKIN_SELECTOR_KEY = 'window-manager-main/opgg-window/showSkinSelector'
+export const BACKGROUND_MATERIAL_SETTING_KEY = 'window-manager-main/backgroundMaterial'
 
+// The customized fork shipped champion-data preferences before the official stable release.
+// Keep that upgrade path while adopting the new network and background settings migration.
 const DEFAULT_PREFERENCES: ChampionDataPreferences = {
   mode: 'ranked',
   position: 'top',
@@ -78,11 +81,42 @@ async function migrateSkinSelectorSetting({ manager }: MigrationContext) {
   await manager.save(Setting.create(OPGG_SHOW_SKIN_SELECTOR_KEY, legacy.value))
 }
 
+async function migrateBackgroundMaterialSetting({ manager }: MigrationContext) {
+  const saved = await manager.findOneBy(Setting, {
+    key: Equal(BACKGROUND_MATERIAL_SETTING_KEY)
+  })
+  if (!saved) return
+
+  const migratedValue = saved.value === 'mica' ? 'system' : saved.value
+  if (migratedValue === saved.value) return
+
+  await manager.save(Setting.create(BACKGROUND_MATERIAL_SETTING_KEY, migratedValue))
+}
+
+async function migrateNetworkProxySettings({ manager }: MigrationContext) {
+  const legacy = await manager.findOneBy(Setting, { key: 'app-common-main/httpProxy' })
+  if (legacy) {
+    const current = await manager.findOneBy(Setting, { key: 'network-main/httpProxy' })
+    if (!current) {
+      const strategies = { disable: 'direct', auto: 'system', force: 'fixed-servers' }
+      await manager.save(
+        Setting.create('network-main/httpProxy', {
+          ...legacy.value,
+          strategy: strategies[legacy.value.strategy as keyof typeof strategies]
+        })
+      )
+    }
+    await manager.remove(legacy)
+  }
+}
+
 export async function migrateFrom151(context: MigrationContext) {
   if (await hasMigration(context.manager, MIGRATION_FROM_151)) return
   context.logger.info('Start migrating settings', MIGRATION_FROM_151)
   await migrateChampionDataPreferences(context)
   await migrateSkinSelectorSetting(context)
+  await migrateBackgroundMaterialSetting(context)
+  await migrateNetworkProxySettings(context)
   await markMigration(context.manager, MIGRATION_FROM_151)
   context.logger.info(`Migration completed, to ${MIGRATION_FROM_151}`)
 }

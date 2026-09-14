@@ -75,19 +75,6 @@ export class AppCommonSettings {
    */
   theme: AppThemeSetting = 'dark'
 
-  /**
-   * HTTP 代理
-   */
-  httpProxy: {
-    strategy: 'force' | 'auto' | 'disable'
-    port: number
-    host: string
-  } = {
-    strategy: 'disable',
-    port: 7890,
-    host: '127.0.0.1'
-  }
-
   streamerMode: boolean = false
 
   streamerModeUseAkariStyledName: boolean = false
@@ -114,10 +101,6 @@ export class AppCommonSettings {
     this.theme = s
   }
 
-  setHttpProxy(s: { strategy: 'force' | 'disable'; port: number; host: string }) {
-    this.httpProxy = s
-  }
-
   setStreamerMode(s: boolean) {
     this.streamerMode = s
   }
@@ -131,8 +114,6 @@ export class AppCommonSettings {
   }
 
   constructor() {
-    makeAutoObservable(this, {
-      httpProxy: observableRef
-    })
+    makeAutoObservable(this)
   }
 }

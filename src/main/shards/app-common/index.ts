@@ -58,14 +58,6 @@ export class AppCommonMain implements IAkariShardInitDispose {
         },
         locale: { default: this._getSystemLocale(), schema: z.string() },
         theme: { default: this.settings.theme, schema: z.enum(APP_THEME_VALUES) },
-        httpProxy: {
-          default: this.settings.httpProxy,
-          schema: z.object({
-            strategy: z.enum(['force', 'auto', 'disable']),
-            port: z.number(),
-            host: z.string()
-          })
-        },
         streamerMode: { default: this.settings.streamerMode, schema: z.boolean() },
         streamerModeUseAkariStyledName: {
           default: this.settings.streamerModeUseAkariStyledName,
@@ -205,7 +197,6 @@ export class AppCommonMain implements IAkariShardInitDispose {
       'showFreeSoftwareDeclaration',
       'locale',
       'theme',
-      'httpProxy',
       'streamerMode',
       'streamerModeUseAkariStyledName',
       'preferredLolSource'

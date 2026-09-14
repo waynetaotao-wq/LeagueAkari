@@ -302,8 +302,14 @@ export function isCounterPageScope(
       }
       if (isWebRecord(entry.href) && isWebRecord(entry.href.query)) {
         const q = entry.href.query
+        // Electron Session may return a localized page even for the canonical English URL.
+        // Strip only its locale prefix; keep every matchup and statistics scope check below.
+        const pathname =
+          typeof entry.href.pathname === 'string'
+            ? entry.href.pathname.replace(/^\/[a-z]{2}(?:-[a-z]{2})?(?=\/lol\/)/i, '')
+            : ''
         if (
-          entry.href.pathname ===
+          pathname ===
             `/lol/champions/${target.slug}/counters/${POSITION_TO_WEB_SEGMENT[args.position]}` &&
           q.target_champion === args.baseSlug &&
           q.patch === args.patch &&

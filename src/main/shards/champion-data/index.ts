@@ -3,17 +3,17 @@ import type { ChampionDataPreferences } from '@shared/data-adapter/champion-data
 import { LolpsHttpApiAxiosHelper } from '@shared/http-api-axios-helper/lolps'
 import { OpggHttpApiAxiosHelper } from '@shared/http-api-axios-helper/opgg'
 import { Qq101HttpApiAxiosHelper } from '@shared/http-api-axios-helper/qq101'
-import axios, { type AxiosInstance } from 'axios'
+import type { AxiosInstance } from 'axios'
 import type { AxiosRetry } from 'axios-retry'
 import { app } from 'electron'
 import { join } from 'node:path'
 import { z } from 'zod'
 
-import { AppCommonMain } from '../app-common'
 import { FeatureGatingMain } from '../feature-gating'
 import { AkariIpcMain } from '../ipc'
 import { type AkariLogger, LoggerFactoryMain } from '../logger-factory'
 import { MobxUtilsMain } from '../mobx-utils'
+import { NetworkMain } from '../network'
 import { SettingFactoryMain } from '../setting-factory'
 import type { SetterSettingService } from '../setting-factory/setter-setting-service'
 import {
@@ -58,7 +58,7 @@ export class ChampionDataMain implements IAkariShardInitDispose {
   private readonly _counterIntel: ChampionDataCounterIntel
 
   constructor(
-    private readonly _appCommon: AppCommonMain,
+    private readonly _network: NetworkMain,
     private readonly _featureGating: FeatureGatingMain,
     private readonly _ipc: AkariIpcMain,
     loggerFactory: LoggerFactoryMain,
@@ -133,7 +133,6 @@ export class ChampionDataMain implements IAkariShardInitDispose {
       'lastFallbackReason'
     ])
     this._watchAvailability()
-    this._watchHttpProxy()
     this._ipcHandlers.register()
     this._counterIntel.register(this._ipc, ChampionDataMain.id)
   }
@@ -178,7 +177,7 @@ export class ChampionDataMain implements IAkariShardInitDispose {
   }
 
   private _createHttpClient(headers?: Record<string, string>) {
-    const client = axios.create({ timeout: 8_000, headers })
+    const client = this._network.createAxiosClient({ timeout: 8_000, headers })
     axiosRetry(client, {
       retries: 1,
       shouldResetTimeout: true,
@@ -217,29 +216,6 @@ export class ChampionDataMain implements IAkariShardInitDispose {
             lolps: { enabled: true }
           }
         })
-      },
-      { fireImmediately: true }
-    )
-  }
-
-  private _watchHttpProxy() {
-    this._mobxUtils.reaction(
-      () => this._appCommon.settings.httpProxy,
-      (httpProxy) => {
-        for (const client of [
-          this._opggHttpClient,
-          this._qq101HttpClient,
-          this._lolpsHttpClient,
-          this._opggWebHttpClient
-        ]) {
-          if (httpProxy.strategy === 'force') {
-            client.defaults.proxy = { host: httpProxy.host, port: httpProxy.port }
-          } else if (httpProxy.strategy === 'disable') {
-            client.defaults.proxy = false
-          } else {
-            client.defaults.proxy = undefined
-          }
-        }
       },
       { fireImmediately: true }
     )

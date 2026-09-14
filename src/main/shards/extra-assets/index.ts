@@ -1,11 +1,10 @@
 import { IAkariShardInitDispose, Shard } from '@shared/akari-shard'
 import { GtimgApi } from '@shared/data-sources/gtimg'
 import { OpggHttpApiAxiosHelper } from '@shared/http-api-axios-helper/opgg'
-import axios from 'axios'
 
-import { AppCommonMain } from '../app-common'
 import { AkariLogger, LoggerFactoryMain } from '../logger-factory'
 import { MobxUtilsMain } from '../mobx-utils'
+import { NetworkMain } from '../network'
 import { ExtraAssetsRefreshController } from './asset-refresh-controller'
 import {
   EXTRA_ASSETS_MAIN_NAMESPACE,
@@ -34,26 +33,25 @@ export class ExtraAssetsMain implements IAkariShardInitDispose {
   public readonly gtimg = new ExtraAssetsStateGtimg()
   public readonly opgg = new ExtraAssetsStateOpgg()
 
-  private readonly _gtimgApi = new GtimgApi()
-  private readonly _opggHttpClient = axios.create()
-  private readonly _opggApi = new OpggHttpApiAxiosHelper(this._opggHttpClient)
-
   constructor(
-    private readonly _appCommon: AppCommonMain,
+    private readonly _network: NetworkMain,
     _loggerFactory: LoggerFactoryMain,
     private readonly _mobxUtils: MobxUtilsMain
   ) {
     this._logger = _loggerFactory.create(ExtraAssetsMain.id)
     this._context = {
       namespace: ExtraAssetsMain.id,
-      appCommon: this._appCommon,
       logger: this._logger,
       mobxUtils: this._mobxUtils,
       gtimg: this.gtimg,
       opgg: this.opgg,
-      gtimgApi: this._gtimgApi,
-      opggApi: this._opggApi,
-      opggHttpClient: this._opggHttpClient
+      gtimgApi: new GtimgApi(
+        this._network.createAxiosClient({
+          baseURL: GtimgApi.BASE_URL,
+          headers: { 'User-Agent': GtimgApi.USER_AGENT }
+        })
+      ),
+      opggApi: new OpggHttpApiAxiosHelper(this._network.createAxiosClient())
     }
     this._refreshController = new ExtraAssetsRefreshController(this._context)
   }

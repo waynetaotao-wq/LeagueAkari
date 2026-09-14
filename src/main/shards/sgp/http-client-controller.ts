@@ -13,29 +13,9 @@ export class SgpHttpClientController {
   constructor(private readonly context: SgpMainContext) {}
 
   init() {
-    this._registerHttpProxy()
     this._registerRequestInterceptor()
     this._registerResponseInterceptor()
     this._watchConnectionCountReset()
-  }
-
-  private _registerHttpProxy() {
-    const { appCommon, httpClient, mobxUtils } = this.context
-
-    mobxUtils.reaction(
-      () => appCommon.settings.httpProxy,
-      (httpProxy) => {
-        if (httpProxy.strategy === 'force') {
-          httpClient.defaults.proxy = {
-            host: httpProxy.host,
-            port: httpProxy.port
-          }
-        } else if (httpProxy.strategy === 'disable') {
-          httpClient.defaults.proxy = false
-        }
-      },
-      { fireImmediately: true }
-    )
   }
 
   private _registerRequestInterceptor() {

@@ -11,17 +11,18 @@ import { ClientInstallationRenderer } from '@renderer-shared/shards/client-insta
 import { ExtraAssetsRenderer } from '@renderer-shared/shards/extra-assets'
 import { FeatureGatingRenderer } from '@renderer-shared/shards/feature-gating'
 import { GameClientRenderer } from '@renderer-shared/shards/game-client'
+import { GameRefocusRenderer } from '@renderer-shared/shards/game-refocus'
 import { InGameSendRenderer } from '@renderer-shared/shards/in-game-send'
 import { AkariIpcRenderer } from '@renderer-shared/shards/ipc'
 import { KeyboardShortcutsRenderer } from '@renderer-shared/shards/keyboard-shortcut'
 import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
 import { LeagueClientUxRenderer } from '@renderer-shared/shards/league-client-ux'
 import { LoggerRenderer } from '@renderer-shared/shards/logger'
+import { MatchRatingRenderer } from '@renderer-shared/shards/match-rating'
+import { NetworkRenderer } from '@renderer-shared/shards/network'
 import { OngoingGameRenderer } from '@renderer-shared/shards/ongoing-game'
 import { PiniaMobxUtilsRenderer } from '@renderer-shared/shards/pinia-mobx-utils'
 import { RendererDebugRenderer } from '@renderer-shared/shards/renderer-debug'
-import { GameRefocusRenderer } from '@renderer-shared/shards/game-refocus'
-import { MatchRatingRenderer } from '@renderer-shared/shards/match-rating'
 import { RespawnTimerRenderer } from '@renderer-shared/shards/respawn-timer'
 import { RiotClientRenderer } from '@renderer-shared/shards/riot-client'
 import { SavedPlayerRenderer } from '@renderer-shared/shards/saved-player'
@@ -60,6 +61,7 @@ manager.use(LeagueClientRenderer)
 manager.use(LeagueClientUxRenderer)
 manager.use(LoggerRenderer)
 manager.use(MainWindowUiRenderer)
+manager.use(NetworkRenderer)
 manager.use(PlayerTabsRenderer)
 manager.use(OngoingGameRenderer)
 manager.use(PiniaMobxUtilsRenderer)

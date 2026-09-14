@@ -5,10 +5,11 @@ import {
   DEFAULT_AKARI_SERVICE_BASE_URLS,
   parseAkariApiBootstrapDocument
 } from '@shared/shards/akari-api'
-import axios, { type AxiosInstance } from 'axios'
+import type { AxiosInstance } from 'axios'
 import { app } from 'electron'
 
 import type { AkariLogger } from '../logger-factory'
+import type { NetworkMain } from '../network'
 import type { SetterSettingService } from '../setting-factory/setter-setting-service'
 
 export const AKARI_API_BOOTSTRAP_CACHE_PATH = 'bootstrap.json'
@@ -25,34 +26,40 @@ export class AkariApiBootstrapController {
   private _generation: number | null = null
   private readonly _npmHttp: AxiosInstance
 
-  public readonly apiHttp = axios.create({
-    baseURL: DEFAULT_AKARI_SERVICE_BASE_URLS.api,
-    timeout: AKARI_API_REQUEST_TIMEOUT,
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': `LeagueAkari/${app.getVersion()}`,
-      'x-akari-version': app.getVersion()
-    }
-  })
-  public readonly staticHttp = axios.create({
-    baseURL: DEFAULT_AKARI_SERVICE_BASE_URLS.static,
-    timeout: AKARI_API_REQUEST_TIMEOUT,
-    headers: {
-      'User-Agent': `LeagueAkari/${app.getVersion()}`,
-      'x-akari-version': app.getVersion()
-    }
-  })
-  public readonly api = new AkariApiHttpApiAxiosHelper(this.apiHttp)
-  public readonly staticAssets = new AkariStaticHttpApiAxiosHelper(this.staticHttp)
+  public readonly apiHttp: AxiosInstance
+  public readonly staticHttp: AxiosInstance
+  public readonly api: AkariApiHttpApiAxiosHelper
+  public readonly staticAssets: AkariStaticHttpApiAxiosHelper
 
   constructor(
     private readonly _settingService: SetterSettingService,
     private readonly _logger: AkariLogger,
+    network: Pick<NetworkMain, 'createAxiosClient'>,
     npmHttp?: AxiosInstance
   ) {
+    this.apiHttp = network.createAxiosClient({
+      baseURL: DEFAULT_AKARI_SERVICE_BASE_URLS.api,
+      timeout: AKARI_API_REQUEST_TIMEOUT,
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': `LeagueAkari/${app.getVersion()}`,
+        'x-akari-version': app.getVersion()
+      }
+    })
+    this.staticHttp = network.createAxiosClient({
+      baseURL: DEFAULT_AKARI_SERVICE_BASE_URLS.static,
+      timeout: AKARI_API_REQUEST_TIMEOUT,
+      headers: {
+        'User-Agent': `LeagueAkari/${app.getVersion()}`,
+        'x-akari-version': app.getVersion()
+      }
+    })
+    this.api = new AkariApiHttpApiAxiosHelper(this.apiHttp)
+    this.staticAssets = new AkariStaticHttpApiAxiosHelper(this.staticHttp)
+
     this._npmHttp =
       npmHttp ??
-      axios.create({
+      network.createAxiosClient({
         timeout: AKARI_API_REQUEST_TIMEOUT,
         headers: {
           'User-Agent': `LeagueAkari/${app.getVersion()}`

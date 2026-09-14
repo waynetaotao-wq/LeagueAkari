@@ -8,7 +8,6 @@ import { SetupInAppScopeRenderer } from '../setup-in-app-scope'
 import { APP_COMMON_RENDERER_NAMESPACE, MAIN_SHARD_NAMESPACE } from './context'
 import { watchAppLocale } from './locale-watcher'
 import { syncAppCommonRendererState } from './settings-sync'
-import { HttpProxySetting } from './store'
 
 @Shard(AppCommonRenderer.id)
 export class AppCommonRenderer implements IAkariShardInitDispose {
@@ -49,10 +48,6 @@ export class AppCommonRenderer implements IAkariShardInitDispose {
 
   setTheme(s: AppThemeSetting) {
     return this._settingUtils.set(MAIN_SHARD_NAMESPACE, 'theme', s)
-  }
-
-  setHttpProxy(s: HttpProxySetting | null) {
-    return this._settingUtils.set(MAIN_SHARD_NAMESPACE, 'httpProxy', s)
   }
 
   setStreamerMode(s: boolean) {

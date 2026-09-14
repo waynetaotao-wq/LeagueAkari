@@ -5,6 +5,7 @@ import { AkariProtocolMain } from '../akari-protocol'
 import { AppCommonMain } from '../app-common'
 import { AkariLogger, LoggerFactoryMain } from '../logger-factory'
 import { MobxUtilsMain } from '../mobx-utils'
+import { NetworkMain } from '../network'
 import { SettingFactoryMain } from '../setting-factory'
 import { SetterSettingService } from '../setting-factory/setter-setting-service'
 import { AkariApiBootstrapController } from './bootstrap-controller'
@@ -43,12 +44,17 @@ export class AkariApiMain implements IAkariShardInitDispose {
     _settingFactory: SettingFactoryMain,
     _protocol: AkariProtocolMain,
     _mobxUtils: MobxUtilsMain,
-    _appCommon: AppCommonMain
+    _appCommon: AppCommonMain,
+    _network: NetworkMain
   ) {
     this._logger = _loggerFactory.create(AkariApiMain.id)
     this._settingService = _settingFactory.register(AkariApiMain.id)
 
-    this._bootstrapController = new AkariApiBootstrapController(this._settingService, this._logger)
+    this._bootstrapController = new AkariApiBootstrapController(
+      this._settingService,
+      this._logger,
+      _network
+    )
     this._protocolController = new AkariApiProtocolController(
       _protocol,
       this._logger,

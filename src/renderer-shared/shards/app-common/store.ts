@@ -10,23 +10,11 @@ import { useTranslation } from 'i18next-vue'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowReactive, shallowRef } from 'vue'
 
-export interface HttpProxySetting {
-  strategy: 'auto' | 'force' | 'disable'
-  port: number
-  host: string
-}
-
 export const useAppCommonStore = defineStore('shard:app-common-renderer', () => {
   const settings = shallowReactive({
     showFreeSoftwareDeclaration: false,
     locale: 'zh-CN',
     theme: 'default' as AppThemeSetting,
-    httpProxy: {
-      strategy: 'disable' as 'auto' | 'force' | 'disable',
-      port: 0,
-      host: ''
-    } as HttpProxySetting,
-    forceDisableProxy: false,
     streamerMode: false,
     streamerModeUseAkariStyledName: false,
     preferredLolSource: 'sgp' as 'sgp' | 'lcu'

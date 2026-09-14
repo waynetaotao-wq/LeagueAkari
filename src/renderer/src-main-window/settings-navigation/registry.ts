@@ -215,6 +215,43 @@ const targetDefinitions = [
     descriptionKey: 'settings.app.lcConnection.rebuildWmi.description'
   },
   {
+    id: 'app.http-proxy',
+    route: { tab: 'basic' },
+    labelKey: 'settings.app.httpProxy.title',
+    searchable: false
+  },
+  {
+    id: 'app.misc.http-proxy.strategy',
+    route: { tab: 'basic' },
+    parentId: 'app.http-proxy',
+    labelKey: 'settings.app.httpProxy.strategy.label',
+    descriptionKey: 'settings.app.httpProxy.strategy.description'
+  },
+  {
+    id: 'app.misc.http-proxy.host',
+    route: { tab: 'basic' },
+    parentId: 'app.http-proxy',
+    fallbackId: 'app.misc.http-proxy.strategy',
+    prepareStep: {
+      key: APP_SETTINGS_NAVIGATION_STEP_KEY,
+      payload: 'forced-http-proxy' satisfies AppSettingsNavigationPayload
+    },
+    labelKey: 'settings.app.httpProxy.host.label',
+    descriptionKey: 'settings.app.httpProxy.host.description'
+  },
+  {
+    id: 'app.misc.http-proxy.port',
+    route: { tab: 'basic' },
+    parentId: 'app.http-proxy',
+    fallbackId: 'app.misc.http-proxy.strategy',
+    prepareStep: {
+      key: APP_SETTINGS_NAVIGATION_STEP_KEY,
+      payload: 'forced-http-proxy' satisfies AppSettingsNavigationPayload
+    },
+    labelKey: 'settings.app.httpProxy.port.label',
+    descriptionKey: 'settings.app.httpProxy.port.description'
+  },
+  {
     id: 'app.misc',
     route: { tab: 'basic' },
     labelKey: 'settings.app.misc.title',
@@ -226,37 +263,6 @@ const targetDefinitions = [
     parentId: 'app.misc',
     labelKey: 'settings.app.misc.logLevel.label',
     descriptionKey: 'settings.app.misc.logLevel.description'
-  },
-  {
-    id: 'app.misc.http-proxy.strategy',
-    route: { tab: 'basic' },
-    parentId: 'app.misc',
-    labelKey: 'settings.app.misc.httpProxy.strategy.label',
-    descriptionKey: 'settings.app.misc.httpProxy.strategy.description'
-  },
-  {
-    id: 'app.misc.http-proxy.host',
-    route: { tab: 'basic' },
-    parentId: 'app.misc',
-    fallbackId: 'app.misc.http-proxy.strategy',
-    prepareStep: {
-      key: APP_SETTINGS_NAVIGATION_STEP_KEY,
-      payload: 'forced-http-proxy' satisfies AppSettingsNavigationPayload
-    },
-    labelKey: 'settings.app.misc.httpProxy.host.label',
-    descriptionKey: 'settings.app.misc.httpProxy.host.description'
-  },
-  {
-    id: 'app.misc.http-proxy.port',
-    route: { tab: 'basic' },
-    parentId: 'app.misc',
-    fallbackId: 'app.misc.http-proxy.strategy',
-    prepareStep: {
-      key: APP_SETTINGS_NAVIGATION_STEP_KEY,
-      payload: 'forced-http-proxy' satisfies AppSettingsNavigationPayload
-    },
-    labelKey: 'settings.app.misc.httpProxy.port.label',
-    descriptionKey: 'settings.app.misc.httpProxy.port.description'
   },
   {
     id: 'app.misc.disable-hardware-acceleration',

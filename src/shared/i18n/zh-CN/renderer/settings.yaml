@@ -102,11 +102,10 @@ settings:
           profileSkin: 英雄背景
           customImage: 自定义壁纸
           none: 默认
-          mica: Mica
+          system: 系统材质
         tooltips:
           profileSkin: 使用当前玩家的生涯背景皮肤作为主界面背景
-          mica: 仅 Windows 高版本系统可用。如果当前平台不可用，会回退到默认背景
-          micaUnsupported: 当前平台不支持 Mica，会回退到默认背景
+          system: 在 Windows 上使用 Mica，在 macOS 上使用原生窗口模糊。当前平台不可用或启用失败时会回退到默认纯色背景
       customBackground:
         label: 自定义壁纸
         description: 使用固定的本地图片或视频作为背景。壁纸会居中裁剪
@@ -119,8 +118,8 @@ settings:
         description: 设置应用界面的背景材质，需特定系统版本支持
         options:
           none: 无
-          mica: Mica
-          micaUnsupported: Mica (不支持)
+          system: 系统材质
+          systemUnsupported: 系统材质 (不支持)
     lcConnection:
       title: LCU 连接
       autoConnect:
@@ -133,6 +132,21 @@ settings:
         label: 重建 WMI
         description: 如果 WMI 无法正常使用，可尝试此修复选项
         rebuildButton: 重建 WMI
+    httpProxy:
+      title: 网络代理
+      strategy:
+        label: HTTP 代理
+        description: 设置整个应用外部 HTTP 请求的代理，包括数据、图片和更新下载；本地客户端连接不受影响
+        options:
+          fixed-servers: 手动代理
+          system: 跟随系统
+          direct: 关闭代理
+      host:
+        label: 代理主机
+        description: 代理服务器的主机地址
+      port:
+        label: 代理端口
+        description: 代理服务器的端口
     misc:
       title: 其他
       logLevel:
@@ -148,20 +162,6 @@ settings:
         enableConfirmation: 将启用硬件加速，重启应用以应用更改
         positiveText: 重启应用并退出
         negativeText: 取消
-      httpProxy:
-        strategy:
-          label: HTTP 代理
-          description: 设置 HTTP 代理，除 LCU HTTP 之外的所有网络请求都将通过该代理
-          options:
-            force: 使用代理
-            auto: 跟随系统
-            disable: 不使用代理
-        host:
-          label: 代理主机
-          description: 代理服务器的主机地址
-        port:
-          label: 代理端口
-          description: 代理服务器的端口
       uninstallApp:
         label: 卸载应用
         description: 卸载应用，将删除所有数据和配置

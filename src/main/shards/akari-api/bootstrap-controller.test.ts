@@ -1,4 +1,4 @@
-import type { AxiosInstance } from 'axios'
+import axios, { type AxiosInstance } from 'axios'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -41,6 +41,7 @@ function setup(localGeneration: number, remoteGeneration: number) {
   const controller = new AkariApiBootstrapController(
     settingService as never,
     logger as never,
+    { createAxiosClient: axios.create },
     npmHttp
   )
 
@@ -108,6 +109,7 @@ describe('Akari API bootstrap controller', () => {
     const controller = new AkariApiBootstrapController(
       settingService as never,
       { info: vi.fn(), warn: vi.fn() } as never,
+      { createAxiosClient: axios.create },
       npmHttp
     )
 

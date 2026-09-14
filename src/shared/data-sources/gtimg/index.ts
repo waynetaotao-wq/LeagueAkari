@@ -1,4 +1,4 @@
-import axios from 'axios'
+import type { AxiosInstance } from 'axios'
 import { AxiosRetry } from 'axios-retry'
 
 const axiosRetry = require('axios-retry').default as AxiosRetry
@@ -57,18 +57,11 @@ export class GtimgApi {
   static USER_AGENT =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
 
-  private _http = axios.create({
-    headers: {
-      'User-Agent': GtimgApi.USER_AGENT
-    },
-    baseURL: GtimgApi.BASE_URL
-  })
-
   get http() {
     return this._http
   }
 
-  constructor() {
+  constructor(private readonly _http: AxiosInstance) {
     axiosRetry(this._http, {
       retries: 2
     })

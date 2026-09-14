@@ -50,6 +50,7 @@ export class GameClientMain implements IAkariShardInitDispose {
 
   private readonly _httpClient = axios.create({
     baseURL: GameClientMain.GAME_CLIENT_BASE_URL,
+    proxy: false,
     httpsAgent: new https.Agent({
       rejectUnauthorized: false,
       keepAlive: true,
