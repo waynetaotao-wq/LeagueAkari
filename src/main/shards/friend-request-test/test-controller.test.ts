@@ -60,16 +60,18 @@ function harness(initial = empty()) {
     })
   }
   const state = new FriendRequestTestState()
+  const logger = { info: vi.fn(), warn: vi.fn() }
   const controller = new FriendRequestTestController({
     state,
     api,
     getSession: () => session,
-    logger: { info: vi.fn(), warn: vi.fn() }
+    logger
   })
   return {
     api,
     state,
     controller,
+    logger,
     chatError: (error: FriendRequestTestChatError) => chatListener?.(error),
     stopWatching,
     setRelationship: (value: FriendTestRelationship) => {
@@ -495,5 +497,161 @@ describe('timed friend request lifecycle', () => {
     expect(h.state.snapshot).toMatchObject({ reason: 'accepted-kept', withdrawn: 0, removed: 0 })
     expect(h.api.send).not.toHaveBeenCalled()
     expect(h.api.remove).not.toHaveBeenCalled()
+  })
+
+  it.each(['in', 'both'] as const)(
+    'preserves and reports a %s request appearing during withdrawal confirmation',
+    async (direction) => {
+      const h = harness()
+      h.api.withdraw.mockImplementationOnce(async () => {
+        h.setRelationship(empty())
+        setTimeout(
+          () => h.setRelationship({ friend: null, request: { puuid: target.puuid, direction } }),
+          200
+        )
+      })
+      h.controller.start({ ...options, removeAccepted: true })
+      await vi.advanceTimersByTimeAsync(30_100)
+      expect(h.state.snapshot).toMatchObject({
+        phase: 'confirming',
+        pendingOperation: 'withdraw',
+        withdrawn: 0
+      })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(h.state.snapshot).toMatchObject({
+        active: false,
+        reason: 'incoming-request',
+        sent: 1,
+        withdrawn: 0,
+        pendingOperation: null,
+        relationship: { isFriend: false, direction, checkedAt: expect.any(Number) }
+      })
+      expect(h.api.send).toHaveBeenCalledTimes(1)
+      expect(h.api.withdraw).toHaveBeenCalledTimes(1)
+      expect(h.api.remove).not.toHaveBeenCalled()
+      const entries = h.logger.info.mock.calls.map((call) => call[1])
+      const runId = entries[0].runId
+      expect(entries[0]).toMatchObject({
+        target: options.riotId,
+        intervalSeconds: 30,
+        removeAccepted: true
+      })
+      expect(entries).toContainEqual(
+        expect.objectContaining({ runId, direction, lastMutation: 'withdraw' })
+      )
+      expect(entries.at(-1)).toMatchObject({
+        runId,
+        reason: 'incoming-request',
+        lastMutation: 'withdraw'
+      })
+    }
+  )
+
+  it('rechecks a stopped target without restarting or losing the original result', async () => {
+    const h = harness({ friend: null, request: { puuid: target.puuid, direction: 'in' } })
+    h.controller.start({ ...options, removeAccepted: true })
+    await vi.advanceTimersByTimeAsync(0)
+    h.setRelationship(accepted())
+    expect(await h.controller.refreshRelationship()).toEqual({ refreshed: true })
+    expect(h.state.snapshot).toMatchObject({
+      active: false,
+      refreshing: false,
+      reason: 'incoming-request',
+      sent: 0,
+      withdrawn: 0,
+      removed: 0,
+      target,
+      relationship: { isFriend: true, direction: null },
+      mayHaveRelationship: true
+    })
+    expect(h.api.relationship).toHaveBeenLastCalledWith(target.puuid, expect.any(AbortSignal))
+    expect(h.api.resolve).toHaveBeenCalledTimes(1)
+    expect(h.api.send).not.toHaveBeenCalled()
+    expect(h.api.withdraw).not.toHaveBeenCalled()
+    expect(h.api.remove).not.toHaveBeenCalled()
+  })
+
+  it('rejects checks without a resolved target and prevents a check from overlapping a test', async () => {
+    const h = harness()
+    expect(await h.controller.refreshRelationship()).toEqual({
+      refreshed: false,
+      reason: 'target-not-found'
+    })
+    expect(h.api.relationship).not.toHaveBeenCalled()
+    h.controller.start(options)
+    expect(await h.controller.refreshRelationship()).toEqual({ refreshed: false, reason: 'busy' })
+    await vi.advanceTimersByTimeAsync(0)
+    h.controller.stop()
+    await vi.advanceTimersByTimeAsync(100)
+    h.api.relationship.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      return pending()
+    })
+    const check = h.controller.refreshRelationship()
+    expect(h.state.snapshot.refreshing).toBe(true)
+    expect(h.controller.start(options)).toEqual({ started: false, reason: 'busy' })
+    expect(await h.controller.refreshRelationship()).toEqual({ refreshed: false, reason: 'busy' })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(await check).toEqual({ refreshed: true })
+    expect(h.api.send).toHaveBeenCalledTimes(1)
+    expect(h.api.withdraw).not.toHaveBeenCalled()
+  })
+
+  it.each([new Error('invalid-response'), httpError(503)])(
+    'invalidates stale relationship results when a recheck fails %#',
+    async (error) => {
+      const h = harness(accepted())
+      h.controller.start(options)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(h.state.snapshot.relationship?.isFriend).toBe(true)
+      h.api.relationship.mockRejectedValueOnce(error)
+      expect(await h.controller.refreshRelationship()).toMatchObject({ refreshed: false })
+      expect(h.state.snapshot).toMatchObject({
+        relationship: null,
+        refreshing: false,
+        reason: 'existing-relationship'
+      })
+      expect(h.api.send).not.toHaveBeenCalled()
+      expect(h.api.remove).not.toHaveBeenCalled()
+    }
+  )
+
+  it('discards recheck results after account changes and will not query that target in the new session', async () => {
+    const h = harness(accepted())
+    h.controller.start(options)
+    await vi.advanceTimersByTimeAsync(0)
+    h.api.relationship.mockImplementationOnce(async () => {
+      h.setSession({ connection: {}, selfPuuid: 'other-account' })
+      return empty()
+    })
+    expect(await h.controller.refreshRelationship()).toEqual({
+      refreshed: false,
+      reason: 'session-changed'
+    })
+    expect(h.state.snapshot.relationship).toBeNull()
+    const reads = h.api.relationship.mock.calls.length
+    expect(await h.controller.refreshRelationship()).toEqual({
+      refreshed: false,
+      reason: 'session-changed'
+    })
+    expect(h.api.relationship).toHaveBeenCalledTimes(reads)
+    expect(h.api.remove).not.toHaveBeenCalled()
+  })
+
+  it('cancels an in-flight recheck on window disposal without displaying its late result', async () => {
+    const h = harness(accepted())
+    h.controller.start(options)
+    await vi.advanceTimersByTimeAsync(0)
+    h.api.relationship.mockImplementationOnce(async (_puuid, signal) => {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(signal.aborted).toBe(true)
+      return empty()
+    })
+    const check = h.controller.refreshRelationship()
+    h.controller.stop('window-closed')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(await check).toMatchObject({ refreshed: false })
+    expect(h.state.snapshot).toMatchObject({ refreshing: false, relationship: null })
+    expect(h.api.send).not.toHaveBeenCalled()
   })
 })

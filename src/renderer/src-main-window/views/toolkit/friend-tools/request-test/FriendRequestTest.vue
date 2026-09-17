@@ -4,11 +4,13 @@
     :available="available && !disabled"
     :busy="busy"
     :start-error="startError"
+    :refresh-error="refreshError"
     @start="start($event, 'start')"
     @withdraw-pending="start($event, 'withdrawPending')"
     @pause="command('pause')"
     @resume="command('resume')"
     @stop="command('stop')"
+    @refresh-relationship="refreshRelationship"
   />
 </template>
 
@@ -34,6 +36,7 @@ const client = useLeagueClientStore()
 const activated = useActivated()
 const busy = ref(false)
 const startError = ref<FriendRequestTestReason | null>(null)
+const refreshError = ref<FriendRequestTestReason | null>(null)
 const available = computed(
   () =>
     activated.value &&
@@ -45,11 +48,24 @@ const available = computed(
 async function start(options: FriendRequestTestOptions, action: 'start' | 'withdrawPending') {
   busy.value = true
   startError.value = null
+  refreshError.value = null
   try {
     const result = await shard[action](options)
     if (!result.started) startError.value = result.reason
   } catch {
     startError.value = 'request-failed'
+  } finally {
+    busy.value = false
+  }
+}
+async function refreshRelationship() {
+  busy.value = true
+  refreshError.value = null
+  try {
+    const result = await shard.refreshRelationship()
+    if (!result.refreshed) refreshError.value = result.reason
+  } catch {
+    refreshError.value = 'request-failed'
   } finally {
     busy.value = false
   }
@@ -73,7 +89,7 @@ watch(
   { flush: 'sync' }
 )
 watch(
-  () => store.state.snapshot.active,
+  () => store.state.snapshot.active || store.state.snapshot.refreshing,
   (active, before) => {
     emit('activeChange', active)
     if (before && !active) emit('relationshipChange')

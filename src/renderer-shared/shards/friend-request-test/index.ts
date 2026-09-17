@@ -2,6 +2,7 @@ import { Dep, Shard } from '@shared/akari-shard'
 import {
   FRIEND_REQUEST_TEST_MAIN_NAMESPACE,
   type FriendRequestTestOptions,
+  type FriendRequestTestRefreshResult,
   type FriendRequestTestStartResult
 } from '@shared/shards/friend-request-test'
 
@@ -36,6 +37,9 @@ export class FriendRequestTestRenderer {
 
   pause() {
     return this._ipc.call(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'pause')
+  }
+  refreshRelationship(): Promise<FriendRequestTestRefreshResult> {
+    return this._ipc.call(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'refreshRelationship')
   }
   resume() {
     return this._ipc.call(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'resume')

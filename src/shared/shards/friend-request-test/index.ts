@@ -40,6 +40,12 @@ export type FriendRequestTestPhase =
 
 export type FriendRequestTestOperation = 'resolve' | 'relationship' | 'send' | 'withdraw' | 'remove'
 
+export interface FriendRequestTestRelationship {
+  isFriend: boolean
+  direction: 'in' | 'out' | 'both' | null
+  checkedAt: number
+}
+
 export type FriendRequestTestReason =
   | 'invalid-options'
   | 'busy'
@@ -80,6 +86,9 @@ export interface FriendRequestTestSnapshot {
   lastOperation: FriendRequestTestOperation | null
   httpStatus: number | null
   chatError: FriendRequestTestChatError | null
+  relationship: FriendRequestTestRelationship | null
+  refreshing: boolean
+  pendingOperation: 'send' | 'withdraw' | 'remove' | null
 }
 
 export function createFriendRequestTestSnapshot(): FriendRequestTestSnapshot {
@@ -100,9 +109,15 @@ export function createFriendRequestTestSnapshot(): FriendRequestTestSnapshot {
     lastSendIntervalMs: null,
     lastOperation: null,
     httpStatus: null,
-    chatError: null
+    chatError: null,
+    relationship: null,
+    refreshing: false,
+    pendingOperation: null
   }
 }
 
 export type FriendRequestTestStartResult =
   { started: true } | { started: false; reason: FriendRequestTestReason }
+
+export type FriendRequestTestRefreshResult =
+  { refreshed: true } | { refreshed: false; reason: FriendRequestTestReason }

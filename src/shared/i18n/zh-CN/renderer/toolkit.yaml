@@ -581,7 +581,7 @@ toolkit:
     duration: 时长（分钟）
     interval: 间隔（秒）
     accepted: 接受后删除并继续
-    acceptedHint: 开启后，仅删除本次发送申请后新建立的好友关系。关闭时，对方接受就结束测试并保留好友。
+    acceptedHint: 开启后，仅处理本次运行期间发送申请后新建立的好友关系。测试结束后再成为好友，不会自动删除；重新开始前已有的好友也会保留。关闭时，对方接受就结束测试并保留好友。
     consent: 目标是本人控制，或已明确同意参与测试的账号
     start: 开始测试
     withdrawPending: 仅撤回已发申请
@@ -593,10 +593,40 @@ toolkit:
     paused: 已暂停
     unavailable: 连接客户端并停留在大厅或房间后可开始；同时不能运行批量删除好友。
     remaining: '剩余 {{time}}'
+    remainingAtEnd: '结束时剩余 {{time}}'
     nextAction: '距下一步 {{time}}'
     sent: '已确认发送 {{count}} 次'
-    withdrawn: '已撤回 {{count}} 次'
-    removed: '已删除测试好友 {{count}} 次'
+    withdrawn: '已确认撤回 {{count}} 次'
+    removed: '已确认删除测试好友 {{count}} 次'
+    countsHint: 仅统计已确认完成的操作。提交后关系又发生变化时，次数可能不会增加。
+    confirmationHint: 已提交操作，正在等待客户端更新关系。确认完成后才会增加次数并继续。
+    confirmations:
+      send: 已提交发送，等待确认
+      withdraw: 已提交撤回，等待确认
+      remove: 已提交删除好友，等待确认
+    endedReason: 上次操作结束原因
+    relationshipTitle: 该账号的关系检查结果
+    relationshipChecked: '{{time}} 检查；结果不会自动刷新'
+    relationshipCheckedDuringRun: '最近读取：{{time}}'
+    refreshRelationship: 重新检查关系
+    refreshing: 正在检查好友和申请状态…
+    refreshFailed: 本次检查未成功，无法确认当前关系。
+    relationships:
+      unknown: 尚未取得有效的关系结果
+      none: 未发现好友关系或待处理申请
+      out: 有你发给对方的申请
+      in: 客户端显示收到对方申请
+      both: 客户端显示双向申请
+      friend: 已经是好友
+      syncing: 好友与申请同时存在，关系仍需核对
+    nextSteps:
+      unknown: 点击“重新检查关系”取得结果；连接或账号改变后，请回到客户端核对。
+      none: 这次检查未发现需要处理的关系。若要重新测试，可点击开始；开始前还会再次核对。
+      out: 核对上方填写的是此账号后，可点击“仅撤回已发申请”收尾。
+      in: 请在游戏客户端处理收到的申请，再重新检查。单次撤回只处理你发出的申请。
+      both: 请在游戏客户端核对并处理双向申请，再重新检查。此状态下测试不会继续。
+      friend: 若要重新测试，请先在游戏客户端处理这段好友关系，再重新检查。单次撤回不会删除好友，已结束的测试也不会继续删除。
+      syncing: 请稍后重新检查；两份关系数据尚未一致，现在不能判断下一步。
     actualInterval: '最近两次发送实际相隔 {{seconds}} 秒（含暂停及接口耗时）'
     httpFailure: '{{operation}}时返回 HTTP {{status}}'
     chatFailure: '同期聊天服务错误：{{code}} / {{category}}。此错误未标明目标，不能据此断定触发限流。'
@@ -620,7 +650,7 @@ toolkit:
       failed: 测试中断
     reasons:
       invalid-options: 请填写完整的名字#标签、有效时长和间隔，并确认测试账号范围。
-      busy: 当前测试尚未结束，请先停止或继续当前任务。
+      busy: 当前测试或关系检查尚未结束，请等待；运行中的测试可暂停或停止。
       not-ready: 当前客户端尚未就绪，或不在大厅/房间。
       session-changed: 客户端连接、登录账号或游戏阶段已改变，测试已停止。
       target-not-found: 当前大区未找到完全匹配的账号，请核对名字和标签。
@@ -629,7 +659,7 @@ toolkit:
       invalid-response: 客户端返回的关系数据不完整或有冲突，已停止操作。
       request-not-confirmed: 发送后未能确认对应申请，已停止，请在客户端核对。
       request-disappeared: 申请已消失，可能已被拒绝或手动撤回，测试结束且不再重发。
-      incoming-request: 检测到对方发来的申请，测试结束，请手动处理。
+      incoming-request: 客户端返回了收到申请或双向申请，测试已停止。该状态不能证明对方点击过什么操作；请查看下方关系结果。
       accepted-kept: 已是好友，保留好友关系并结束本次操作。
       removal-not-confirmed: 已提交清理，但等待后仍未确认关系清空，已停止。若残留的是已发申请，可稍后单独撤回。
       rate-limited: 客户端或服务器限制了请求频率，测试已停止，不会自动重试。

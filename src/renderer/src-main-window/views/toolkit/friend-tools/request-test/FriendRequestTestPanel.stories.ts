@@ -88,3 +88,42 @@ export const WithdrawalCompleted: Story = {
     }
   }
 }
+
+export const IncomingRequest: Story = {
+  args: {
+    snapshot: {
+      ...Paused.args!.snapshot!,
+      active: false,
+      paused: false,
+      phase: 'completed',
+      reason: 'incoming-request',
+      sent: 6,
+      withdrawn: 5,
+      removed: 0,
+      lastSendIntervalMs: 2220,
+      relationship: { isFriend: false, direction: 'in', checkedAt: Date.now() }
+    }
+  }
+}
+export const FriendshipAfterStop: Story = {
+  args: {
+    snapshot: {
+      ...IncomingRequest.args!.snapshot!,
+      relationship: { isFriend: true, direction: null, checkedAt: Date.now() }
+    }
+  }
+}
+export const AwaitingWithdrawal: Story = {
+  args: {
+    snapshot: {
+      ...Paused.args!.snapshot!,
+      paused: false,
+      phase: 'confirming',
+      pendingOperation: 'withdraw',
+      relationship: { isFriend: false, direction: 'out', checkedAt: Date.now() }
+    }
+  }
+}
+export const RefreshFailed: Story = {
+  args: { ...FriendshipAfterStop.args, refreshError: 'request-failed' }
+}

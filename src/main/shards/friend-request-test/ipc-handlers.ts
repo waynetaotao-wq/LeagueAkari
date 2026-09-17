@@ -26,6 +26,9 @@ export class FriendRequestTestIpcHandlers {
       return result
     })
     this._ipc.onCall(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'pause', () => this._controller.pause())
+    this._ipc.onCall(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'refreshRelationship', () =>
+      this._controller.refreshRelationship()
+    )
     this._ipc.onCall(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'resume', () => this._controller.resume())
     this._ipc.onCall(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'stop', () => this._controller.stop())
   }

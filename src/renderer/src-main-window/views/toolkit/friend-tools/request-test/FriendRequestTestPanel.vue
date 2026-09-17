@@ -110,29 +110,39 @@
       >
         <div class="flex flex-wrap items-center justify-between gap-2">
           <span class="font-semibold" role="status" aria-live="polite">{{
-            snapshot.paused ? t('paused') : t(`phases.${snapshot.phase}`)
+            snapshot.paused
+              ? t('paused')
+              : snapshot.phase === 'confirming' && snapshot.pendingOperation
+                ? t(`confirmations.${snapshot.pendingOperation}`)
+                : t(`phases.${snapshot.phase}`)
           }}</span>
           <span v-if="snapshot.mode === 'withdraw-only'" class="text-xs">{{
             t('withdrawOnlyTask')
           }}</span>
           <span v-else class="font-mono text-sm">{{
-            t('remaining', { time: formatTime(snapshot.remainingMs) })
+            t(snapshot.active ? 'remaining' : 'remainingAtEnd', {
+              time: formatTime(snapshot.remainingMs)
+            })
           }}</span>
         </div>
         <div v-if="snapshot.target" class="mt-1 text-xs break-all">
           {{ snapshot.target.gameName }}#{{ snapshot.target.tagLine }}
         </div>
         <div
-          v-if="snapshot.active && snapshot.waitRemainingMs > 0"
+          v-if="snapshot.active && snapshot.phase === 'waiting' && snapshot.waitRemainingMs > 0"
           class="mt-1 text-xs text-black/60 dark:text-white/60"
         >
           {{ t('nextAction', { time: formatTime(snapshot.waitRemainingMs) }) }}
+        </div>
+        <div v-if="snapshot.active && snapshot.phase === 'confirming'" class="mt-2 text-xs">
+          {{ t('confirmationHint') }}
         </div>
         <div class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs">
           <span>{{ t('sent', { count: snapshot.sent }) }}</span>
           <span>{{ t('withdrawn', { count: snapshot.withdrawn }) }}</span>
           <span>{{ t('removed', { count: snapshot.removed }) }}</span>
         </div>
+        <div class="mt-2 text-xs text-black/60 dark:text-white/60">{{ t('countsHint') }}</div>
         <div v-if="snapshot.lastSendIntervalMs !== null" class="mt-2 text-xs">
           {{ t('actualInterval', { seconds: (snapshot.lastSendIntervalMs / 1000).toFixed(3) }) }}
         </div>
@@ -144,7 +154,45 @@
             })
           }}
         </div>
-        <div v-if="snapshot.reason" class="mt-2 text-xs">{{ t(`reasons.${snapshot.reason}`) }}</div>
+        <NAlert v-if="snapshot.reason" :type="resultType" :show-icon="false" class="mt-3">
+          <div class="font-medium">{{ t('endedReason') }}</div>
+          <div>{{ t(`reasons.${snapshot.reason}`) }}</div>
+        </NAlert>
+        <div v-if="snapshot.target" class="mt-3 border-t border-black/10 pt-3 dark:border-white/10">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="text-sm font-medium">{{ t('relationshipTitle') }}</span>
+            <NButton
+              v-if="!snapshot.active"
+              size="tiny"
+              :loading="snapshot.refreshing"
+              :disabled="!available || busy || snapshot.refreshing"
+              @click="$emit('refreshRelationship')"
+              >{{ t('refreshRelationship') }}</NButton
+            >
+          </div>
+          <div class="mt-2 text-sm" role="status" aria-live="polite">
+            {{ snapshot.refreshing ? t('refreshing') : t(`relationships.${relationshipKey}`) }}
+          </div>
+          <div
+            v-if="snapshot.relationship && !refreshError"
+            class="mt-1 text-xs text-black/60 dark:text-white/60"
+          >
+            {{
+              t(snapshot.active ? 'relationshipCheckedDuringRun' : 'relationshipChecked', {
+                time: formatCheckedTime(snapshot.relationship.checkedAt)
+              })
+            }}
+          </div>
+          <NAlert v-if="refreshError" type="warning" :show-icon="false" class="mt-2">
+            {{ t('refreshFailed') }} {{ t(`reasons.${refreshError}`) }}
+          </NAlert>
+          <div
+            v-if="!snapshot.active && !snapshot.refreshing && !refreshError"
+            class="mt-2 text-xs leading-5"
+          >
+            {{ t(`nextSteps.${relationshipKey}`) }}
+          </div>
+        </div>
         <div v-if="snapshot.chatError" class="mt-2 text-xs text-amber-700 dark:text-amber-300">
           {{
             t('chatFailure', {
@@ -154,7 +202,10 @@
           }}
         </div>
         <div
-          v-if="snapshot.paused || (!snapshot.active && snapshot.mayHaveRelationship)"
+          v-if="
+            snapshot.paused ||
+            (!snapshot.active && snapshot.mayHaveRelationship && !snapshot.relationship)
+          "
           class="mt-2 text-xs text-amber-700 dark:text-amber-300"
         >
           {{ t('relationshipLeft') }}
@@ -182,6 +233,7 @@ const props = defineProps<{
   available: boolean
   busy: boolean
   startError: FriendRequestTestReason | null
+  refreshError?: FriendRequestTestReason | null
 }>()
 const emit = defineEmits<{
   start: [options: FriendRequestTestOptions]
@@ -189,12 +241,26 @@ const emit = defineEmits<{
   pause: []
   resume: []
   stop: []
+  refreshRelationship: []
 }>()
 const { t } = useTranslation(undefined, { keyPrefix: 'toolkit.friendRequestTest' })
 const options = reactive({ riotId: '', removeAccepted: false, consented: false })
 const duration = ref<number | null>(5)
 const interval = ref<number | null>(30)
-const locked = computed(() => props.snapshot.active || props.busy)
+const locked = computed(() => props.snapshot.active || props.snapshot.refreshing || props.busy)
+const relationshipKey = computed(() => {
+  const relationship = props.refreshError ? null : props.snapshot.relationship
+  if (!relationship) return 'unknown'
+  if (relationship.isFriend && relationship.direction) return 'syncing'
+  if (relationship.isFriend) return 'friend'
+  return relationship.direction ?? 'none'
+})
+const resultType = computed(() => {
+  if (props.snapshot.phase === 'failed') return 'error'
+  if (['finished', 'withdrawn-only', 'no-outgoing-request'].includes(props.snapshot.reason ?? ''))
+    return 'success'
+  return 'warning'
+})
 const canStart = computed(() => {
   const parts = options.riotId.trim().split('#')
   return (
@@ -241,4 +307,5 @@ const formatTime = (milliseconds: number) => {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1000))
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
+const formatCheckedTime = (timestamp: number) => new Date(timestamp).toLocaleString()
 </script>

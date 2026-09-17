@@ -4,11 +4,13 @@ import {
   type FriendRequestTestMode,
   type FriendRequestTestOptions,
   type FriendRequestTestReason,
+  type FriendRequestTestRefreshResult,
   type FriendRequestTestStartResult,
   type FriendRequestTestTarget,
   createFriendRequestTestSnapshot
 } from '@shared/shards/friend-request-test'
 import { isAxiosError } from 'axios'
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 
 import type {
@@ -29,6 +31,7 @@ const optionsSchema = z.object({
 })
 
 interface TestRun {
+  id: string
   mode: FriendRequestTestMode
   abort: AbortController
   session: FriendRequestTestSession
@@ -44,6 +47,8 @@ interface TestRun {
   stopReason: FriendRequestTestReason | null
   chatError: FriendRequestTestChatError | null
   mutationStarted: boolean
+  mutationStartedAt: number
+  lastMutation: 'send' | 'withdraw' | 'remove' | null
 }
 
 class TestFinished extends Error {
@@ -68,11 +73,13 @@ const delay = (milliseconds: number, signal: AbortSignal) =>
 
 export class FriendRequestTestController {
   private _run: TestRun | null = null
+  private _lastRun: TestRun | null = null
+  private _refreshAbort: AbortController | null = null
 
   constructor(private readonly _context: FriendRequestTestContext) {}
 
   start(options: unknown, mode: FriendRequestTestMode = 'test'): FriendRequestTestStartResult {
-    if (this._run) return { started: false, reason: 'busy' }
+    if (this._run || this._refreshAbort) return { started: false, reason: 'busy' }
     const parsed = optionsSchema.safeParse(options)
     const parts = parsed.success ? parsed.data.riotId.split('#').map((part) => part.trim()) : []
     if (!parsed.success || parts.length !== 2 || parts.some((part) => !part)) {
@@ -81,6 +88,7 @@ export class FriendRequestTestController {
     const session = this._context.getSession()
     if (!session) return { started: false, reason: 'not-ready' }
     const run: TestRun = {
+      id: randomUUID(),
       mode,
       abort: new AbortController(),
       session,
@@ -95,9 +103,12 @@ export class FriendRequestTestController {
       timer: null,
       stopReason: null,
       chatError: null,
-      mutationStarted: false
+      mutationStarted: false,
+      mutationStartedAt: 0,
+      lastMutation: null
     }
     this._run = run
+    this._lastRun = run
     this._context.state.setSnapshot({
       ...createFriendRequestTestSnapshot(),
       mode,
@@ -107,9 +118,56 @@ export class FriendRequestTestController {
       remainingMs: parsed.data.durationMinutes * 60_000
     })
     run.timer = setInterval(() => this._tick(run), 250)
-    this._context.logger.info('Friend request test started')
+    this._context.logger.info('Friend request test started', {
+      runId: run.id,
+      target: `${parts[0]}#${parts[1]}`,
+      mode,
+      durationMinutes: run.options.durationMinutes,
+      intervalSeconds: run.options.intervalSeconds,
+      removeAccepted: run.options.removeAccepted
+    })
     void this._execute(run, parts[0], parts[1])
     return { started: true }
+  }
+
+  async refreshRelationship(): Promise<FriendRequestTestRefreshResult> {
+    if (this._run || this._refreshAbort) return { refreshed: false, reason: 'busy' }
+    const run = this._lastRun
+    if (!run?.target) return { refreshed: false, reason: 'target-not-found' }
+    if (!this._sameSession(run)) {
+      this._context.state.update({ relationship: null })
+      return { refreshed: false, reason: 'session-changed' }
+    }
+    const abort = new AbortController()
+    this._refreshAbort = abort
+    this._context.state.update({ refreshing: true })
+    try {
+      const relationship = await this._context.api.relationship(run.target.puuid, abort.signal)
+      abort.signal.throwIfAborted()
+      if (!this._sameSession(run)) throw new Error('session-changed')
+      this._recordRelationship(run, relationship, 'refresh')
+      this._context.state.update({
+        mayHaveRelationship: !!(relationship.friend || relationship.request)
+      })
+      return { refreshed: true }
+    } catch (error) {
+      const reason = !this._sameSession(run)
+        ? 'session-changed'
+        : error instanceof Error && error.message === 'invalid-response'
+          ? 'invalid-response'
+          : 'request-failed'
+      // Never present a previous successful read as the result of a failed refresh.
+      this._context.state.update({ relationship: null })
+      this._context.logger.warn('Friend request relationship refresh failed', {
+        runId: run.id,
+        reason,
+        httpStatus: isAxiosError(error) ? (error.response?.status ?? null) : null
+      })
+      return { refreshed: false, reason }
+    } finally {
+      this._refreshAbort = null
+      this._context.state.update({ refreshing: false })
+    }
   }
 
   pause() {
@@ -120,6 +178,7 @@ export class FriendRequestTestController {
     run.paused = true
     run.revision++
     this._context.state.update({ paused: true })
+    this._context.logger.info('Friend request test paused', { runId: run.id })
   }
 
   resume() {
@@ -133,9 +192,11 @@ export class FriendRequestTestController {
     run.revision++
     run.lastTick = performance.now()
     this._context.state.update({ paused: false })
+    this._context.logger.info('Friend request test resumed', { runId: run.id })
   }
 
   stop(reason: FriendRequestTestReason = 'user-stopped') {
+    this._refreshAbort?.abort()
     const run = this._run
     if (!run || run.abort.signal.aborted) return
     run.stopReason = reason
@@ -207,6 +268,7 @@ export class FriendRequestTestController {
       // A pause can last indefinitely. Never act on a relationship read before that pause.
       if (run.paused || revision !== run.revision) continue
       this._advanceClock(run)
+      this._recordRelationship(run, relationship, 'test')
       // Chat's two lists are not an atomic snapshot while a request is accepted.
       if (relationship.friend && relationship.request) {
         if (++inconsistentReads >= 3) throw new Error('invalid-response')
@@ -219,13 +281,56 @@ export class FriendRequestTestController {
     }
   }
 
+  private _recordRelationship(
+    run: TestRun,
+    relationship: FriendTestRelationship,
+    source: 'test' | 'refresh'
+  ) {
+    const previous = this._context.state.snapshot.relationship
+    const current = {
+      isFriend: !!relationship.friend,
+      direction: relationship.request?.direction ?? null,
+      checkedAt: Date.now()
+    }
+    this._context.state.update({ relationship: current })
+    if (
+      source === 'refresh' ||
+      !previous ||
+      previous.isFriend !== current.isFriend ||
+      previous.direction !== current.direction
+    ) {
+      // Only this target's relationship summary is recorded, never chat payloads or credentials.
+      this._context.logger.info('Friend request relationship observed', {
+        runId: run.id,
+        source,
+        isFriend: current.isFriend,
+        direction: current.direction,
+        previous: previous ? { isFriend: previous.isFriend, direction: previous.direction } : null,
+        lastMutation: run.lastMutation,
+        activeMs: Math.round(run.activeMs)
+      })
+    }
+  }
+
   private _beginMutation(run: TestRun, operation: 'send' | 'withdraw' | 'remove') {
     run.chatError = null
     run.mutationStarted = true
-    this._context.state.update({ lastOperation: operation, chatError: null })
+    run.mutationStartedAt = performance.now()
+    run.lastMutation = operation
+    this._context.state.update({
+      lastOperation: operation,
+      pendingOperation: operation,
+      chatError: null
+    })
+    this._context.logger.info('Friend request operation started', { runId: run.id, operation })
   }
 
   private async _confirmRelationship(run: TestRun, operation: 'send' | 'withdraw' | 'remove') {
+    this._context.logger.info('Friend request operation acknowledged; awaiting relationship', {
+      runId: run.id,
+      operation,
+      requestMs: Math.round(performance.now() - run.mutationStartedAt)
+    })
     // A successful LCU response only acknowledges a queued chat operation. Allow a
     // delayed server update, and require two empty observations before another send.
     const startedAt = run.activeMs
@@ -424,9 +529,11 @@ export class FriendRequestTestController {
           phase,
           reason,
           waitRemainingMs: 0,
+          pendingOperation: null,
           remainingMs: Math.max(0, run.options.durationMinutes * 60_000 - run.activeMs)
         })
         this._context.logger.info('Friend request test ended', {
+          runId: run.id,
           phase,
           reason,
           mode: run.mode,
@@ -434,6 +541,9 @@ export class FriendRequestTestController {
           withdrawn: this._context.state.snapshot.withdrawn,
           removed: this._context.state.snapshot.removed,
           operation: this._context.state.snapshot.lastOperation,
+          lastMutation: run.lastMutation,
+          relationship: this._context.state.snapshot.relationship,
+          lastSendIntervalMs: this._context.state.snapshot.lastSendIntervalMs,
           httpStatus: this._context.state.snapshot.httpStatus,
           chatError: this._context.state.snapshot.chatError
         })

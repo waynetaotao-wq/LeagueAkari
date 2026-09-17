@@ -582,7 +582,7 @@ toolkit:
     duration: Duration (minutes)
     interval: Interval (seconds)
     accepted: Remove accepted test friendship and continue
-    acceptedHint: Only removes a friendship newly established after this test sends its request. When disabled, acceptance ends the test and keeps the friendship.
+    acceptedHint: Applies only to friendships created by requests sent during the current active test. Friendships formed after the test ends or present before a restart are kept. When disabled, acceptance ends the test and keeps the friendship.
     consent: I control this account, or its owner has explicitly agreed to this test
     start: Start test
     withdrawPending: Withdraw outgoing request only
@@ -594,13 +594,43 @@ toolkit:
     paused: Paused
     unavailable: Connect the client and stay in the home or lobby. Bulk friend deletion must also be inactive.
     remaining: '{{time}} remaining'
+    remainingAtEnd: '{{time}} remained when stopped'
     nextAction: 'Next step in {{time}}'
     sent_one: '{{count}} send confirmed'
     sent_other: '{{count}} sends confirmed'
-    withdrawn_one: '{{count}} request withdrawn'
-    withdrawn_other: '{{count}} requests withdrawn'
-    removed_one: '{{count}} test friendship removed'
-    removed_other: '{{count}} test friendships removed'
+    withdrawn_one: '{{count}} withdrawal confirmed'
+    withdrawn_other: '{{count}} withdrawals confirmed'
+    removed_one: '{{count}} test friendship removal confirmed'
+    removed_other: '{{count}} test friendship removals confirmed'
+    countsHint: Counts include confirmed results only. A relationship change after submission may leave the count unchanged.
+    confirmationHint: The operation was submitted. Waiting for the client relationship update before counting it and continuing.
+    confirmations:
+      send: Send submitted; awaiting confirmation
+      withdraw: Withdrawal submitted; awaiting confirmation
+      remove: Friend removal submitted; awaiting confirmation
+    endedReason: Why the last operation ended
+    relationshipTitle: Relationship check for this account
+    relationshipChecked: 'Checked at {{time}}; this result does not refresh automatically'
+    relationshipCheckedDuringRun: 'Last read at {{time}}'
+    refreshRelationship: Recheck relationship
+    refreshing: Checking friends and requests…
+    refreshFailed: This check failed. The current relationship could not be confirmed.
+    relationships:
+      unknown: No valid relationship result
+      none: No friendship or pending request found
+      out: You have an outgoing request
+      in: The client reports an incoming request
+      both: The client reports requests in both directions
+      friend: Already friends
+      syncing: Both friendship and request are present; recheck needed
+    nextSteps:
+      unknown: Recheck to obtain a result. If the connection or account changed, inspect the game client.
+      none: This check found no relationship to clear. Start again if needed; the test will check once more before sending.
+      out: Confirm that the input above names this account, then use single withdrawal to clear the outgoing request.
+      in: Handle the incoming request in the game client, then recheck. Single withdrawal only handles your outgoing requests.
+      both: Review and handle the mutual requests in the game client, then recheck. The test does not continue in this state.
+      friend: To test again, handle this friendship in the game client first, then recheck. Single withdrawal does not delete friends, and an ended test will not resume deleting.
+      syncing: Recheck shortly. The two relationship lists do not yet agree, so the next step is uncertain.
     actualInterval: 'Last two sends were {{seconds}} seconds apart (including pauses and request time)'
     httpFailure: 'HTTP {{status}} while {{operation}}'
     chatFailure: 'Concurrent chat service error: {{code}} / {{category}}. This event identifies no target and does not prove rate limiting.'
@@ -624,7 +654,7 @@ toolkit:
       failed: Test interrupted
     reasons:
       invalid-options: Enter a complete name#tag, valid timing, and confirm that the account is within the agreed test scope.
-      busy: A test is still active. Stop or resume the current task first.
+      busy: A test or relationship check is still active. Wait for it, or pause or stop the running test.
       not-ready: The client is not ready or is outside the home or lobby.
       session-changed: The connection, account, or game phase changed. The test stopped.
       target-not-found: No exact account match in the current region. Check the name and tag.
@@ -633,7 +663,7 @@ toolkit:
       invalid-response: Relationship data is incomplete or conflicting. The test stopped.
       request-not-confirmed: The submitted request could not be confirmed. The test stopped; please check the client.
       request-disappeared: The request disappeared, possibly after rejection or manual withdrawal. The test ended without resending.
-      incoming-request: An incoming request was detected. The test ended; handle it manually.
+      incoming-request: The client reported an incoming or mutual request, so the test stopped. This does not establish what the other player clicked; see the relationship result below.
       accepted-kept: A friendship exists. It was kept and this operation ended.
       removal-not-confirmed: Cleanup was submitted, but the relationship did not clear during confirmation. The test stopped. If an outgoing request remains, try single withdrawal later.
       rate-limited: The client or server limited the request rate. The test stopped without retrying.
