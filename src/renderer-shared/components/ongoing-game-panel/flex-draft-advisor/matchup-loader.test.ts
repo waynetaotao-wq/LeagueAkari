@@ -2,7 +2,7 @@ import type {
   ChampionDataDetails,
   ChampionDataLoadResult
 } from '@shared/data-adapter/champion-data'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { DraftMatchupLoader, readMatchupSamples } from './matchup-loader'
 
@@ -28,6 +28,8 @@ function details(championId = 13): ChampionDataDetails {
     }
   } as ChampionDataDetails
 }
+
+afterEach(() => vi.useRealTimers())
 
 describe('Flex draft matchup source contract', () => {
   it('keeps the queried champion perspective and rejects mismatched patch, position or source', () => {
@@ -112,5 +114,58 @@ describe('Flex draft matchup source contract', () => {
     const next = await loader.load('middle', [13], new AbortController().signal)
     expect(next.samples[13]).toHaveLength(1)
     expect(source.loadDetails).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns completed results at the deadline even when another IPC call ignores cancellation', async () => {
+    vi.useFakeTimers()
+    let finish!: (data: ChampionDataLoadResult<ChampionDataDetails>) => void
+    const source = {
+      loadPatches: vi.fn(async () => success(['16.18'])),
+      loadDetails: vi.fn(async (_query, id: number) =>
+        id === 13
+          ? success(details(id))
+          : new Promise<ChampionDataLoadResult<ChampionDataDetails>>(
+              (resolve) => (finish = resolve)
+            )
+      )
+    }
+    const loader = new DraftMatchupLoader(source)
+    const request = loader.load('middle', [13, 103], new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(30_001)
+    expect(await request).toMatchObject({
+      patch: '16.18',
+      samples: { 13: [{ championId: 105 }] },
+      failed: [103]
+    })
+    finish(success(details(103)))
+    source.loadDetails.mockImplementation(async (_query, id) => success(details(id)))
+    const retry = await loader.load('middle', [13, 103], new AbortController().signal)
+    expect(retry.failed).toEqual([])
+    expect(source.loadDetails).toHaveBeenCalledTimes(3)
+  })
+
+  it('never mixes cached previous-patch statistics into a partially available new patch', async () => {
+    vi.useFakeTimers()
+    const source = {
+      loadPatches: vi.fn(async () => success(['16.18'])),
+      loadDetails: vi.fn(async (_query, id: number) => success(details(id)))
+    }
+    const loader = new DraftMatchupLoader(source)
+    const signal = new AbortController().signal
+    await loader.load('middle', [13, 103], signal)
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    source.loadPatches.mockResolvedValue(success(['16.19']))
+    source.loadDetails.mockImplementation(async (_query, id) => {
+      const data = details(id)
+      if (id === 13) data.metadata.patch = '16.19'
+      return success(data)
+    })
+    const progress = vi.fn()
+    const next = await loader.load('middle', [13, 103], signal, progress)
+    expect(next.patch).toBe('16.19')
+    expect(next.failed).toEqual([103])
+    expect(next.samples[103]).toBeUndefined()
+    expect(progress.mock.calls.every(([r]) => r.patch === '16.19' && !r.samples[103])).toBe(true)
+    expect(source.loadPatches).toHaveBeenCalledTimes(2)
   })
 })

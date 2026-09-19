@@ -48,15 +48,30 @@
             <ChampionIcon :champion-id="ban.championId" class="draft-champion" />
             <div class="draft-card-copy">
               <strong>{{ index + 1 }}. {{ championName(ban.championId) }}</strong>
-              <span class="draft-player" :title="playerNames[ban.player.puuid]">{{
-                playerNames[ban.player.puuid]
-              }}</span>
+              <span
+                class="draft-player"
+                :title="
+                  [ban.player, ...ban.otherPlayers].map((p) => playerNames[p.puuid]).join(' · ')
+                "
+              >
+                {{ playerNames[ban.player.puuid] }}
+                <span v-if="ban.otherPlayers.length">{{
+                  t('ongoingGame.flexDraft.alsoUsed', { count: ban.otherPlayers.length })
+                }}</span>
+              </span>
               <span class="draft-muted">{{
-                t('ongoingGame.flexDraft.poolUsage', { games: ban.games, total: ban.poolGames })
+                t('ongoingGame.flexDraft.poolUsage', { games: ban.games, count: ban.poolGames })
               }}</span>
-              <span v-if="expanded" class="draft-muted">{{
-                t('ongoingGame.flexDraft.historyWins', { wins: ban.wins, games: ban.games })
-              }}</span>
+              <span v-if="expanded" class="draft-muted">
+                <TranslationComponent :translation="t('ongoingGame.flexDraft.historyWins')">
+                  <template #games>{{
+                    t('ongoingGame.flexDraft.games', { count: ban.games })
+                  }}</template>
+                  <template #wins>{{
+                    t('ongoingGame.flexDraft.wins', { count: ban.wins })
+                  }}</template>
+                </TranslationComponent>
+              </span>
             </div>
           </div>
         </div>
@@ -87,7 +102,7 @@
             v-for="(pick, index) in picks.slice(0, 3)"
             :key="pick.championId"
             class="draft-card"
-            :class="{ 'draft-card-first': index === 0 && pick.score !== null }"
+            :class="{ 'draft-card-first': index === 0 && pick.outlook === 'favorable' }"
           >
             <ChampionIcon :champion-id="pick.championId" class="draft-champion" />
             <div class="draft-card-copy">
@@ -95,22 +110,33 @@
                 >{{ pick.score !== null ? `${index + 1}. ` : ''
                 }}{{ championName(pick.championId) }}</strong
               >
-              <span :class="pick.score !== null ? 'draft-positive' : 'draft-muted'">{{
-                t(
-                  pick.score !== null
-                    ? 'ongoingGame.flexDraft.coverage'
-                    : loading
-                      ? 'ongoingGame.flexDraft.loading'
-                      : 'ongoingGame.flexDraft.insufficient',
-                  { rate: percent(pick.coverage) }
-                )
+              <span
+                :class="
+                  pick.outlook === 'favorable'
+                    ? 'draft-positive'
+                    : pick.outlook === 'unfavorable'
+                      ? 'draft-negative'
+                      : 'draft-muted'
+                "
+                >{{
+                  t(
+                    pick.score !== null
+                      ? `ongoingGame.flexDraft.outlook.${pick.outlook}`
+                      : loading
+                        ? 'ongoingGame.flexDraft.loading'
+                        : 'ongoingGame.flexDraft.insufficient'
+                  )
+                }}</span
+              >
+              <span v-if="pick.score !== null" class="draft-muted">{{
+                t('ongoingGame.flexDraft.coverage', { rate: percent(pick.coverage) })
               }}</span>
               <span class="draft-muted">{{
                 t(
                   pick.games
                     ? 'ongoingGame.flexDraft.familiarGames'
-                    : 'ongoingGame.flexDraft.manualChampion',
-                  { games: pick.games }
+                    : 'ongoingGame.flexDraft.noRoleHistory',
+                  { count: pick.games }
                 )
               }}</span>
               <span v-if="pick.worst && pick.score !== null" class="draft-caution">{{
@@ -133,6 +159,9 @@
             t('ongoingGame.flexDraft.editPool')
           }}</NButton>
         </div>
+        <div v-if="noFavorablePick" class="draft-pick-note">
+          {{ t('ongoingGame.flexDraft.noFavorablePick') }}
+        </div>
       </div>
     </div>
 
@@ -143,12 +172,14 @@
       }}</span>
       <span v-else
         >{{ t('ongoingGame.flexDraft.target', { target: targetLabel })
-        }}<span v-if="target.unknownRole">
+        }}<span v-if="target.unknownRole || ownPoolHasNoPosition">
           · {{ t('ongoingGame.flexDraft.unknownRole') }}</span
         ></span
       >
       <span v-if="patch">{{ t('ongoingGame.flexDraft.source', { patch }) }}</span>
-      <span v-else-if="loading">{{ t('ongoingGame.flexDraft.loading') }}</span>
+      <span v-if="loading">{{
+        t(patch ? 'ongoingGame.flexDraft.updating' : 'ongoingGame.flexDraft.loading')
+      }}</span>
       <NButton v-if="failed" text type="warning" size="tiny" @click="emit('retry')">{{
         t('ongoingGame.flexDraft.retry')
       }}</NButton>
@@ -158,20 +189,29 @@
       <div class="draft-pool-editor">
         <span>{{ t('ongoingGame.flexDraft.myPool') }}</span>
         <NSelect
-          :value="comfortable ?? picks.map((p) => p.championId)"
+          :value="
+            context.self.lockedChampionId
+              ? [context.self.lockedChampionId]
+              : (comfortable ?? picks.map((p) => p.championId))
+          "
           multiple
           filterable
           clearable
           :max-tag-count="5"
           :options="championOptions"
           :max="MAX_CANDIDATES"
+          :disabled="Boolean(context.self.lockedChampionId)"
           :placeholder="t('ongoingGame.flexDraft.poolPlaceholder')"
           :aria-label="t('ongoingGame.flexDraft.myPool')"
           @update:value="emit('update:comfortable', $event)"
         />
-        <NButton size="small" secondary @click="emit('update:comfortable', null)">{{
-          t('ongoingGame.flexDraft.autoPool')
-        }}</NButton>
+        <NButton
+          size="small"
+          secondary
+          :disabled="Boolean(context.self.lockedChampionId)"
+          @click="emit('update:comfortable', null)"
+          >{{ t('ongoingGame.flexDraft.autoPool') }}</NButton
+        >
       </div>
       <div class="draft-muted">{{ t('ongoingGame.flexDraft.method') }}</div>
       <div class="draft-opponents">
@@ -179,7 +219,7 @@
           {{ playerNames[entry.player.puuid] }} ·
           {{
             t('ongoingGame.flexDraft.familiarGames', {
-              games: histories[entry.player.puuid]?.games ?? 0
+              count: histories[entry.player.puuid]?.games ?? 0
             })
           }}
           <span v-if="entry.player.lockedChampionId">
@@ -226,8 +266,8 @@
 
 <script setup lang="ts">
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
-import { useTranslation } from 'i18next-vue'
-import { NButton, NSelect } from 'naive-ui'
+import { TranslationComponent, useTranslation } from 'i18next-vue'
+import { NButton, NSelect, useThemeVars } from 'naive-ui'
 import { computed, ref } from 'vue'
 
 import {
@@ -267,9 +307,21 @@ const emit = defineEmits<{
   retry: []
 }>()
 const { t } = useTranslation()
+const themeVars = useThemeVars()
 const expanded = ref(false)
 const percent = (value: number) => Math.round(value * 100)
 const championName = (id: number) => props.championNames[id] ?? `#${id}`
+const noFavorablePick = computed(
+  () =>
+    !props.loading &&
+    !props.context.self.lockedChampionId &&
+    props.picks.length > 0 &&
+    props.picks.every((p) => p.score !== null && p.outlook !== 'favorable')
+)
+const ownPoolHasNoPosition = computed(() => {
+  const history = props.histories[props.context.self.puuid]
+  return history?.games > 0 && history.unknownRoleGames === history.games
+})
 const roleOptions = computed(() =>
   DRAFT_ROLES.map((value) => ({ label: t(`ongoingGame.flexDraft.roles.${value}`), value }))
 )
@@ -277,7 +329,13 @@ const opponentOptions = computed(() =>
   props.context.enemies.map((p) => ({ label: props.playerNames[p.puuid], value: p.puuid }))
 )
 const championOptions = computed(() =>
-  [...new Set([...props.pickableIds, ...(props.comfortable ?? [])])]
+  [
+    ...new Set([
+      ...props.pickableIds,
+      ...(props.comfortable ?? []),
+      ...props.picks.map((p) => p.championId)
+    ])
+  ]
     .map((id) => ({
       label: championName(id),
       value: id,
@@ -296,8 +354,8 @@ const targetLabel = computed(() => {
 function pairLabel(pick: PickAdvice, id: number) {
   const row = pick.rows.find((row) => row.championId === id)
   if (row?.winRate === null || row?.winRate === undefined)
-    return row?.games ? t('ongoingGame.flexDraft.smallSample', { games: row.games }) : '—'
-  return t('ongoingGame.flexDraft.pair', { rate: (row.winRate * 100).toFixed(1), games: row.games })
+    return row?.games ? t('ongoingGame.flexDraft.smallSample', { count: row.games }) : '—'
+  return t('ongoingGame.flexDraft.pair', { rate: (row.winRate * 100).toFixed(1), count: row.games })
 }
 </script>
 
@@ -423,6 +481,15 @@ function pairLabel(pick: PickAdvice, id: number) {
 .draft-positive {
   color: var(--la-color-link);
   font-size: 11px;
+}
+.draft-negative {
+  color: v-bind('themeVars.warningColor');
+  font-size: 11px;
+}
+.draft-pick-note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--la-color-text-primary) 80%, transparent);
 }
 .draft-caution {
   color: color-mix(in srgb, var(--la-color-text-primary) 70%, transparent);

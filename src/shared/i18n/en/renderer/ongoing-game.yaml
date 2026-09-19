@@ -8,8 +8,15 @@ ongoingGame:
     collapse: Hide details
     bans: Ban priorities
     banBasis: Opponent mains · Ally intents protected
-    poolUsage: '{{games}} of {{total}} recent games'
-    historyWins: '{{wins}} wins in {{games}} games'
+    poolUsage_one: '{{games}} of {{count}} recent game'
+    poolUsage_other: '{{games}} of {{count}} recent games'
+    historyWins: '{games} · {wins}'
+    games_one: '{{count}} game'
+    games_other: '{{count}} games'
+    wins_one: '{{count}} win'
+    wins_other: '{{count}} wins'
+    alsoUsed_one: '+ {{count}} other regular user'
+    alsoUsed_other: '+ {{count}} other regular users'
     banFinished: Bans completed. Pick analysis continues.
     historyLoading: Loading Flex history…
     noBans: No eligible ban with enough history, or the client has not supplied ban availability.
@@ -18,27 +25,36 @@ ongoingGame:
     pickBasis: Familiarity · Opponent pool coverage
     coverage: '{{rate}}% matchup data coverage'
     loading: Loading matchup statistics…
+    updating: Loading remaining current statistics…
     insufficient: Insufficient data to rank
-    familiarGames: '{{games}} recent Flex games'
-    manualChampion: Manually chosen comfort pick
+    familiarGames_one: '{{count}} recent Flex game'
+    familiarGames_other: '{{count}} recent Flex games'
+    noRoleHistory: No recent Flex history for this role
+    outlook:
+      favorable: Known matchups lean favorable
+      even: Known matchups near even
+      unfavorable: Known matchups lean unfavorable
+    noFavorablePick: No clearly favorable option in this pool. Ranking shows relative tradeoffs; consider adjusting your comfort picks.
     watchOut: 'Watch out for {{champion}}'
     chooseRoleHint: Position unknown. Select your position first.
     choosePoolHint: Not enough familiar champions for this role, or none are available.
     editPool: Choose comfort picks
     chooseOpponentHint: Insufficient position history. Select your lane opponent.
     target: 'Matchup basis: {{target}}'
-    unknownRole: Some history lacks positions; all-position reference only
+    unknownRole: Some champion pools lack positions; all-position reference only
     source: 'OP.GG {{patch}} · KR Emerald+ ranked matchups (not Flex-specific win rates)'
     retry: Some statistics unavailable · Retry
     myPool: My comfort picks
     poolPlaceholder: Up to 10 comfort picks for this draft
     autoPool: Restore automatic
-    method: Uses only loaded, valid Flex games from the last 90 days, up to the latest 50 per player. Automatic picks require 2 recent games in this role; adjust manually when needed. Bans consider usage concentration and sample size. Picks balance matchups, weak points and familiarity. Pairs below 50 games stay unranked; overall coverage must reach 60%. This is a heuristic, not a win prediction or guaranteed counter. Hovers are not locks; correct positions after swaps.
+    method: Uses only loaded, valid Flex games from the last 90 days, up to the latest 50 per player. Automatic picks require 2 recent games in this role; adjust manually when needed. Bans combine usage and sample size across opponents; card counts belong to the first listed player. Picks balance matchups, weak points and familiarity. Outlook describes smoothed known matchup statistics without familiarity bonuses; it does not measure lane or solo-kill advantage. Pairs below 50 games stay unranked; coverage must reach 60%. This heuristic has not been calibrated against Flex outcomes and does not predict wins or guarantee counters. Hovers are not locks; correct positions after swaps.
     locked: 'Locked {{champion}}'
     tableCaption: Each cell shows the column champion’s ranked win rate against the row champion and sample count. Row percentages are analysis weights, not pick probabilities. Coverage measures sufficient data, not favorable matchups. Cards show the first three options; this table compares all candidates.
     matchup: Opponent pool
-    smallSample: 'Only {{games}} games'
-    pair: '{{rate}}% / {{games}} games'
+    smallSample_one: 'Only {{count}} game'
+    smallSample_other: 'Only {{count}} games'
+    pair_one: '{{rate}}% / {{count}} game'
+    pair_other: '{{rate}}% / {{count}} games'
     targetSources:
       manual: 'Manual · {{player}}'
       client: 'Client position · {{player}}'

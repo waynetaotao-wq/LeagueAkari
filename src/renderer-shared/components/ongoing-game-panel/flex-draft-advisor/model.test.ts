@@ -122,6 +122,15 @@ describe('history and ranking evidence', () => {
       roles: { middle: 0 },
       champions: [{ championId: 13, wins: 1 }]
     })
+    const fixture = createDraftFixture()
+    const context = getDraftContext(fixture.game, fixture.session)!
+    const target = (data: LcuOrSgpGameSummary[]) =>
+      buildTargetPool(context, { 'player-7': readPlayerHistory('player', data) }, 'middle', null)
+    expect(target([game]).unknownRole).toBe(true)
+    // With known-position data, unknown-position games are excluded, not called an all-lane pool.
+    const mixed = target([game, ...historyFixture('player', [105])])
+    expect(mixed.unknownRole).toBe(false)
+    expect(mixed.champions.map((p) => p.championId)).toEqual([105])
   })
 
   it('recomputes the opponent pool after bans and locks, with manual overrides', () => {
@@ -241,5 +250,51 @@ describe('history and ranking evidence', () => {
     expect(picks.find((p) => p.championId === 103)?.worst?.championId).toBe(7)
     expect(picks[2]).toMatchObject({ championId: 238, score: null, coverage: 0 })
     expect(picks[2].rows.map((p) => p.winRate)).toEqual([null, null])
+  })
+
+  it('does not mistake full data coverage or familiarity for favorable matchups', () => {
+    const target: TargetPool = {
+      source: 'manual',
+      players: [],
+      unknownRole: false,
+      champions: [{ championId: 105, weight: 1 }]
+    }
+    const picks = rankPicks(
+      [13, 103, 238].map((championId) => ({ championId, games: 50, wins: 40 })),
+      target,
+      {
+        13: [{ championId: 105, games: 1000, wins: 560 }],
+        103: [{ championId: 105, games: 1000, wins: 500 }],
+        238: [{ championId: 105, games: 1000, wins: 460 }]
+      }
+    )
+    expect(picks.map((p) => p.coverage)).toEqual([1, 1, 1])
+    expect(picks.map((p) => p.outlook)).toEqual(['favorable', 'even', 'unfavorable'])
+    expect(picks[0].worst).toBeNull()
+    expect(picks[1].worst).toBeNull()
+    expect(picks[2].worst?.championId).toBe(105)
+  })
+
+  it('accounts for a shared main across opponents without adding their games to one player', () => {
+    const { game, session } = createDraftFixture()
+    const context = getDraftContext(game, session)!
+    const histories = Object.fromEntries(
+      ['player-5', 'player-7'].map((id) => [
+        id,
+        readPlayerHistory(id, historyFixture(id, [105, 105, 105, 105]))
+      ])
+    )
+    const [ban] = rankBans(context, histories, new Set([105]), new Set(), [])
+    const [single] = rankBans(
+      context,
+      { 'player-7': histories['player-7'] },
+      new Set([105]),
+      new Set(),
+      []
+    )
+    expect(ban.score).toBeCloseTo(single.score * 2)
+    expect(ban.games).toBe(4)
+    expect(ban.poolGames).toBe(4)
+    expect(ban.otherPlayers).toHaveLength(1)
   })
 })

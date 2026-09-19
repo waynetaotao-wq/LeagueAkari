@@ -14,5 +14,7 @@ export const Normal: Story = {}
 export const Locked: Story = { args: { initialScenario: 'locked' } }
 export const Inferred: Story = { args: { initialScenario: 'inferred' } }
 export const Partial: Story = { args: { initialScenario: 'partial' } }
+export const Unfavorable: Story = { args: { initialScenario: 'unfavorable' } }
+export const SelfLocked: Story = { args: { initialScenario: 'selfLocked' } }
 export const Empty: Story = { args: { initialScenario: 'empty' } }
 export const Solo: Story = { args: { initialScenario: 'solo' } }

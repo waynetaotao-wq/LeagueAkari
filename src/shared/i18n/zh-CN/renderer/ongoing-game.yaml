@@ -8,8 +8,11 @@ ongoingGame:
     collapse: 收起详情
     bans: 优先禁用
     banBasis: 对手常玩 · 避开我方意向
-    poolUsage: '近期 {{total}} 场中玩了 {{games}} 场'
-    historyWins: '{{games}} 场 {{wins}} 胜'
+    poolUsage: '近期 {{count}} 场中玩了 {{games}} 场'
+    historyWins: '{games} · {wins}'
+    games: '{{count}} 场'
+    wins: '{{count}} 胜'
+    alsoUsed: '· 另 {{count}} 人也常玩'
     banFinished: 禁用已结束，继续分析选人。
     historyLoading: 正在读取五排战绩…
     noBans: 暂无足够样本的可禁英雄，或客户端尚未提供可禁列表。
@@ -18,27 +21,33 @@ ongoingGame:
     pickBasis: 熟练度 · 整个对位英雄池
     coverage: '对位数据覆盖 {{rate}}%'
     loading: 正在读取对位统计…
+    updating: 继续补齐最新统计…
     insufficient: 对位数据不足，暂不排名
-    familiarGames: '近期五排 {{games}} 场'
-    manualChampion: 本局手选熟练英雄
+    familiarGames: '近期五排 {{count}} 场'
+    noRoleHistory: 暂无该位置五排记录
+    outlook:
+      favorable: 已知对位偏有利
+      even: 已知对位接近均势
+      unfavorable: 已知对位偏不利
+    noFavorablePick: 当前候选未见明显有利选择，排序仅供相对取舍；可调整熟练英雄池。
     watchOut: '重点留意 {{champion}}'
     chooseRoleHint: 位置尚未确定，请先选择自己的位置。
     choosePoolHint: 该位置的常玩英雄不足，或暂无可选英雄。
     editPool: 选择我会玩的英雄
     chooseOpponentHint: 对手位置样本不足，请手动指定对位玩家。
     target: '对位依据：{{target}}'
-    unknownRole: 部分战绩无位置，仅作全位置参考
+    unknownRole: 部分英雄池缺少位置数据，按全位置参考
     source: 'OP.GG {{patch}} · 韩国翡翠+排位对位参考（非五排专属胜率）'
     retry: 部分统计不可用 · 重试
     myPool: 我会玩的英雄
     poolPlaceholder: 最多选择 10 个本局熟练英雄
     autoPool: 恢复自动
-    method: 只使用已加载、90 天内最近至多 50 场有效五排战绩；默认选近期该位置至少玩过 2 场的英雄，可手动调整。禁用优先考虑常玩占比和样本量；选人综合对位表现、薄弱对位及熟练度。单组不足 50 场留空，数据覆盖不足 60% 不排名。此排序是参考，不代表本局胜率或保证克制；预选不算锁定，交换位置后可手动纠正。
+    method: 只使用已加载、90 天内最近至多 50 场有效五排战绩；默认选近期该位置至少玩过 2 场的英雄，可手动调整。禁用综合多名对手的常玩占比和样本量，卡片场次属于列出的首位玩家。选人综合对位表现、薄弱对位及熟练度；有利/均势/不利描述已知对位的平滑统计，不含熟练度加分，也不表示单杀或对线优势。单组不足 50 场留空，数据覆盖不足 60% 不排名。此排序未经五排实战校准，不代表本局胜率或保证克制；预选不算锁定，交换位置后可手动纠正。
     locked: '已锁 {{champion}}'
     tableCaption: 数字为上方我方英雄对左侧敌方英雄的排位胜率 / 样本数；左侧百分比是英雄池分析权重，不是对手选择概率。覆盖率只表示有足够数据的比例，不等于优势比例。默认只列前三项，表中可比较全部候选。
     matchup: 敌方英雄池
-    smallSample: '仅 {{games}} 场'
-    pair: '{{rate}}% / {{games}} 场'
+    smallSample: '仅 {{count}} 场'
+    pair: '{{rate}}% / {{count}} 场'
     targetSources:
       manual: '手动 · {{player}}'
       client: '客户端位置 · {{player}}'

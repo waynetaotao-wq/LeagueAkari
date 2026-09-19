@@ -27,6 +27,7 @@ export function useDraftAdvisor() {
   const loading = ref(false)
   const failed = ref(false)
   const result = shallowRef<DraftMatchups>({ patch: null, samples: {}, failed: [] })
+  const resultScope = ref<string | null>(null)
   const context = computed(() => getDraftContext(game, leagueClient.champSelect.session))
   watch(
     () => context.value?.key,
@@ -34,6 +35,14 @@ export function useDraftAdvisor() {
       selectedRole.value = null
       selectedOpponent.value = null
       comfortable.value = null
+    },
+    { flush: 'sync' }
+  )
+  watch(
+    () => context.value?.enemies,
+    (enemies) => {
+      if (selectedOpponent.value && !enemies?.some((p) => p.puuid === selectedOpponent.value))
+        selectedOpponent.value = null
     },
     { flush: 'sync' }
   )
@@ -57,6 +66,9 @@ export function useDraftAdvisor() {
     context.value
       ? buildTargetPool(context.value, histories.value, role.value, selectedOpponent.value)
       : null
+  )
+  const currentScope = computed(() =>
+    context.value && role.value ? `${context.value.key}:${role.value}` : null
   )
   const candidates = computed(() =>
     context.value
@@ -82,7 +94,13 @@ export function useDraftAdvisor() {
       : []
   )
   const picks = computed(() =>
-    target.value ? rankPicks(candidates.value, target.value, result.value.samples) : []
+    target.value
+      ? rankPicks(
+          candidates.value,
+          target.value,
+          resultScope.value === currentScope.value ? result.value.samples : {}
+        )
+      : []
   )
   const championNames = computed(() =>
     Object.fromEntries(Object.values(leagueClient.gameData.champions).map((c) => [c.id, c.name]))
@@ -125,21 +143,31 @@ export function useDraftAdvisor() {
       ]),
     (_, __, onCleanup) => {
       const controller = new AbortController()
-      result.value = { patch: null, samples: {}, failed: [] }
+      if (resultScope.value !== currentScope.value)
+        result.value = { patch: null, samples: {}, failed: [] }
+      resultScope.value = currentScope.value
       failed.value = false
       loading.value = false
       const lane = role.value
       const ids = candidates.value.map((p) => p.championId)
-      if (!context.value || !lane || !ids.length || !target.value?.champions.length) return
+      if (!context.value || !lane || !ids.length || !target.value?.champions.length) {
+        result.value = { patch: null, samples: {}, failed: [] }
+        return
+      }
       loading.value = true
       const timer = setTimeout(async () => {
         try {
-          const data = await loader.load(lane, ids, controller.signal)
+          const data = await loader.load(lane, ids, controller.signal, (partial) => {
+            if (!controller.signal.aborted) result.value = partial
+          })
           if (controller.signal.aborted) return
           result.value = data
           failed.value = data.failed.length > 0 || !data.patch
         } catch {
-          if (!controller.signal.aborted) failed.value = true
+          if (!controller.signal.aborted) {
+            result.value = { patch: null, samples: {}, failed: ids }
+            failed.value = true
+          }
         } finally {
           if (!controller.signal.aborted) loading.value = false
         }
@@ -157,7 +185,7 @@ export function useDraftAdvisor() {
   onScopeDispose(() => clearInterval(interval))
 
   function retry() {
-    loader.clear()
+    // Successful, current-patch samples remain useful; retry only what is absent or expired.
     refresh.value += 1
   }
 

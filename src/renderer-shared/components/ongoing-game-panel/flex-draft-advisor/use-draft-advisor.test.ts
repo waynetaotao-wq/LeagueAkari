@@ -115,4 +115,59 @@ describe('live draft advice lifecycle', () => {
     expect(advisor.failed.value).toBe(false)
     expect(advisor.picks.value[0].score).not.toBeNull()
   })
+
+  it('keeps manual choices while visible identities fill in, but clears a hidden target and a new draft', async () => {
+    const store = useLeagueClientStore()
+    store.champSelect.session!.theirTeam[0].gameName = ''
+    const advisor = scope.run(() => useDraftAdvisor())!
+    advisor.selectedRole.value = 'middle'
+    advisor.selectedOpponent.value = 'player-7'
+    advisor.comfortable.value = [103]
+    await nextTick()
+    store.champSelect.session = {
+      ...store.champSelect.session!,
+      theirTeam: store.champSelect.session!.theirTeam.map((p, i) =>
+        i === 0 ? { ...p, gameName: 'Now visible' } : p
+      )
+    }
+    await nextTick()
+    expect(advisor.selectedRole.value).toBe('middle')
+    expect(advisor.selectedOpponent.value).toBe('player-7')
+    expect(advisor.comfortable.value).toEqual([103])
+    store.champSelect.session = {
+      ...store.champSelect.session!,
+      theirTeam: store.champSelect.session!.theirTeam.map((p, i) =>
+        i === 2 ? { ...p, nameVisibilityType: 'HIDDEN' } : p
+      )
+    }
+    await nextTick()
+    expect(advisor.selectedOpponent.value).toBeNull()
+    expect(advisor.comfortable.value).toEqual([103])
+    store.champSelect.session = { ...store.champSelect.session!, id: 'next-draft' }
+    await nextTick()
+    expect(advisor.selectedRole.value).toBeNull()
+    expect(advisor.comfortable.value).toBeNull()
+  })
+
+  it('shows completed statistics while another pick is still loading and preserves them on retry', async () => {
+    let finish!: (data: ChampionDataLoadResult<ChampionDataDetails>) => void
+    source.loadDetails.mockImplementation(async (_query, id) =>
+      id === 103 ? new Promise((resolve) => (finish = resolve)) : response(id)
+    )
+    const advisor = scope.run(() => useDraftAdvisor())!
+    advisor.comfortable.value = [13, 103]
+    await vi.advanceTimersByTimeAsync(300)
+    expect(advisor.loading.value).toBe(true)
+    expect(advisor.picks.value.find((p) => p.championId === 13)?.score).not.toBeNull()
+    expect(advisor.picks.value.find((p) => p.championId === 103)?.score).toBeNull()
+    finish(response(103))
+    await vi.advanceTimersByTimeAsync(1)
+    advisor.retry()
+    await nextTick()
+    expect(advisor.picks.value.every((p) => p.score !== null)).toBe(true)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(source.loadDetails).toHaveBeenCalledTimes(2)
+    advisor.selectedRole.value = 'top'
+    expect(advisor.picks.value.every((p) => p.score === null)).toBe(true)
+  })
 })

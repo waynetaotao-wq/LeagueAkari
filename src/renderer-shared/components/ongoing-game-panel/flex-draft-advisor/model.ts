@@ -56,6 +56,7 @@ export interface MatchupSample {
 
 export interface PickAdvice extends PoolChampion {
   score: number | null
+  outlook: 'favorable' | 'even' | 'unfavorable' | 'unknown'
   coverage: number
   favorableCoverage: number
   rows: Array<{
@@ -69,6 +70,7 @@ export interface PickAdvice extends PoolChampion {
 
 export interface BanAdvice extends PoolChampion {
   player: DraftPlayer
+  otherPlayers: DraftPlayer[]
   poolGames: number
   score: number
 }
@@ -143,7 +145,8 @@ export function getDraftContext(
   const roster = [...session.myTeam, ...session.theirTeam]
   const bans = actions.filter((action) => action.type === 'ban')
   return {
-    key: `${session.id || session.gameId}:${self.puuid}:${roster.map((m) => `${m.cellId}:${visibleMember(m) ? m.puuid : '?'}`).join(',')}`,
+    // Identities arrive incrementally within one session; they must not reset manual choices.
+    key: `${session.id || session.gameId}:${self.puuid}`,
     self: player(self),
     allies,
     enemies,
@@ -313,7 +316,11 @@ export function buildTargetPool(
             : (roleGames + 1) / ((history?.games ?? 0) + 5)
       }
     })
-    if (!weights.some(({ player }) => (histories[player.puuid]?.roles[role] ?? 0) >= 3))
+    if (
+      !weights.some(
+        ({ player, weight }) => weight > 0 && (histories[player.puuid]?.roles[role] ?? 0) >= 3
+      )
+    )
       return { ...result, source: 'unresolved' }
     // Unseen identities retain uncertainty instead of making one known player look certain.
     const total =
@@ -329,7 +336,7 @@ export function buildTargetPool(
       continue
     }
     const history = histories[player.puuid]
-    if (history?.unknownRoleGames) result.unknownRole = true
+    if (history?.games && history.unknownRoleGames === history.games) result.unknownRole = true
     const pool = rolePool(history, role).filter(
       (row) => !context.banned.has(row.championId) && !context.locked.has(row.championId)
     )
@@ -387,7 +394,7 @@ export function rankBans(
   comfortable: number[]
 ): BanAdvice[] {
   if (context.banFinished) return []
-  const rows = new Map<number, BanAdvice>()
+  const rows = new Map<number, Array<Omit<BanAdvice, 'otherPlayers'>>>()
   for (const player of context.enemies) {
     if (player.lockedChampionId) continue
     const history = histories[player.puuid]
@@ -409,10 +416,20 @@ export function rankBans(
         (history.games / (history.games + 10)) *
         ((champion.wins + 5) / (champion.games + 10))
       const row = { ...champion, player, poolGames: history.games, score }
-      if (score > (rows.get(id)?.score ?? -1)) rows.set(id, row)
+      const group = rows.get(id) ?? []
+      group.push(row)
+      rows.set(id, group)
     }
   }
   return [...rows.values()]
+    .map((group): BanAdvice => {
+      group.sort((a, b) => b.score - a.score || b.games - a.games)
+      return {
+        ...group[0],
+        score: group.reduce((sum, row) => sum + row.score, 0),
+        otherPlayers: group.slice(1).map((row) => row.player)
+      }
+    })
     .sort((a, b) => b.score - a.score || b.games - a.games || a.championId - b.championId)
     .slice(0, 3)
 }
@@ -441,13 +458,23 @@ export function rankPicks(
         weightedEdge += enemy.weight * edge
         if (edge > 0.01) favorableCoverage += enemy.weight
         worstEdge = Math.min(worstEdge, edge)
-        if (!worst || rate < worst.winRate) worst = { championId: enemy.championId, winRate: rate }
+        if (edge < -0.01 && (!worst || rate < worst.winRate))
+          worst = { championId: enemy.championId, winRate: rate }
         return { ...enemy, games: pair.games, winRate: rate }
       })
       return {
         ...candidate,
         rows,
         coverage,
+        // Describe the known matchups independently of familiarity and ranking penalties.
+        outlook:
+          coverage < 0.6
+            ? 'unknown'
+            : weightedEdge / coverage > 0.01
+              ? 'favorable'
+              : weightedEdge / coverage < -0.01
+                ? 'unfavorable'
+                : 'even',
         favorableCoverage,
         worst,
         score:

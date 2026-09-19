@@ -62,6 +62,8 @@ const scenarios = [
   { label: '五排 · 对手已锁定', value: 'locked' },
   { label: '五排 · 推测对位', value: 'inferred' },
   { label: '五排 · 部分统计缺失', value: 'partial' },
+  { label: '五排 · 候选全不利', value: 'unfavorable' },
+  { label: '五排 · 我方已锁冷门英雄', value: 'selfLocked' },
   { label: '五排 · 缺少历史', value: 'empty' },
   { label: '单排 · 不显示', value: 'solo' }
 ]
@@ -70,15 +72,17 @@ const fixture = computed(() => {
   if (scenario.value === 'solo' && game.queryStage.phase === 'champ-select')
     game.queryStage.gameInfo.queueId = 420
   if (scenario.value === 'inferred') session.theirTeam.forEach((p) => (p.assignedPosition = ''))
-  if (scenario.value === 'locked') {
-    session.theirTeam[2].championId = 105
+  if (scenario.value === 'locked' || scenario.value === 'selfLocked') {
+    const selfLocked = scenario.value === 'selfLocked'
+    const member = selfLocked ? session.myTeam[2] : session.theirTeam[2]
+    member.championId = selfLocked ? 61 : 105
     session.actions.push([
       {
-        actorCellId: 7,
-        championId: 105,
+        actorCellId: member.cellId,
+        championId: member.championId,
         completed: true,
         id: 20,
-        isAllyAction: false,
+        isAllyAction: selfLocked,
         isInProgress: false,
         type: 'pick',
         duration: 30_000,
@@ -99,7 +103,8 @@ const championNames = {
   24: '贾克斯',
   64: '李青',
   202: '烬',
-  111: '诺提勒斯'
+  111: '诺提勒斯',
+  61: '奥莉安娜'
 }
 const histories = computed(() =>
   Object.fromEntries(
@@ -167,7 +172,11 @@ const picks = computed(() =>
     ? rankPicks(
         candidates.value,
         target.value,
-        scenario.value === 'partial' ? { 13: samples[13] } : samples
+        scenario.value === 'partial'
+          ? { 13: samples[13] }
+          : scenario.value === 'unfavorable'
+            ? Object.fromEntries(Object.keys(samples).map((id) => [id, samples[238]]))
+            : samples
       )
     : []
 )
