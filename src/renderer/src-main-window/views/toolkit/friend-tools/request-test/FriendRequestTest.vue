@@ -5,8 +5,8 @@
     :busy="busy"
     :start-error="startError"
     :refresh-error="refreshError"
-    @start="start($event, 'start')"
-    @withdraw-pending="start($event, 'withdrawPending')"
+    @start="(options) => submit(() => shard.start(options))"
+    @withdraw-pending="(options) => submit(() => shard.withdrawPending(options))"
     @pause="command('pause')"
     @resume="command('resume')"
     @stop="command('stop')"
@@ -21,20 +21,22 @@ import { FriendRequestTestRenderer } from '@renderer-shared/shards/friend-reques
 import { useFriendRequestTestStore } from '@renderer-shared/shards/friend-request-test/store'
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import type {
-  FriendRequestTestOptions,
-  FriendRequestTestReason
+  FriendRequestTestReason,
+  FriendRequestTestStartResult
 } from '@shared/shards/friend-request-test'
 import { computed, ref, watch } from 'vue'
 
 import FriendRequestTestPanel from './FriendRequestTestPanel.vue'
 
-defineProps<{ disabled: boolean }>()
+const props = defineProps<{ disabled: boolean }>()
 const emit = defineEmits<{ activeChange: [active: boolean]; relationshipChange: [] }>()
 const shard = useInstance(FriendRequestTestRenderer)
 const store = useFriendRequestTestStore()
 const client = useLeagueClientStore()
 const activated = useActivated()
-const busy = ref(false)
+const pendingCommands = ref(0)
+const busy = computed(() => pendingCommands.value > 0)
+let pausingWhenAway: Promise<void> | null = null
 const startError = ref<FriendRequestTestReason | null>(null)
 const refreshError = ref<FriendRequestTestReason | null>(null)
 const available = computed(
@@ -45,21 +47,24 @@ const available = computed(
     client.chat.me?.puuid === client.summoner.me.puuid &&
     ['None', 'Lobby'].includes(client.gameflow.phase ?? '')
 )
-async function start(options: FriendRequestTestOptions, action: 'start' | 'withdrawPending') {
-  busy.value = true
+async function submit(action: () => Promise<FriendRequestTestStartResult>) {
+  if (busy.value || !available.value || props.disabled) return
+  pendingCommands.value++
   startError.value = null
   refreshError.value = null
   try {
-    const result = await shard[action](options)
+    const result = await action()
     if (!result.started) startError.value = result.reason
+    else await pauseWhenAway()
   } catch {
     startError.value = 'request-failed'
   } finally {
-    busy.value = false
+    pendingCommands.value--
   }
 }
 async function refreshRelationship() {
-  busy.value = true
+  if (busy.value || !available.value || props.disabled) return
+  pendingCommands.value++
   refreshError.value = null
   try {
     const result = await shard.refreshRelationship()
@@ -67,33 +72,43 @@ async function refreshRelationship() {
   } catch {
     refreshError.value = 'request-failed'
   } finally {
-    busy.value = false
+    pendingCommands.value--
   }
 }
 async function command(action: 'pause' | 'resume' | 'stop') {
-  busy.value = true
+  if (action === 'resume' && (!available.value || props.disabled)) return
+  pendingCommands.value++
   startError.value = null
   try {
     await shard[action]()
+    if (action === 'resume') await pauseWhenAway()
   } catch {
     startError.value = 'request-failed'
   } finally {
-    busy.value = false
+    pendingCommands.value--
   }
 }
+function pauseWhenAway(): Promise<void> | undefined {
+  if (activated.value) return
+  // A start/resume reply can arrive after deactivation or even unmount. Vue's
+  // lifecycle watcher alone cannot cover that interval before state sync arrives.
+  return (pausingWhenAway ??= command('pause').finally(() => {
+    pausingWhenAway = null
+  }))
+}
 watch(
-  activated,
-  (value) => {
-    if (!value && store.state.snapshot.active) void command('pause')
+  [activated, () => store.state.snapshot.active, () => store.state.snapshot.paused],
+  ([present, active, paused]) => {
+    if (!present && active && !paused) void pauseWhenAway()
   },
   { flush: 'sync' }
 )
 watch(
-  () => store.state.snapshot.active || store.state.snapshot.refreshing,
+  () => busy.value || store.state.snapshot.active || store.state.snapshot.refreshing,
   (active, before) => {
     emit('activeChange', active)
     if (before && !active) emit('relationshipChange')
   },
-  { immediate: true }
+  { immediate: true, flush: 'sync' }
 )
 </script>

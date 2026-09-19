@@ -3,7 +3,8 @@ import {
   FRIEND_REQUEST_TEST_MAIN_NAMESPACE,
   type FriendRequestTestOptions,
   type FriendRequestTestRefreshResult,
-  type FriendRequestTestStartResult
+  type FriendRequestTestStartResult,
+  type FriendRequestTestWithdrawalOptions
 } from '@shared/shards/friend-request-test'
 
 import { AkariIpcRenderer } from '../ipc'
@@ -31,7 +32,9 @@ export class FriendRequestTestRenderer {
     return this._ipc.call(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'start', options)
   }
 
-  withdrawPending(options: FriendRequestTestOptions): Promise<FriendRequestTestStartResult> {
+  withdrawPending(
+    options: FriendRequestTestWithdrawalOptions
+  ): Promise<FriendRequestTestStartResult> {
     return this._ipc.call(FRIEND_REQUEST_TEST_MAIN_NAMESPACE, 'withdrawPending', options)
   }
 

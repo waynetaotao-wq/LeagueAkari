@@ -13,6 +13,11 @@ export interface FriendRequestTestOptions {
   consented: boolean
 }
 
+export type FriendRequestTestWithdrawalOptions = Pick<
+  FriendRequestTestOptions,
+  'riotId' | 'consented'
+>
+
 export interface FriendRequestTestTarget {
   puuid: string
   gameName: string

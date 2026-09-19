@@ -211,6 +211,24 @@ describe('timed friend request lifecycle', () => {
     })
   })
 
+  it('attributes a failed withdrawal to that write when its follow-up relationship read succeeds', async () => {
+    const h = harness(pending())
+    h.api.withdraw.mockRejectedValueOnce(httpError(404))
+    h.controller.start(options, 'withdraw-only')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(h.state.snapshot).toMatchObject({
+      phase: 'failed',
+      reason: 'request-failed',
+      httpStatus: 404,
+      lastOperation: 'withdraw',
+      withdrawn: 0,
+      relationship: { isFriend: false, direction: 'out' }
+    })
+    expect(h.api.withdraw).toHaveBeenCalledTimes(1)
+    expect(h.api.send).not.toHaveBeenCalled()
+    expect(h.api.remove).not.toHaveBeenCalled()
+  })
+
   it('waits for a transient overlap of the friend and request lists to settle before deleting', async () => {
     const h = harness()
     h.controller.start({ ...options, removeAccepted: true })
@@ -303,7 +321,8 @@ describe('timed friend request lifecycle', () => {
       active: false,
       phase: 'stopped',
       reason: 'user-stopped',
-      mayHaveRelationship: true
+      mayHaveRelationship: true,
+      relationship: null
     })
     expect(h.api.send).toHaveBeenCalledTimes(1)
     expect(h.api.withdraw).not.toHaveBeenCalled()
@@ -466,10 +485,86 @@ describe('timed friend request lifecycle', () => {
       active: false,
       sent: 0,
       reason: 'request-not-confirmed',
-      lastOperation: 'send'
+      lastOperation: 'send',
+      relationship: null,
+      mayHaveRelationship: true
     })
     expect(h.api.send).toHaveBeenCalledTimes(1)
     expect(h.api.withdraw).not.toHaveBeenCalled()
+  })
+
+  it('does not report a cleared relationship when stopped after only one empty withdrawal observation', async () => {
+    const h = harness(pending())
+    h.controller.start(options, 'withdraw-only')
+    await vi.advanceTimersByTimeAsync(100)
+    h.controller.stop()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.state.snapshot).toMatchObject({
+      phase: 'stopped',
+      withdrawn: 0,
+      relationship: null,
+      mayHaveRelationship: true
+    })
+    expect(h.api.withdraw).toHaveBeenCalledTimes(1)
+    expect(h.api.send).not.toHaveBeenCalled()
+    expect(await h.controller.refreshRelationship()).toEqual({ refreshed: true })
+    expect(h.state.snapshot).toMatchObject({
+      withdrawn: 0,
+      relationship: { isFriend: false, direction: null },
+      mayHaveRelationship: false
+    })
+  })
+
+  it('retains a confirmed outgoing request when stopped between operations', async () => {
+    const h = harness()
+    h.controller.start(options)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(h.state.snapshot).toMatchObject({ pendingOperation: null, sent: 1 })
+    h.controller.stop()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.state.snapshot).toMatchObject({
+      phase: 'stopped',
+      relationship: { isFriend: false, direction: 'out' },
+      mayHaveRelationship: true
+    })
+    expect(h.api.withdraw).not.toHaveBeenCalled()
+  })
+
+  it('keeps chat diagnostics when an unconfirmed operation is stopped', async () => {
+    const h = harness()
+    h.api.send.mockResolvedValue(undefined)
+    h.controller.start(options)
+    await vi.advanceTimersByTimeAsync(100)
+    h.chatError({ code: 500, category: 'wait' })
+    h.controller.stop()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.state.snapshot).toMatchObject({
+      reason: 'user-stopped',
+      chatError: { code: 500, category: 'wait' },
+      httpStatus: null,
+      sent: 0
+    })
+    expect(h.stopWatching).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows a single withdrawal without loop settings and still requires consent and an exact Riot ID', async () => {
+    const h = harness(pending())
+    for (const invalid of [{ riotId: options.riotId }, { riotId: 'name', consented: true }]) {
+      expect(h.controller.start(invalid, 'withdraw-only')).toEqual({
+        started: false,
+        reason: 'invalid-options'
+      })
+    }
+    expect(
+      h.controller.start({ riotId: options.riotId, consented: true }, 'withdraw-only')
+    ).toEqual({
+      started: true
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(h.state.snapshot).toMatchObject({ reason: 'withdrawn-only', withdrawn: 1, sent: 0 })
+    expect(h.api.withdraw).toHaveBeenCalledExactlyOnceWith(target.puuid, expect.any(AbortSignal))
+    expect(h.api.send).not.toHaveBeenCalled()
+    expect(h.api.remove).not.toHaveBeenCalled()
   })
 
   it.each([

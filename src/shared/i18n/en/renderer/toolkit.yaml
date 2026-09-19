@@ -586,7 +586,7 @@ toolkit:
     consent: I control this account, or its owner has explicitly agreed to this test
     start: Start test
     withdrawPending: Withdraw outgoing request only
-    withdrawPendingHint: Withdraws only the entered account's outgoing request. Does not send, delete friends, or restart the loop. Wait before trying again after a server error.
+    withdrawPendingHint: Only the account and consent are required; duration and interval are unused. Does not send, delete friends, or restart the loop. Wait before trying again after a server error.
     withdrawOnlyTask: Single withdrawal
     pause: Pause
     resume: Resume
@@ -616,7 +616,7 @@ toolkit:
     refreshing: Checking friends and requests…
     refreshFailed: This check failed. The current relationship could not be confirmed.
     relationships:
-      unknown: No valid relationship result
+      unknown: Current relationship is not yet confirmed
       none: No friendship or pending request found
       out: You have an outgoing request
       in: The client reports an incoming request

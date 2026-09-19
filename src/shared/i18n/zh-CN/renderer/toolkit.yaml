@@ -585,7 +585,7 @@ toolkit:
     consent: 目标是本人控制，或已明确同意参与测试的账号
     start: 开始测试
     withdrawPending: 仅撤回已发申请
-    withdrawPendingHint: 单次撤回只处理上方账号的已发申请，不发新申请、不删除好友，也不会自动重启循环。服务器出错时请稍后再操作。
+    withdrawPendingHint: 单次撤回只需填写上方账号并确认测试范围，无需设置时长和间隔。不发新申请、不删除好友，也不会自动重启循环。服务器出错时请稍后再操作。
     withdrawOnlyTask: 单次撤回
     pause: 暂停
     resume: 继续
@@ -612,7 +612,7 @@ toolkit:
     refreshing: 正在检查好友和申请状态…
     refreshFailed: 本次检查未成功，无法确认当前关系。
     relationships:
-      unknown: 尚未取得有效的关系结果
+      unknown: 当前关系尚未确认
       none: 未发现好友关系或待处理申请
       out: 有你发给对方的申请
       in: 客户端显示收到对方申请

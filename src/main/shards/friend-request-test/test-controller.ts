@@ -30,6 +30,15 @@ const optionsSchema = z.object({
   consented: z.literal(true)
 })
 
+const withdrawalSchema = optionsSchema
+  .pick({ riotId: true, consented: true })
+  .transform((options) => ({
+    ...options,
+    durationMinutes: 1,
+    intervalSeconds: 0,
+    removeAccepted: false
+  }))
+
 interface TestRun {
   id: string
   mode: FriendRequestTestMode
@@ -80,7 +89,7 @@ export class FriendRequestTestController {
 
   start(options: unknown, mode: FriendRequestTestMode = 'test'): FriendRequestTestStartResult {
     if (this._run || this._refreshAbort) return { started: false, reason: 'busy' }
-    const parsed = optionsSchema.safeParse(options)
+    const parsed = (mode === 'withdraw-only' ? withdrawalSchema : optionsSchema).safeParse(options)
     const parts = parsed.success ? parsed.data.riotId.split('#').map((part) => part.trim()) : []
     if (!parsed.success || parts.length !== 2 || parts.some((part) => !part)) {
       return { started: false, reason: 'invalid-options' }
@@ -320,6 +329,7 @@ export class FriendRequestTestController {
     this._context.state.update({
       lastOperation: operation,
       pendingOperation: operation,
+      relationship: null,
       chatError: null
     })
     this._context.logger.info('Friend request operation started', { runId: run.id, operation })
@@ -340,16 +350,24 @@ export class FriendRequestTestController {
     while (true) {
       const relationship = await this._relationship(run)
       if (operation === 'send') {
-        if (relationship.friend || relationship.request) return relationship
+        if (relationship.friend || relationship.request) {
+          this._context.state.update({ pendingOperation: null })
+          return relationship
+        }
       } else {
-        if (operation === 'withdraw' && relationship.friend) return relationship
+        if (operation === 'withdraw' && relationship.friend) {
+          this._context.state.update({ pendingOperation: null })
+          return relationship
+        }
         if (!relationship.friend && !relationship.request) {
           if (
             emptySince !== null &&
             emptyRevision === run.revision &&
             run.activeMs - emptySince >= 500
-          )
+          ) {
+            this._context.state.update({ pendingOperation: null })
             return relationship
+          }
           emptySince = run.activeMs
           emptyRevision = run.revision
         } else {
@@ -400,10 +418,12 @@ export class FriendRequestTestController {
         ) {
           const current = await this._relationship(run)
           if (current.friend) {
+            this._context.state.update({ pendingOperation: null })
             mayRemoveAcceptedAfterWithdrawal = false
             continue
           }
         }
+        this._context.state.update({ lastOperation: deletingFriend ? 'remove' : 'withdraw' })
         throw error
       }
       run.abort.signal.throwIfAborted()
@@ -523,6 +543,11 @@ export class FriendRequestTestController {
       run.abort.abort()
       if (this._run === run) {
         this._run = null
+        const { pendingOperation, relationship } = this._context.state.snapshot
+        // A pre-write empty list or one empty confirmation read cannot prove that
+        // a queued chat operation was cancelled. Keep positive observations useful.
+        const unconfirmedEmpty =
+          pendingOperation && !relationship?.isFriend && !relationship?.direction
         this._context.state.update({
           active: false,
           paused: false,
@@ -530,6 +555,8 @@ export class FriendRequestTestController {
           reason,
           waitRemainingMs: 0,
           pendingOperation: null,
+          relationship: unconfirmedEmpty ? null : relationship,
+          chatError: run.chatError,
           remainingMs: Math.max(0, run.options.durationMinutes * 60_000 - run.activeMs)
         })
         this._context.logger.info('Friend request test ended', {

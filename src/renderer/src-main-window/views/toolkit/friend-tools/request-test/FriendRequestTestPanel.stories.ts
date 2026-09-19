@@ -127,3 +127,28 @@ export const AwaitingWithdrawal: Story = {
 export const RefreshFailed: Story = {
   args: { ...FriendshipAfterStop.args, refreshError: 'request-failed' }
 }
+
+export const WithdrawalNotYetConfirmed: Story = {
+  args: {
+    snapshot: {
+      ...AwaitingWithdrawal.args!.snapshot!,
+      relationship: { isFriend: false, direction: null, checkedAt: Date.now() }
+    }
+  }
+}
+
+export const StoppedBeforeSendConfirmed: Story = {
+  args: {
+    snapshot: {
+      ...Paused.args!.snapshot!,
+      active: false,
+      paused: false,
+      phase: 'stopped',
+      reason: 'user-stopped',
+      sent: 0,
+      withdrawn: 0,
+      removed: 0,
+      lastSendIntervalMs: null
+    }
+  }
+}

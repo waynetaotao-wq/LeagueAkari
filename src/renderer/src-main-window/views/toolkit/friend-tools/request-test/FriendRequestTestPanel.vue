@@ -58,7 +58,7 @@
           size="small"
           :loading="busy"
           :disabled="!canStart"
-          @click="start('start')"
+          @click="start"
           >{{ t('start') }}</NButton
         >
         <NButton
@@ -87,8 +87,8 @@
         <NButton
           v-if="!snapshot.active"
           size="small"
-          :disabled="!canStart"
-          @click="start('withdrawPending')"
+          :disabled="!canWithdraw"
+          @click="withdrawPending"
           >{{ t('withdrawPending') }}</NButton
         >
       </div>
@@ -174,7 +174,7 @@
             {{ snapshot.refreshing ? t('refreshing') : t(`relationships.${relationshipKey}`) }}
           </div>
           <div
-            v-if="snapshot.relationship && !refreshError"
+            v-if="snapshot.relationship && relationshipKey !== 'unknown'"
             class="mt-1 text-xs text-black/60 dark:text-white/60"
           >
             {{
@@ -222,7 +222,8 @@ import {
   FRIEND_REQUEST_TEST_LIMITS,
   type FriendRequestTestOptions,
   type FriendRequestTestReason,
-  type FriendRequestTestSnapshot
+  type FriendRequestTestSnapshot,
+  type FriendRequestTestWithdrawalOptions
 } from '@shared/shards/friend-request-test'
 import { useTranslation } from 'i18next-vue'
 import { NAlert, NButton, NCheckbox, NInput, NInputNumber, NSwitch } from 'naive-ui'
@@ -237,7 +238,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   start: [options: FriendRequestTestOptions]
-  withdrawPending: [options: FriendRequestTestOptions]
+  withdrawPending: [options: FriendRequestTestWithdrawalOptions]
   pause: []
   resume: []
   stop: []
@@ -253,6 +254,7 @@ const relationshipKey = computed(() => {
   if (!relationship) return 'unknown'
   if (relationship.isFriend && relationship.direction) return 'syncing'
   if (relationship.isFriend) return 'friend'
+  if (props.snapshot.pendingOperation && !relationship.direction) return 'unknown'
   return relationship.direction ?? 'none'
 })
 const resultType = computed(() => {
@@ -261,14 +263,19 @@ const resultType = computed(() => {
     return 'success'
   return 'warning'
 })
-const canStart = computed(() => {
+const canWithdraw = computed(() => {
   const parts = options.riotId.trim().split('#')
   return (
     props.available &&
     !locked.value &&
     options.consented &&
     parts.length === 2 &&
-    parts.every((part) => part.trim()) &&
+    parts.every((part) => part.trim())
+  )
+})
+const canStart = computed(
+  () =>
+    canWithdraw.value &&
     duration.value !== null &&
     Number.isInteger(duration.value) &&
     duration.value >= 1 &&
@@ -277,30 +284,35 @@ const canStart = computed(() => {
     Number.isFinite(interval.value) &&
     interval.value >= FRIEND_REQUEST_TEST_LIMITS.minIntervalSeconds &&
     interval.value <= FRIEND_REQUEST_TEST_LIMITS.maxIntervalSeconds
-  )
-})
+)
 watch(
   () => props.snapshot.options,
   (saved) => {
     if (saved) {
       options.riotId = saved.riotId
-      options.removeAccepted = saved.removeAccepted
       options.consented = saved.consented
-      duration.value = saved.durationMinutes
-      interval.value = saved.intervalSeconds
+      if (props.snapshot.mode === 'test') {
+        options.removeAccepted = saved.removeAccepted
+        duration.value = saved.durationMinutes
+        interval.value = saved.intervalSeconds
+      }
     }
   },
   { immediate: true }
 )
-const start = (action: 'start' | 'withdrawPending') => {
+const start = () => {
   if (canStart.value) {
     const payload = {
       ...options,
       durationMinutes: duration.value!,
       intervalSeconds: interval.value!
     }
-    if (action === 'start') emit('start', payload)
-    else emit('withdrawPending', payload)
+    emit('start', payload)
+  }
+}
+const withdrawPending = () => {
+  if (canWithdraw.value) {
+    emit('withdrawPending', { riotId: options.riotId, consented: options.consented })
   }
 }
 const formatTime = (milliseconds: number) => {
