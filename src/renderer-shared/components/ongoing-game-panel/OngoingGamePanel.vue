@@ -8,6 +8,9 @@
     }"
   >
     <NScrollbar v-if="!isInIdleState" x-scrollable>
+      <div ref="draftAdvisorElement" :style="{ maxWidth: contentWidth + 'px' }">
+        <FlexDraftAdvisor />
+      </div>
       <div
         class="m relative mx-auto box-border flex flex-col gap-4 p-4"
         :class="{ 'w-fit': columnsNeed >= 4 }"
@@ -69,10 +72,11 @@
 <script setup lang="ts">
 import { GameController, TimeOutline } from '@vicons/ionicons5'
 import { Forbid, PlugConnected } from '@vicons/tabler'
+import { useElementSize } from '@vueuse/core'
 import { useOngoingGameProvider } from '@renderer-shared/providers/ongoing-game'
 import { useTranslation } from 'i18next-vue'
 import { NIcon, NScrollbar } from 'naive-ui'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { MatchPreviewPayload } from '../match-preview'
 import { FIXED_CARD_WIDTH_PX_NUMBER, POSITION_ORDER, PREMADE_TEAMS } from './constants'
@@ -82,6 +86,7 @@ import {
   provideOngoingGamePanel
 } from './context'
 import OngoingGameTeam from './widgets/OngoingGameTeam.vue'
+import FlexDraftAdvisor from './flex-draft-advisor/FlexDraftAdvisor.vue'
 
 const props = defineProps<{
   /** 容器参考宽度，用于计算列数 */
@@ -98,6 +103,8 @@ const emits = defineEmits<{
 }>()
 
 const { t } = useTranslation()
+const draftAdvisorElement = ref<HTMLElement | null>(null)
+const { height: draftAdvisorHeight } = useElementSize(draftAdvisorElement)
 
 const ongoingGameProviderValue = useOngoingGameProvider()
 const ongoingGame = computed(() => ongoingGameProviderValue)
@@ -233,7 +240,7 @@ const teamsContainerStyles = computed(() => {
   // 2. 只有一排显示
   if (isTwoTeamsMode.value && linesPerTeam.value === 1) {
     return {
-      height: props.contentHeight + 'px',
+      height: Math.max(500, props.contentHeight - draftAdvisorHeight.value) + 'px',
       maxHeight: '1200px',
       minHeight: '500px'
     }

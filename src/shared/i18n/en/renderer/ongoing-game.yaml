@@ -1,4 +1,55 @@
 ongoingGame:
+  flexDraft:
+    title: Flex Draft Advisor
+    samples: 'Ranked Flex only · Recent samples for {{players}}/5 opponents'
+    chooseRole: My position
+    chooseOpponent: Lane opponent
+    details: Pool & evidence
+    collapse: Hide details
+    bans: Ban priorities
+    banBasis: Opponent mains · Ally intents protected
+    poolUsage: '{{games}} of {{total}} recent games'
+    historyWins: '{{wins}} wins in {{games}} games'
+    banFinished: Bans completed. Pick analysis continues.
+    historyLoading: Loading Flex history…
+    noBans: No eligible ban with enough history, or the client has not supplied ban availability.
+    picks: My pick options
+    lockedPick: My locked champion
+    pickBasis: Familiarity · Opponent pool coverage
+    coverage: '{{rate}}% matchup data coverage'
+    loading: Loading matchup statistics…
+    insufficient: Insufficient data to rank
+    familiarGames: '{{games}} recent Flex games'
+    manualChampion: Manually chosen comfort pick
+    watchOut: 'Watch out for {{champion}}'
+    chooseRoleHint: Position unknown. Select your position first.
+    choosePoolHint: Not enough familiar champions for this role, or none are available.
+    editPool: Choose comfort picks
+    chooseOpponentHint: Insufficient position history. Select your lane opponent.
+    target: 'Matchup basis: {{target}}'
+    unknownRole: Some history lacks positions; all-position reference only
+    source: 'OP.GG {{patch}} · KR Emerald+ ranked matchups (not Flex-specific win rates)'
+    retry: Some statistics unavailable · Retry
+    myPool: My comfort picks
+    poolPlaceholder: Up to 10 comfort picks for this draft
+    autoPool: Restore automatic
+    method: Uses only loaded, valid Flex games from the last 90 days, up to the latest 50 per player. Automatic picks require 2 recent games in this role; adjust manually when needed. Bans consider usage concentration and sample size. Picks balance matchups, weak points and familiarity. Pairs below 50 games stay unranked; overall coverage must reach 60%. This is a heuristic, not a win prediction or guaranteed counter. Hovers are not locks; correct positions after swaps.
+    locked: 'Locked {{champion}}'
+    tableCaption: Each cell shows the column champion’s ranked win rate against the row champion and sample count. Row percentages are analysis weights, not pick probabilities. Coverage measures sufficient data, not favorable matchups. Cards show the first three options; this table compares all candidates.
+    matchup: Opponent pool
+    smallSample: 'Only {{games}} games'
+    pair: '{{rate}}% / {{games}} games'
+    targetSources:
+      manual: 'Manual · {{player}}'
+      client: 'Client position · {{player}}'
+      history: Inferred from history; correct if needed
+      unresolved: Select lane opponent
+    roles:
+      top: Top
+      jungle: Jungle
+      middle: Mid
+      bottom: Bot
+      utility: Support
   titlebar:
     draftMode: Draft Mode
     exitDraft: Exit Draft Mode

@@ -7,6 +7,7 @@ import { AutoChampConfigRenderer } from '@renderer-shared/shards/auto-champ-conf
 import { AutoGameflowRenderer } from '@renderer-shared/shards/auto-gameflow'
 import { AutoMiscRenderer } from '@renderer-shared/shards/auto-misc'
 import { AutoSelectRenderer } from '@renderer-shared/shards/auto-select'
+import { ChampionDataRenderer } from '@renderer-shared/shards/champion-data'
 import { ClientInstallationRenderer } from '@renderer-shared/shards/client-installation'
 import { ExtraAssetsRenderer } from '@renderer-shared/shards/extra-assets'
 import { FeatureGatingRenderer } from '@renderer-shared/shards/feature-gating'
@@ -52,6 +53,7 @@ manager.use(AutoGameflowRenderer)
 manager.use(AutoSelectRenderer)
 manager.use(AutoMiscRenderer)
 manager.use(ClientInstallationRenderer)
+manager.use(ChampionDataRenderer)
 manager.use(ExtraAssetsRenderer)
 manager.use(FeatureGatingRenderer)
 manager.use(FriendRequestTestRenderer)
