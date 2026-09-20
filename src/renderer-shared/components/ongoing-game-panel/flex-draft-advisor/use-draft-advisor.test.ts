@@ -64,7 +64,7 @@ afterEach(() => {
 })
 
 describe('live draft advice lifecycle', () => {
-  it('loads from the registered source, ranks the current draft and clears it when leaving Flex', async () => {
+  it('loads premade five advice and clears it when switching to ordinary Ranked Flex', async () => {
     const advisor = scope.run(() => useDraftAdvisor())!
     await vi.advanceTimersByTimeAsync(300)
     expect(advisor.picks.value[0]).toMatchObject({ championId: 13, coverage: 1 })
@@ -72,9 +72,10 @@ describe('live draft advice lifecycle', () => {
     Object.assign(game, {
       queryStage: {
         phase: 'champ-select',
-        gameInfo: { queueId: 420, gameMode: 'CLASSIC', gameId: 101 }
+        gameInfo: { queueId: 440, queueType: 'RANKED_FLEX_SR', gameMode: 'CLASSIC', gameId: 101 }
       }
     })
+    useLeagueClientStore().champSelect.session!.queueId = 440
     await nextTick()
     expect(advisor.context.value).toBeNull()
     expect(advisor.picks.value).toEqual([])

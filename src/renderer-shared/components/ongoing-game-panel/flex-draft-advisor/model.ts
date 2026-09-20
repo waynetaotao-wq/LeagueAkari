@@ -6,6 +6,8 @@ export const DRAFT_ROLES = ['top', 'jungle', 'middle', 'bottom', 'utility'] as c
 export type DraftRole = (typeof DRAFT_ROLES)[number]
 export const MAX_CANDIDATES = 10
 const DAY = 86_400_000
+// LCU identifies 积分对战 五排 as RANKED_PREMADE_5x5 (710), separate from Ranked Flex (440).
+const PREMADE_FIVE_QUEUE_ID = 710
 
 export interface PoolChampion {
   championId: number
@@ -105,11 +107,11 @@ export function getDraftContext(
     game.isSpectating ||
     game.draft ||
     game.queryStage.phase !== 'champ-select' ||
-    game.queryStage.gameInfo.queueId !== 440 ||
+    game.queryStage.gameInfo.queueId !== PREMADE_FIVE_QUEUE_ID ||
     game.queryStage.gameInfo.gameMode !== 'CLASSIC' ||
     !session ||
     // Gameflow is authoritative; some LCU versions omit queueId on the selection session.
-    (session.queueId > 0 && session.queueId !== 440) ||
+    (session.queueId > 0 && session.queueId !== PREMADE_FIVE_QUEUE_ID) ||
     session.isSpectating ||
     session.isCustomGame ||
     session.myTeam.length !== 5 ||
@@ -190,7 +192,7 @@ export function readPlayerHistory(
     const game = entry.source === 'sgp' ? entry.data.json : entry.data
     if (
       !game ||
-      game.queueId !== 440 ||
+      game.queueId !== PREMADE_FIVE_QUEUE_ID ||
       game.mapId !== 11 ||
       game.gameMode !== 'CLASSIC' ||
       !Number.isFinite(game.gameCreation) ||

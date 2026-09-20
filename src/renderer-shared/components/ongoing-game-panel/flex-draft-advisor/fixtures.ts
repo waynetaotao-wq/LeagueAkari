@@ -60,7 +60,7 @@ export function createDraftFixture() {
       multiUserChatPassword: '',
       mucJwtDto: { channelClaim: '', domain: '', jwt: '', targetRegion: '' }
     },
-    queueId: 440,
+    queueId: 710,
     id: 'draft-101',
     gameId: 101,
     isSpectating: false,
@@ -103,7 +103,7 @@ export function createDraftFixture() {
     },
     queryStage: {
       phase: 'champ-select',
-      gameInfo: { queueId: 440, queueType: 'RANKED_FLEX_SR', gameMode: 'CLASSIC', gameId: 101 }
+      gameInfo: { queueId: 710, queueType: 'RANKED_PREMADE_5x5', gameMode: 'CLASSIC', gameId: 101 }
     },
     draft: null,
     teams: {
@@ -148,7 +148,7 @@ export function historyFixture(
             gameId: index + 1,
             gameCreation: now - (index + 1) * 3_600_000,
             gameDuration: 1800,
-            queueId: 440,
+            queueId: 710,
             mapId: 11,
             gameMode: 'CLASSIC',
             endOfGameResult: 'GameComplete',

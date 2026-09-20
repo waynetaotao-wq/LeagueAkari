@@ -12,15 +12,34 @@ import {
   readPlayerHistory
 } from './model'
 
-describe('Flex draft eligibility and live choices', () => {
-  it.each([420, 400, 430, 450, 490, 720])(
+describe('Premade five draft eligibility and live choices', () => {
+  it.each([420, 400, 430, 440, 450, 490, 720])(
     'never enables in queue %i even if identities are visible',
     (queueId) => {
       const { game, session } = createDraftFixture()
       if (game.queryStage.phase === 'champ-select') game.queryStage.gameInfo.queueId = queueId
+      session.queueId = queueId
       expect(getDraftContext(game, session)).toBeNull()
     }
   )
+
+  it('shows visible opponents in premade five on red side before gameflow has a game ID', () => {
+    // Reconstructed from observed LCU metadata; identities and draft actions are synthetic.
+    const { game, session } = createDraftFixture()
+    ;[session.myTeam, session.theirTeam] = [session.theirTeam, session.myTeam]
+    session.localPlayerCellId = 5
+    session.myTeam[0].assignedPosition = 'middle'
+    session.theirTeam.forEach((player) => (player.assignedPosition = ''))
+    if (game.queryStage.phase === 'champ-select') game.queryStage.gameInfo.gameId = 0
+
+    const context = getDraftContext({ ...game, selfPuuid: session.myTeam[0].puuid }, session)
+    expect(context?.self).toMatchObject({ cellId: 5, puuid: 'player-5', position: 'middle' })
+    expect(context?.enemies.map((player) => player.cellId)).toEqual([0, 1, 2, 3, 4])
+    expect(buildTargetPool(context!, {}, 'middle', null)).toMatchObject({
+      source: 'unresolved',
+      champions: []
+    })
+  })
 
   it('requires the current connected, non-spectating champion-select session', () => {
     const { game, session } = createDraftFixture()
@@ -81,7 +100,7 @@ describe('Flex draft eligibility and live choices', () => {
 })
 
 describe('history and ranking evidence', () => {
-  it('uses recent Flex games only, deduplicates and ignores unknown players/results and remakes', () => {
+  it('uses recent premade five games only, deduplicates and ignores unknown players/results and remakes', () => {
     const now = Date.now()
     const data = historyFixture('player', [13, 13, 13, 13, 13, 13, 13, 13], 'middle', now)
     const games = data.map((p) => (p.source === 'sgp' ? p.data.json : null))!
@@ -107,7 +126,7 @@ describe('history and ranking evidence', () => {
         gameId: 9,
         gameCreation: Date.now() - 1000,
         gameDuration: 1800,
-        queueId: 440,
+        queueId: 710,
         mapId: 11,
         gameMode: 'CLASSIC',
         participantIdentities: [{ participantId: 3, player: { puuid: 'player' } }],
@@ -132,6 +151,47 @@ describe('history and ranking evidence', () => {
     expect(mixed.unknownRole).toBe(false)
     expect(mixed.champions.map((p) => p.championId)).toEqual([105])
   })
+
+  it.each(['lcu', 'sgp'] as const)(
+    'keeps premade five history separate from ordinary Ranked Flex through %s',
+    (source) => {
+      const history = [710, 440].map((queueId, index) => {
+        const championId = index === 0 ? 13 : 105
+        const common = {
+          gameId: index + 1,
+          queueId,
+          mapId: 11,
+          gameMode: 'CLASSIC',
+          gameCreation: Date.now() - 1000,
+          gameDuration: 1800
+        }
+        return source === 'lcu'
+          ? {
+              source,
+              gameId: common.gameId,
+              data: {
+                ...common,
+                participantIdentities: [{ participantId: 1, player: { puuid: 'player' } }],
+                participants: [{ participantId: 1, championId, stats: { win: true } }]
+              }
+            }
+          : {
+              source,
+              gameId: common.gameId,
+              data: {
+                json: {
+                  ...common,
+                  participants: [{ puuid: 'player', championId, win: true, teamPosition: 'MIDDLE' }]
+                }
+              }
+            }
+      }) as LcuOrSgpGameSummary[]
+      expect(readPlayerHistory('player', history)).toMatchObject({
+        games: 1,
+        champions: [{ championId: 13, games: 1, wins: 1 }]
+      })
+    }
+  )
 
   it('recomputes the opponent pool after bans and locks, with manual overrides', () => {
     const { game, session } = createDraftFixture()

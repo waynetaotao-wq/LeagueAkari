@@ -1,7 +1,7 @@
 ongoingGame:
   flexDraft:
-    title: Flex Draft Advisor
-    samples: 'Ranked Flex only · Recent samples for {{players}}/5 opponents'
+    title: Premade Five Draft Advisor
+    samples: 'Ranked Premade 5v5 only · Recent samples for {{players}}/5 opponents'
     chooseRole: My position
     chooseOpponent: Lane opponent
     details: Pool & evidence
@@ -18,7 +18,7 @@ ongoingGame:
     alsoUsed_one: '+ {{count}} other regular user'
     alsoUsed_other: '+ {{count}} other regular users'
     banFinished: Bans completed. Pick analysis continues.
-    historyLoading: Loading Flex history…
+    historyLoading: Loading premade 5v5 history…
     noBans: No eligible ban with enough history, or the client has not supplied ban availability.
     picks: My pick options
     lockedPick: My locked champion
@@ -27,9 +27,9 @@ ongoingGame:
     loading: Loading matchup statistics…
     updating: Loading remaining current statistics…
     insufficient: Insufficient data to rank
-    familiarGames_one: '{{count}} recent Flex game'
-    familiarGames_other: '{{count}} recent Flex games'
-    noRoleHistory: No recent Flex history for this role
+    familiarGames_one: '{{count}} recent premade 5v5 game'
+    familiarGames_other: '{{count}} recent premade 5v5 games'
+    noRoleHistory: No recent premade 5v5 history for this role
     outlook:
       favorable: Known matchups lean favorable
       even: Known matchups near even
@@ -42,12 +42,12 @@ ongoingGame:
     chooseOpponentHint: Insufficient position history. Select your lane opponent.
     target: 'Matchup basis: {{target}}'
     unknownRole: Some champion pools lack positions; all-position reference only
-    source: 'OP.GG {{patch}} · KR Emerald+ ranked matchups (not Flex-specific win rates)'
+    source: 'OP.GG {{patch}} · KR Emerald+ ranked matchups (not specific to this queue)'
     retry: Some statistics unavailable · Retry
     myPool: My comfort picks
     poolPlaceholder: Up to 10 comfort picks for this draft
     autoPool: Restore automatic
-    method: Uses only loaded, valid Flex games from the last 90 days, up to the latest 50 per player. Automatic picks require 2 recent games in this role; adjust manually when needed. Bans combine usage and sample size across opponents; card counts belong to the first listed player. Picks balance matchups, weak points and familiarity. Outlook describes smoothed known matchup statistics without familiarity bonuses; it does not measure lane or solo-kill advantage. Pairs below 50 games stay unranked; coverage must reach 60%. This heuristic has not been calibrated against Flex outcomes and does not predict wins or guarantee counters. Hovers are not locks; correct positions after swaps.
+    method: Uses only loaded, valid Ranked Premade 5v5 games from the last 90 days, up to the latest 50 per player. Automatic picks require 2 recent games in this role; adjust manually when needed. Bans combine usage and sample size across opponents; card counts belong to the first listed player. Picks balance matchups, weak points and familiarity. Outlook describes smoothed known matchup statistics without familiarity bonuses; it does not measure lane or solo-kill advantage. Pairs below 50 games stay unranked; coverage must reach 60%. This heuristic has not been calibrated against premade 5v5 outcomes and does not predict wins or guarantee counters. Hovers are not locks; correct positions after swaps.
     locked: 'Locked {{champion}}'
     tableCaption: Each cell shows the column champion’s ranked win rate against the row champion and sample count. Row percentages are analysis weights, not pick probabilities. Coverage measures sufficient data, not favorable matchups. Cards show the first three options; this table compares all candidates.
     matchup: Opponent pool
