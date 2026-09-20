@@ -63,9 +63,9 @@ export interface OpggChampionAverageStats {
 }
 
 export interface OpggChampionTierData {
-  tier: number
-  rank: number
-  rank_prev: number
+  tier: number | null
+  rank: number | null
+  rank_prev: number | null
   rank_prev_patch: number | null
 }
 
@@ -78,11 +78,11 @@ export interface OpggChampionPosition {
 
 export interface OpggChampionPositionStats {
   play: number
-  win_rate: number
-  pick_rate: number
+  win_rate: number | null
+  pick_rate: number | null
   role_rate: number
-  ban_rate: number
-  kda: number
+  ban_rate: number | null
+  kda: number | null
   tier_data: OpggChampionTierData
   total_place: never
   first_place: never

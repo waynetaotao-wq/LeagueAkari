@@ -63,13 +63,16 @@
                   'bg-[#5f32e6] text-white': s.startsWith('R')
                 }
               ]"
-              v-for="s of m.builds[0].order"
+              v-for="s of m.builds[0]?.order ?? []"
             >
               {{ s }}
             </div>
           </div>
         </div>
-        <div class="desc ml-auto flex items-center">
+        <div
+          class="desc ml-auto flex items-center"
+          :title="t('opgg.champion.abilityPrioritySample')"
+        >
           <div class="pick flex min-w-19 flex-col items-center">
             <span
               class="pick-rate text-xs font-bold text-[#1a1a1a] dark:text-[#ebebeb]"

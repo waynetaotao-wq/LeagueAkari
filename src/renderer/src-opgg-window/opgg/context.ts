@@ -17,6 +17,8 @@ import type {
 } from '@shared/data-adapter/champion-data'
 import {
   CHAMPION_DATA_CAPABILITIES,
+  LOLPS_REGIONS,
+  LOLPS_TIERS,
   getChampionDataCapability
 } from '@shared/data-adapter/champion-data'
 import {
@@ -292,11 +294,11 @@ export function provideOpgg() {
   let sourceChangeInProgress = false
 
   const unwrapResult = <T>(result: ChampionDataLoadResult<T>, generation: number) => {
-    if (generation === updateGeneration) {
-      effectiveSource.value = result.effectiveSource
-      fallbackReason.value = result.fallbackReason
-    }
+    // 包括失败结果在内，过期请求均不得影响新一轮筛选。
+    if (generation !== updateGeneration) throw new DOMException('Superseded request', 'AbortError')
     if (result.status === 'unavailable') {
+      effectiveSource.value = null
+      fallbackReason.value = result.fallbackReason
       isDataUnavailable.value = true
       champions.value = null
       overview.value = null
@@ -306,7 +308,6 @@ export function provideOpgg() {
         result.attempts.some((attempt) => attempt.outcome === 'failed')
       )
     }
-    isDataUnavailable.value = false
     return result.data
   }
 
@@ -382,14 +383,24 @@ export function provideOpgg() {
   }) => {
     const generation = ++updateGeneration
     queueKeeper.cancelAll()
+    autoLoadoutQueue.invalidate()
 
     isLoading.value = true
+    // 更新期间暂停对位统计/自动配置；有效来源只能与最终数据一起提交。
+    effectiveSource.value = null
 
     try {
       const targetSource = opts.source ?? preferredSource.value
       const targetMode = opts.mode ?? mode.value
-      const targetRegion = opts.region ?? region.value
-      const targetTier = opts.tier ?? tier.value
+      let targetRegion = opts.region ?? region.value
+      let targetTier = opts.tier ?? tier.value
+      // 切换数据源时保留共有选项；独有选项回到该源的真实默认值并同步显示。
+      if (targetSource === 'lolps') {
+        if (!Object.hasOwn(LOLPS_REGIONS, targetRegion)) targetRegion = 'kr'
+        if (!Object.hasOwn(LOLPS_TIERS, targetTier)) targetTier = 'emerald_plus'
+      } else if (targetTier === 'bronze_plat') {
+        targetTier = 'emerald_plus'
+      }
       let targetChampionId = opts.championId ?? championId.value
       let targetPosition = opts.position ?? position.value
       const capability = getChampionDataCapability(targetSource, toChampionDataMode(targetMode))
@@ -505,7 +516,9 @@ export function provideOpgg() {
 
       if (generation !== updateGeneration) return false
 
-      // commit
+      // commit：筛选、来源和数据始终属于同一轮请求。
+      fallbackReason.value = null
+      isDataUnavailable.value = false
       version.value = nextVersion
       region.value = targetRegion
       mode.value = targetMode
@@ -527,6 +540,7 @@ export function provideOpgg() {
 
       // 会在模式不匹配时主动清空
       kiwiAugments.value = updatedKiwiAugmentsData
+      effectiveSource.value = targetSource
       return true
     } catch (error) {
       if (generation !== updateGeneration || isAbortError(error)) {
@@ -538,6 +552,11 @@ export function provideOpgg() {
         return false
       }
 
+      isDataUnavailable.value = true
+      champions.value = null
+      overview.value = null
+      champion.value = null
+      kiwiAugments.value = null
       const err = error as Error
       message.error(err.message || String(error))
       return false
@@ -555,8 +574,12 @@ export function provideOpgg() {
     }
 
     const nextMode = resolveSupportedMode(source, mode.value)
-    mode.value = nextMode
     sourceChangeInProgress = true
+    effectiveSource.value = null
+    champion.value = null
+    champions.value = null
+    overview.value = null
+    kiwiAugments.value = null
     try {
       await championData.setPreferredSource(source)
       loadedPatchContext = null
@@ -628,8 +651,7 @@ export function provideOpgg() {
     currentTab.value = tab
 
     if (championId0) {
-      championId.value = championId0
-      changeChampion(championId0)
+      void changeChampion(championId0)
     }
   }
 
@@ -679,7 +701,8 @@ export function provideOpgg() {
       [
         championDataStore.settings.preferredSource,
         championDataStore.availability.sources.opgg.enabled,
-        championDataStore.availability.sources.qq101.enabled
+        championDataStore.availability.sources.qq101.enabled,
+        championDataStore.availability.sources.lolps.enabled
       ] as const,
     ([source], [previousSource]) => {
       if (sourceChangeInProgress) return
@@ -687,7 +710,10 @@ export function provideOpgg() {
       loadedPatchContext = null
       if (source !== previousSource) {
         const nextMode = resolveSupportedMode(source, mode.value)
-        mode.value = nextMode
+        champion.value = null
+        champions.value = null
+        overview.value = null
+        kiwiAugments.value = null
         void update({ mode: nextMode, force: true })
       } else {
         void refresh()
@@ -777,10 +803,18 @@ export function provideOpgg() {
       return
     }
 
+    const generation = updateGeneration
     void autoLoadoutQueue.enqueue(async () => {
       // 排队期间选人、英雄、模式或真实分路可能已变化；执行前必须用最新状态复验。
       const active = activeSession.value
-      if (matchupLoadoutPending.value || !active || String(lcs.gameflow.phase) !== 'ChampSelect') {
+      if (
+        generation !== updateGeneration ||
+        isLoading.value ||
+        !effectiveSource.value ||
+        matchupLoadoutPending.value ||
+        !active ||
+        String(lcs.gameflow.phase) !== 'ChampSelect'
+      ) {
         return
       }
       if (
@@ -850,6 +884,8 @@ export function provideOpgg() {
       String(lcs.gameflow.phase) !== 'ChampSelect' ||
       active.gameMode !== 'CLASSIC' ||
       mode.value !== 'ranked' ||
+      isLoading.value ||
+      !effectiveSource.value ||
       matchupLoadoutPending.value
     ) {
       autoLoadoutQueue.invalidate()

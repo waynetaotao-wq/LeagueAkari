@@ -94,6 +94,7 @@ opgg:
       tw: 台湾
       me: 中东
     tiers:
+      bronze_plat: 青铜 ~ 铂金
       all: 全部段位
       ibsg: 黄金 -
       gold_plus: 黄金 +
@@ -191,6 +192,7 @@ opgg:
     plays: 总场次
     banRate: 禁用率
     counter: 劣势对位
+    counterPerspective: 数值是当前英雄面对图中英雄的整场胜率，不是单杀率；场次来自所选地区、段位和版本。
     allCounters: 所有对位
     counterC: 劣势
     allC: 所有
@@ -201,6 +203,8 @@ opgg:
     apply: 应用
     runes: 符文配法
     abilityBuild: 技能点法
+    abilityPrioritySample: 此处场次、选用率和胜率属于主升顺序；逐级加点另有独立样本。
+    lolpsRuneSample: 胜率对应主副系符文；属性碎片采用当前筛选下独立统计的热门组合。
     starterItemText: 初始装备
     prismItemText: 棱彩阶装备
     coreItemText: 核心装备

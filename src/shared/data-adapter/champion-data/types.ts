@@ -187,6 +187,8 @@ export interface ChampionRunePage {
 export interface ChampionAbilityBuild {
   abilityPriority: ChampionDataAbility[]
   levelOrder: ChampionDataAbility[]
+  /** 主升顺序和逐级加点使用不同样本，不能互相替代。 */
+  priorityPerformance?: ChampionRecommendationPerformance
   performance: ChampionRecommendationPerformance
 }
 

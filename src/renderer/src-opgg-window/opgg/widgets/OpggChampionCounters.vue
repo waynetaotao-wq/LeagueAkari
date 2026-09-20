@@ -21,6 +21,9 @@
         <template #unchecked>{{ t('opgg.champion.counterC') }}</template>
       </NSwitch>
     </div>
+    <div class="mb-2 text-[10px] text-[#666666] dark:text-[#b2b2b2]">
+      {{ t('opgg.champion.counterPerspective') }}
+    </div>
 
     <!-- expanded (注意展开和没有展开，用的数据不同。但一般来说既然后 thatPosition 数据，那么 champion.data.counters 数据也应该存在) -->
     <div class="counters flex flex-wrap gap-2" v-if="isCountersExpanded">
@@ -66,8 +69,8 @@
     <div class="counters flex flex-wrap gap-2" v-else>
       <div
         class="counter flex w-11.5 cursor-pointer flex-col items-center transition-[filter] duration-200 hover:brightness-[1.2]"
-        v-if="thatPosition.counters"
-        v-for="c of thatPosition.counters"
+        v-if="unfavorableCounters.length"
+        v-for="c of unfavorableCounters"
         :key="c.champion_id"
         @click="setTab('champion', c.champion_id)"
       >
@@ -121,6 +124,12 @@ const thatPosition = computed(() => {
 })
 
 const isCountersExpanded = ref(false)
+const unfavorableCounters = computed(() =>
+  (thatPosition.value?.counters ?? [])
+    .filter((c) => c.play > 0 && c.win / c.play < 0.5)
+    .toSorted((a, b) => a.win / a.play - b.win / b.play)
+    .slice(0, 5)
+)
 
 watchEffect(() => {
   if (!champion.value) {

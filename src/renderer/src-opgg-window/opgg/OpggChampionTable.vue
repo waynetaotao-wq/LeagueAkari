@@ -95,15 +95,15 @@ const columns: DataTableColumns<OpggChampionItem> = [
     align: 'center',
     className: 'text-[13px] dark:text-white/80 text-black/80',
     width: 46,
-    render: (row, index) => {
+    render: (row) => {
       if (mode.value === 'ranked' && position.value !== 'none') {
         const positionData = row.positions?.find(
           (p) => p.name.toUpperCase() === position.value?.toUpperCase()
         )
-        return positionData?.stats?.tier_data?.rank || index + 1
+        return positionData?.stats?.tier_data?.rank ?? '-'
       }
 
-      return row.average_stats?.rank || index + 1
+      return row.average_stats?.rank ?? '-'
     }
   },
   {
@@ -135,7 +135,7 @@ const columns: DataTableColumns<OpggChampionItem> = [
     width: 76,
     className: 'text-[13px] dark:text-white/80 text-black/80',
     sorter: (a, b) => {
-      return (b.average_stats?.tier || Infinity) - (a.average_stats?.tier || Infinity)
+      return (b.average_stats?.tier ?? Infinity) - (a.average_stats?.tier ?? Infinity)
     },
     render: (row) => {
       if (mode.value === 'ranked' && position.value !== 'none') {

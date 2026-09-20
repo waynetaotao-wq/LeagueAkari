@@ -1,6 +1,8 @@
 import {
   CHAMPION_DATA_CAPABILITIES,
-  type ChampionDataSourceId
+  type ChampionDataSourceId,
+  LOLPS_REGIONS,
+  LOLPS_TIERS
 } from '@shared/data-adapter/champion-data'
 import { useTranslation } from 'i18next-vue'
 import { MaybeRefOrGetter, computed, toValue } from 'vue'
@@ -32,46 +34,60 @@ export function usePositionOptions() {
   return { positionOptions }
 }
 
-export function useTierOptions() {
+export function useTierOptions(source: MaybeRefOrGetter<ChampionDataSourceId> = 'opgg') {
   const { t } = useTranslation()
 
-  const tierOptions = computed(() => [
-    { label: t('opgg.filters.tiers.all'), value: 'all' },
-    { label: t('opgg.filters.tiers.ibsg'), value: 'ibsg' },
-    { label: t('opgg.filters.tiers.gold_plus'), value: 'gold_plus' },
-    { label: t('opgg.filters.tiers.platinum_plus'), value: 'platinum_plus' },
-    { label: t('opgg.filters.tiers.emerald_plus'), value: 'emerald_plus' },
-    { label: t('opgg.filters.tiers.diamond_plus'), value: 'diamond_plus' },
-    { label: t('opgg.filters.tiers.master'), value: 'master' },
-    { label: t('opgg.filters.tiers.master_plus'), value: 'master_plus' },
-    { label: t('opgg.filters.tiers.grandmaster'), value: 'grandmaster' },
-    { label: t('opgg.filters.tiers.challenger'), value: 'challenger' }
-  ])
+  const tierOptions = computed(() =>
+    toValue(source) === 'lolps'
+      ? Object.keys(LOLPS_TIERS).map((value) => ({
+          label: t(`opgg.filters.tiers.${value}`),
+          value
+        }))
+      : [
+          { label: t('opgg.filters.tiers.all'), value: 'all' },
+          { label: t('opgg.filters.tiers.ibsg'), value: 'ibsg' },
+          { label: t('opgg.filters.tiers.gold_plus'), value: 'gold_plus' },
+          { label: t('opgg.filters.tiers.platinum_plus'), value: 'platinum_plus' },
+          { label: t('opgg.filters.tiers.emerald_plus'), value: 'emerald_plus' },
+          { label: t('opgg.filters.tiers.diamond_plus'), value: 'diamond_plus' },
+          { label: t('opgg.filters.tiers.master'), value: 'master' },
+          { label: t('opgg.filters.tiers.master_plus'), value: 'master_plus' },
+          { label: t('opgg.filters.tiers.grandmaster'), value: 'grandmaster' },
+          { label: t('opgg.filters.tiers.challenger'), value: 'challenger' }
+        ]
+  )
 
   return { tierOptions }
 }
 
-export function useRegionOptions() {
+export function useRegionOptions(source: MaybeRefOrGetter<ChampionDataSourceId> = 'opgg') {
   const { t } = useTranslation()
 
-  const regionOptions = computed(() => [
-    { label: t('opgg.filters.regions.global'), value: 'global' },
-    { label: t('opgg.filters.regions.na'), value: 'na' },
-    { label: t('opgg.filters.regions.euw'), value: 'euw' },
-    { label: t('opgg.filters.regions.kr'), value: 'kr' },
-    { label: t('opgg.filters.regions.br'), value: 'br' },
-    { label: t('opgg.filters.regions.eune'), value: 'eune' },
-    { label: t('opgg.filters.regions.jp'), value: 'jp' },
-    { label: t('opgg.filters.regions.lan'), value: 'lan' },
-    { label: t('opgg.filters.regions.las'), value: 'las' },
-    { label: t('opgg.filters.regions.oce'), value: 'oce' },
-    { label: t('opgg.filters.regions.tr'), value: 'tr' },
-    { label: t('opgg.filters.regions.ru'), value: 'ru' },
-    { label: t('opgg.filters.regions.sg'), value: 'sg' },
-    { label: t('opgg.filters.regions.vn'), value: 'vn' },
-    { label: t('opgg.filters.regions.tw'), value: 'tw' },
-    { label: t('opgg.filters.regions.me'), value: 'me' }
-  ])
+  const regionOptions = computed(() =>
+    toValue(source) === 'lolps'
+      ? Object.keys(LOLPS_REGIONS).map((value) => ({
+          label: t(`opgg.filters.regions.${value}`),
+          value
+        }))
+      : [
+          { label: t('opgg.filters.regions.global'), value: 'global' },
+          { label: t('opgg.filters.regions.na'), value: 'na' },
+          { label: t('opgg.filters.regions.euw'), value: 'euw' },
+          { label: t('opgg.filters.regions.kr'), value: 'kr' },
+          { label: t('opgg.filters.regions.br'), value: 'br' },
+          { label: t('opgg.filters.regions.eune'), value: 'eune' },
+          { label: t('opgg.filters.regions.jp'), value: 'jp' },
+          { label: t('opgg.filters.regions.lan'), value: 'lan' },
+          { label: t('opgg.filters.regions.las'), value: 'las' },
+          { label: t('opgg.filters.regions.oce'), value: 'oce' },
+          { label: t('opgg.filters.regions.tr'), value: 'tr' },
+          { label: t('opgg.filters.regions.ru'), value: 'ru' },
+          { label: t('opgg.filters.regions.sg'), value: 'sg' },
+          { label: t('opgg.filters.regions.vn'), value: 'vn' },
+          { label: t('opgg.filters.regions.tw'), value: 'tw' },
+          { label: t('opgg.filters.regions.me'), value: 'me' }
+        ]
+  )
 
   return { regionOptions }
 }

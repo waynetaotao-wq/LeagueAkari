@@ -19,15 +19,21 @@ const mocks = vi.hoisted(() => ({
   context: vi.fn(),
   call: vi.fn(),
   sync: vi.fn(),
-  pending: vi.fn()
+  pending: vi.fn(),
+  overview: vi.fn()
 }))
 vi.mock('@renderer-shared/shards/league-client/store', () => ({
   useLeagueClientStore: mocks.store
 }))
 vi.mock('../../context', () => ({ useOpgg: mocks.context }))
 vi.mock('@renderer-shared/shards', () => ({
-  useInstance: () => ({ call: mocks.call, onEventVue: () => () => {} })
+  useInstance: () => ({
+    call: mocks.call,
+    onEventVue: () => () => {},
+    loadOverview: mocks.overview
+  })
 }))
+vi.mock('@renderer-shared/shards/champion-data', () => ({ ChampionDataRenderer: class {} }))
 vi.mock('@renderer-shared/shards/league-client', () => ({ LeagueClientRenderer: class {} }))
 vi.mock('@renderer-shared/shards/ipc', () => ({ AkariIpcRenderer: class {} }))
 vi.mock('@renderer-shared/providers/akari-resource', () => ({
@@ -170,6 +176,69 @@ afterEach(() => {
 })
 
 describe('progressive draft matchup', () => {
+  it('uses LOL.PS lane samples, keeps Bz advice, and never mixes OP.GG matchup statistics into LOL.PS', async () => {
+    const view = mount([22, 41, 86])
+    await settle()
+    const context = mocks.context.mock.results.at(-1)!.value
+    const normal = mocks.call.getMockImplementation()!
+    mocks.call.mockImplementation((namespace, method, query) =>
+      method === 'counterIntel/bzGuide'
+        ? Promise.resolve({
+            found: true,
+            row: {
+              champion: '英雄 41',
+              stale: false,
+              coreItemIds: [6692, 6694],
+              summary: 'Bz test advice'
+            }
+          })
+        : normal(namespace, method, query)
+    )
+    mocks.overview.mockResolvedValue({
+      status: 'success',
+      data: {
+        sections: {
+          champions: Object.entries(draftPriors).flatMap(([id, roles]) =>
+            Object.entries(roles).map(([position, games]) => ({
+              championId: Number(id),
+              position,
+              performance: { games: Number(games) * 1000 }
+            }))
+          )
+        }
+      }
+    })
+    mocks.call.mockClear()
+    context.effectiveSource.value = 'lolps'
+    context.region.value = 'na'
+    context.tier.value = 'bronze_plat'
+    context.version.value = '26.18'
+    await settle()
+    nodes(view.root)
+      .find((n) => n.type === 'NSwitch')!
+      .props['onUpdate:value'](true)
+    await nextTick()
+    expect(mocks.overview).toHaveBeenLastCalledWith({
+      source: 'lolps',
+      mode: 'ranked',
+      region: 'na',
+      tier: 'bronze_plat',
+      patch: '26.18',
+      position: 'all'
+    })
+    for (const method of [
+      'counterIntel/rolePriors',
+      'counterIntel/get',
+      'counterIntel/matchupBuild'
+    ]) {
+      expect(mocks.call.mock.calls.map(([, called]) => called)).not.toContain(method)
+    }
+    expect(mocks.call.mock.calls.some(([, method]) => method === 'counterIntel/bzGuide')).toBe(true)
+    expect(label(view.root)).toContain('Bz test advice')
+    expect(label(view.root)).toContain('当前数据源未提供')
+    expect(matchupOverlayIdentity.value?.source).toBe('lolps')
+  })
+
   it('previews from the first pick, switches to a stronger candidate, and reevaluates the same candidate without refetching', async () => {
     const view = mount()
     await settle()

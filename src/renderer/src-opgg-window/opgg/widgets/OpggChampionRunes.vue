@@ -10,6 +10,12 @@
       </NCheckbox>
     </div>
 
+    <div
+      v-if="effectiveSource === 'lolps'"
+      class="mb-2 text-[10px] text-[#666666] dark:text-[#b2b2b2]"
+    >
+      {{ t('opgg.champion.lolpsRuneSample') }}
+    </div>
     <!--  runes -->
     <div
       class="mb-3 flex items-center gap-1 last:mb-0"
@@ -90,7 +96,7 @@ import { useOpgg } from '../context'
 import { getMatchupLoadoutIdentity } from '../matchup-overlay'
 import { useLoadout } from '../utils/loadout'
 
-const { champion, position } = useOpgg()
+const { champion, position, effectiveSource } = useOpgg()
 const { setRunes } = useLoadout()
 const { t } = useTranslation()
 const lcs = useLeagueClientStore()

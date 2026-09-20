@@ -10,6 +10,15 @@ import type {
   ChampionRecommendationPerformance
 } from './types'
 
+// 与 LOL.PS 网站实际提供的筛选项一致；请求层不把不支持的条件暗中折算。
+export const LOLPS_REGIONS: Readonly<Record<string, number>> = { kr: 0, na: 3 }
+export const LOLPS_TIERS: Readonly<Record<string, number>> = {
+  bronze_plat: 1,
+  emerald_plus: 2,
+  diamond_plus: 13,
+  master_plus: 3
+}
+
 // ==================================================================
 // LOL.PS 数据源载荷形状（由 LolpsHttpApiAxiosHelper 构造）
 // 字段命名沿用 OP.GG 线格式，便于与 opgg 翻译器保持同构。
@@ -18,9 +27,9 @@ import type {
 export type LolpsPositionName = 'TOP' | 'JUNGLE' | 'MID' | 'ADC' | 'SUPPORT'
 
 export interface LolpsTierData {
-  tier: number
-  rank: number
-  rank_prev: number
+  tier: number | null
+  rank: number | null
+  rank_prev: number | null
 }
 
 export interface LolpsAverageStats {
@@ -50,6 +59,7 @@ export interface LolpsCounter {
   champion_id: number
   play?: number
   win?: number
+  win_rate?: number | null
   pick_rate?: number
 }
 
@@ -69,7 +79,8 @@ export interface LolpsPickItem {
   ids: number[]
   play?: number
   win?: number
-  pick_rate?: number
+  win_rate?: number | null
+  pick_rate?: number | null
 }
 
 export interface LolpsRuneBuild {
@@ -80,21 +91,24 @@ export interface LolpsRuneBuild {
   stat_mod_ids: number[]
   play?: number
   win?: number
-  pick_rate?: number
+  win_rate?: number | null
+  pick_rate?: number | null
 }
 
 export interface LolpsSkillBuild {
   order: string[]
   play?: number
   win?: number
-  pick_rate?: number
+  win_rate?: number | null
+  pick_rate?: number | null
 }
 
 export interface LolpsSkillMastery {
   ids: string[]
   play?: number
   win?: number
-  pick_rate?: number
+  win_rate?: number | null
+  pick_rate?: number | null
   builds: LolpsSkillBuild[]
 }
 
@@ -154,12 +168,13 @@ function isoString(value: string | undefined) {
 function recommendationPerformance(item: {
   play?: number
   win?: number
-  pick_rate?: number
+  win_rate?: number | null
+  pick_rate?: number | null
 }): ChampionRecommendationPerformance {
   return {
     games: item.play ?? null,
     wins: item.win ?? null,
-    winRate: ratio(item.win, item.play),
+    winRate: item.win_rate ?? ratio(item.win, item.play),
     pickRate: item.pick_rate ?? null,
     rank: null,
     averagePlacement: null,
@@ -192,7 +207,7 @@ function championPerformance(stats: LolpsAverageStats | null): ChampionPerforman
     banRate: stats.ban_rate ?? null,
     kda: stats.kda ?? null,
     rank: stats.rank ?? stats.tier_data.rank,
-    rankChange: stats.tier_data.rank_prev - stats.tier_data.rank,
+    rankChange: rankChange(stats.tier_data),
     strengthTier: stats.tier ?? stats.tier_data.tier,
     averagePlacement: null,
     firstPlaceRate: null
@@ -209,7 +224,7 @@ function positionPerformance(position: LolpsChampionPosition): ChampionPerforman
     banRate: stats.ban_rate ?? null,
     kda: stats.kda ?? null,
     rank: stats.tier_data.rank,
-    rankChange: stats.tier_data.rank_prev - stats.tier_data.rank,
+    rankChange: rankChange(stats.tier_data),
     strengthTier: stats.tier_data.tier,
     averagePlacement: null,
     firstPlaceRate: null
@@ -224,6 +239,10 @@ function findPosition(
   return positions?.find((item) => LOLPS_POSITION_TO_UNIFIED[item.name] === position) ?? null
 }
 
+function rankChange(tier: LolpsTierData) {
+  return tier.rank_prev === null || tier.rank === null ? null : tier.rank_prev - tier.rank
+}
+
 function overviewItem(
   item: LolpsChampionItem,
   requestedPosition?: ChampionDataPosition
@@ -236,7 +255,11 @@ function overviewItem(
       : (requestedPosition ?? 'all'),
     performance: selectedPosition
       ? positionPerformance(selectedPosition)
-      : championPerformance(item.average_stats),
+      : championPerformance(
+          requestedPosition && !['all', 'none'].includes(requestedPosition)
+            ? null
+            : item.average_stats
+        ),
     counterChampionIds: selectedPosition?.counters.map((counter) => counter.champion_id) ?? []
   }
 }
@@ -277,7 +300,19 @@ export function adaptLolpsChampionOverview(
   return {
     metadata: metadata(response.meta.version, response.meta.cached_at, options),
     sections: {
-      champions: response.data.map((item) => overviewItem(item, options.position))
+      champions: response.data
+        .filter((item) =>
+          !options.position || ['all', 'none'].includes(options.position)
+            ? true
+            : findPosition(item.positions, options.position) !== null
+        )
+        .flatMap((item) =>
+          options.position === 'all'
+            ? item.positions.map((position) =>
+                overviewItem(item, LOLPS_POSITION_TO_UNIFIED[position.name])
+              )
+            : [overviewItem(item, options.position)]
+        )
     }
   }
 }
@@ -314,6 +349,7 @@ export function adaptLolpsChampionDetails(
                   {
                     abilityPriority: [...mastery.ids],
                     levelOrder: [],
+                    priorityPerformance: recommendationPerformance(mastery),
                     performance: recommendationPerformance(mastery)
                   }
                 ]
@@ -321,6 +357,7 @@ export function adaptLolpsChampionDetails(
               return mastery.builds.map((build) => ({
                 abilityPriority: [...mastery.ids],
                 levelOrder: [...(build.order ?? [])],
+                priorityPerformance: recommendationPerformance(mastery),
                 performance: recommendationPerformance(build)
               }))
             })

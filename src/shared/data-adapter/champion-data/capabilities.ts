@@ -93,7 +93,7 @@ export const CHAMPION_DATA_CAPABILITIES: Readonly<
   lolps: [
     {
       mode: 'ranked',
-      filters: ['patch', 'tier', 'position'],
+      filters: ['region', 'patch', 'tier', 'position'],
       features: [
         'champion-overview',
         'champion-summary',

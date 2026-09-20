@@ -318,6 +318,7 @@ import { getBzSummaryZh } from '@renderer-shared/components/ongoing-game-panel/w
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
 import { useInstance } from '@renderer-shared/shards'
+import { ChampionDataRenderer } from '@renderer-shared/shards/champion-data'
 import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
 import { CHAMPION_DATA_MAIN_NAMESPACE } from '@renderer-shared/shards/champion-data/context'
 import { AkariIpcRenderer } from '@renderer-shared/shards/ipc'
@@ -375,6 +376,7 @@ const lcs = useLeagueClientStore()
 const resources = useAkariResourceProvider()
 const ipc = useInstance(AkariIpcRenderer)
 const lc = useInstance(LeagueClientRenderer)
+const championData = useInstance(ChampionDataRenderer)
 const {
   region,
   tier,
@@ -539,10 +541,11 @@ let priorsRetryAt = 0
 const PRIORS_RETRY_DELAY_MS = 3000
 
 function currentPriorsKey() {
-  return `${region.value}|${tier.value}|${opggVersion.value ?? 'latest'}`
+  return `${effectiveSource.value}|${region.value}|${tier.value}|${opggVersion.value ?? 'latest'}`
 }
 
 async function ensurePriors(forceRetry = false) {
+  if (!['opgg', 'lolps'].includes(effectiveSource.value ?? '') || !opggVersion.value) return
   const key = currentPriorsKey()
   if (!forceRetry && priors.value && priorsKey === key && Date.now() - priorsLoadedAt < 10 * 60_000)
     return
@@ -555,14 +558,39 @@ async function ensurePriors(forceRetry = false) {
     priors.value = null
     priorsKey = ''
   }
-  const request = ipc.call<RolePriors>(
-    CHAMPION_DATA_MAIN_NAMESPACE,
-    'counterIntel/rolePriors',
-    region.value,
-    tier.value,
-    opggVersion.value,
-    forceRetry
-  )
+  const request =
+    effectiveSource.value === 'lolps'
+      ? championData
+          .loadOverview({
+            source: 'lolps',
+            mode: 'ranked',
+            region: region.value,
+            tier: tier.value,
+            patch: opggVersion.value,
+            position: 'all'
+          })
+          .then((result) => {
+            if (result.status !== 'success') throw new Error('LOL.PS role statistics unavailable')
+            const loaded: RolePriors = {}
+            for (const row of result.data.sections.champions) {
+              if (!(LANES as readonly string[]).includes(row.position)) continue
+              const roles = (loaded[row.championId] ??= {})
+              roles[row.position as LaneName] = row.performance.games ?? 0
+            }
+            for (const roles of Object.values(loaded)) {
+              const total = Object.values(roles).reduce((sum, count) => sum + (count ?? 0), 0)
+              if (total > 0) for (const lane of LANES) roles[lane] = (roles[lane] ?? 0) / total
+            }
+            return loaded
+          })
+      : ipc.call<RolePriors>(
+          CHAMPION_DATA_MAIN_NAMESPACE,
+          'counterIntel/rolePriors',
+          region.value,
+          tier.value,
+          opggVersion.value,
+          forceRetry
+        )
   priorsInFlight = { key, request }
   try {
     const loaded = await request
@@ -639,6 +667,8 @@ const statusText = computed(() => {
 })
 
 const placeholderText = computed(() => {
+  if (effectiveSource.value && effectiveSource.value !== 'opgg')
+    return '当前数据源未提供此处的单杀率与对位出装；下方显示所选数据源的通用构筑。'
   if (!effectiveLane.value) return '未获取到你的分路，请在上方选择'
   if (enemyChampionIds.value.length === 0) return '等待对面选择英雄…'
   if (!priors.value) return '正在获取分路数据，完成后自动推测；暂不可用时会自动重试'
@@ -931,18 +961,20 @@ async function loadMatchupForIdentity(
 ): Promise<boolean> {
   bzSourceUnavailable.value = false
   const [matchupOutcome, bzOutcome] = await Promise.all([
-    ipc
-      .call<MatchupBuildResult>(CHAMPION_DATA_MAIN_NAMESPACE, 'counterIntel/matchupBuild', {
-        myChampionId: me,
-        opponentChampionId: opp,
-        position: lane,
-        region: options.query.region,
-        tier: options.query.tier,
-        version: options.query.version,
-        force: options.force
-      })
-      .then((result) => ({ result, error: null }))
-      .catch((error: unknown) => ({ result: null, error })),
+    options.query.source === 'opgg'
+      ? ipc
+          .call<MatchupBuildResult>(CHAMPION_DATA_MAIN_NAMESPACE, 'counterIntel/matchupBuild', {
+            myChampionId: me,
+            opponentChampionId: opp,
+            position: lane,
+            region: options.query.region,
+            tier: options.query.tier,
+            version: options.query.version,
+            force: options.force
+          })
+          .then((result) => ({ result, error: null }))
+          .catch((error: unknown) => ({ result: null, error }))
+      : Promise.resolve({ result: null, error: null }),
     fetchBzRow(me, opp, options.force).then((outcome) => {
       if (seq === matchupSeq && isCurrentMatchupRequest(options.requestToken, matchupLifecycle)) {
         bzRow.value = outcome.row
@@ -1031,11 +1063,14 @@ async function loadMatchupForIdentity(
 
     const opponentText = championName(opp)
     const sectionText = `${matchupSections.value.length}/${ALL_SECTIONS.length} 项`
-    const opggText = result?.overlay
-      ? `OP.GG${metaText ? ` · ${metaText}` : ''} · ${sectionText}`
-      : resultError
-        ? 'OP.GG 获取失败，已降级'
-        : 'OP.GG 该对位样本不足'
+    const opggText =
+      options.query.source !== 'opgg'
+        ? '当前数据源无对位构筑'
+        : result?.overlay
+          ? `OP.GG${metaText ? ` · ${metaText}` : ''} · ${sectionText}`
+          : resultError
+            ? 'OP.GG 获取失败，已降级'
+            : 'OP.GG 该对位样本不足'
     if (bz?.imageReference) {
       matchupStatus.value = `Bz 已核对记录已自动展示 vs ${opponentText} · ${bz.refreshing ? '后台同步中' : '等待自动重试'}`
     } else if (bz && !bz.stale) {
@@ -1067,11 +1102,13 @@ async function loadMatchupForIdentity(
 
   if (!IN_GAME_PHASES.has(String(lcs.gameflow.phase))) matchupLock.value = null
   clearMatchupOverlay(
-    resultError
-      ? `对位数据获取失败：${(resultError as any)?.message ?? resultError}`
-      : bzSourceUnavailable.value
-        ? '该对位暂无 OP.GG 样本，且 BZ 数据源暂不可用，显示通用构筑'
-        : '该对位样本不足，显示通用构筑'
+    options.query.source !== 'opgg'
+      ? '当前数据源无对位构筑，显示通用构筑'
+      : resultError
+        ? `对位数据获取失败：${(resultError as any)?.message ?? resultError}`
+        : bzSourceUnavailable.value
+          ? '该对位暂无 OP.GG 样本，且 BZ 数据源暂不可用，显示通用构筑'
+          : '该对位样本不足，显示通用构筑'
   )
   // 无可展示构筑时仍保留攻略文字；参考记录不能授权自动写入。
   bzRow.value = bz
@@ -1412,7 +1449,7 @@ async function fetchIntel(seq: number, force = false) {
     tier: String(tier.value),
     version: opggVersion.value
   }
-  if (!targetId || !lane || opggMode.value !== 'ranked' || !effectiveSource.value) {
+  if (!targetId || !lane || opggMode.value !== 'ranked' || effectiveSource.value !== 'opgg') {
     intel.value = null
     return
   }
@@ -1494,7 +1531,7 @@ watch(
   () => refresh()
 )
 watch(
-  [() => region.value, () => tier.value, () => opggVersion.value],
+  [() => region.value, () => tier.value, () => opggVersion.value, () => effectiveSource.value],
   () => {
     priorsSeq++
     priors.value = null

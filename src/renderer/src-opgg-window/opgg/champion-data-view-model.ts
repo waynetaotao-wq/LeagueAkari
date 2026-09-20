@@ -48,9 +48,10 @@ function inferredWins(performance: ChampionRecommendationPerformance) {
   return inferredWinsIfAvailable(performance) ?? 0
 }
 
-function averageStats(performance: ChampionPerformance): OpggChampionAverageStats {
+function averageStats(performance: ChampionPerformance): OpggChampionAverageStats | null {
+  if (Object.values(performance).every((value) => value === null)) return null
   const tier = tierNumber(performance.strengthTier)
-  const rank = performance.rank ?? 0
+  const rank = performance.rank
   return {
     play: performance.games ?? 0,
     ...(performance.winRate === null ? {} : { win_rate: performance.winRate }),
@@ -60,9 +61,10 @@ function averageStats(performance: ChampionPerformance): OpggChampionAverageStat
     ...(tier === undefined ? {} : { tier }),
     ...(performance.rank === null ? {} : { rank: performance.rank }),
     tier_data: {
-      tier: tier ?? 0,
+      tier: tier ?? null,
       rank,
-      rank_prev: rank + (performance.rankChange ?? 0),
+      rank_prev:
+        rank !== null && performance.rankChange !== null ? rank + performance.rankChange : null,
       rank_prev_patch: null
     },
     ...(performance.wins === null ? {} : { win: performance.wins }),
@@ -95,15 +97,16 @@ function positionItem(
   const name = UNIFIED_TO_OPGG_POSITION[position]
   if (!name) return null
   const stats = averageStats(performance)
+  if (!stats) return null
   return {
     name,
     stats: {
       play: stats.play,
-      win_rate: stats.win_rate ?? 0,
-      pick_rate: stats.pick_rate ?? 0,
+      win_rate: stats.win_rate ?? null,
+      pick_rate: stats.pick_rate ?? null,
       role_rate: share ?? performance.pickRate ?? 0,
-      ban_rate: stats.ban_rate ?? 0,
-      kda: stats.kda ?? 0,
+      ban_rate: stats.ban_rate,
+      kda: stats.kda ?? null,
       tier_data: stats.tier_data,
       total_place: undefined as never,
       first_place: undefined as never
@@ -248,9 +251,9 @@ export function toOpggChampionDetailsViewModel(
       })),
       skill_masteries: Array.from(abilityBuilds.values()).map((builds) => ({
         ids: builds[0].abilityPriority as OpggSkillKey[],
-        play: builds[0].performance.games ?? 0,
-        win: inferredWins(builds[0].performance),
-        pick_rate: builds[0].performance.pickRate ?? 0,
+        play: (builds[0].priorityPerformance ?? builds[0].performance).games ?? 0,
+        win: inferredWins(builds[0].priorityPerformance ?? builds[0].performance),
+        pick_rate: (builds[0].priorityPerformance ?? builds[0].performance).pickRate ?? 0,
         builds: builds.map((build) => buildPickItem([], build.performance, build.levelOrder))
       })),
       skills: [],

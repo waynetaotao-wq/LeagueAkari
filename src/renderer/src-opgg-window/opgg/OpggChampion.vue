@@ -99,7 +99,7 @@
               </div>
 
               <!-- 胜率 1 -->
-              <div class="w-12.5" v-if="stats.win_rate">
+              <div class="w-12.5" v-if="typeof stats.win_rate === 'number'">
                 <div class="text-[11px] text-black/70 dark:text-white/70">
                   {{ t('opgg.champion.winRate') }}
                 </div>
@@ -107,7 +107,7 @@
               </div>
 
               <!-- 选取率 -->
-              <div class="w-12.5" v-if="stats.pick_rate">
+              <div class="w-12.5" v-if="typeof stats.pick_rate === 'number'">
                 <div class="text-[11px] text-black/70 dark:text-white/70">
                   {{ t('opgg.champion.pickRate') }}
                 </div>
@@ -115,7 +115,7 @@
               </div>
 
               <!-- 禁用率 -->
-              <div class="w-12.5" v-if="stats.ban_rate">
+              <div class="w-12.5" v-if="typeof stats.ban_rate === 'number'">
                 <div class="text-[11px] text-black/70 dark:text-white/70">
                   {{ t('opgg.champion.banRate') }}
                 </div>
@@ -126,8 +126,8 @@
         </div>
 
         <!-- 堆叠的艺术 -->
-        <!-- [lolps] 原版"劣势对位"大区块（OpggChampionCounters）已移除：
-             与顶部"对位克制"助手功能重叠且占据数屏空间，让位给对线胜率 / 单杀率双表 -->
+        <!-- LOL.PS 使用自身公布的英雄对位胜率；OP.GG 已在顶部克制表展示。 -->
+        <OpggChampionCounters v-if="effectiveSource === 'lolps'" />
         <OpggChampionBalance />
         <OpggChampionKiwiAugments />
         <OpggChampionSpells />
@@ -174,6 +174,7 @@ import OpggChampionAugments from './widgets/OpggChampionAugments.vue'
 import OpggChampionBalance from './widgets/OpggChampionBalance.vue'
 import OpggChampionBoots from './widgets/OpggChampionBoots.vue'
 import OpggChampionCoreItems from './widgets/OpggChampionCoreItems.vue'
+import OpggChampionCounters from './widgets/OpggChampionCounters.vue'
 import OpggChampionImportItemSet from './widgets/OpggChampionImportItemSet.vue'
 import OpggChampionKiwiAugments from './widgets/OpggChampionKiwiAugments.vue'
 import OpggChampionLastItems from './widgets/OpggChampionLastItems.vue'
@@ -264,7 +265,7 @@ const tierText = computed(() => {
     return '-'
   }
 
-  if (tierData.tier === undefined) {
+  if (tierData.tier == null) {
     return '-'
   }
 

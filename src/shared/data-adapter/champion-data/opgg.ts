@@ -95,7 +95,7 @@ function championPerformance(stats: OpggChampionAverageStats | null): ChampionPe
     banRate: stats.ban_rate,
     kda: stats.kda ?? null,
     rank: stats.rank ?? stats.tier_data.rank,
-    rankChange: stats.tier_data.rank_prev - stats.tier_data.rank,
+    rankChange: rankChange(stats.tier_data),
     strengthTier: stats.tier ?? stats.tier_data.tier,
     averagePlacement: ratio(stats.total_place, stats.play),
     firstPlaceRate: ratio(stats.first_place, stats.play)
@@ -112,11 +112,15 @@ function positionPerformance(position: OpggChampionPosition): ChampionPerformanc
     banRate: stats.ban_rate,
     kda: stats.kda,
     rank: stats.tier_data.rank,
-    rankChange: stats.tier_data.rank_prev - stats.tier_data.rank,
+    rankChange: rankChange(stats.tier_data),
     strengthTier: stats.tier_data.tier,
     averagePlacement: null,
     firstPlaceRate: null
   }
+}
+
+function rankChange(tier: OpggChampionAverageStats['tier_data']) {
+  return tier.rank_prev == null || tier.rank == null ? null : tier.rank_prev - tier.rank
 }
 
 function findPosition(
@@ -139,7 +143,11 @@ function overviewItem(
       : (requestedPosition ?? 'all'),
     performance: selectedPosition
       ? positionPerformance(selectedPosition)
-      : championPerformance(item.average_stats),
+      : championPerformance(
+          requestedPosition && !['all', 'none'].includes(requestedPosition)
+            ? null
+            : item.average_stats
+        ),
     counterChampionIds: selectedPosition?.counters.map((counter) => counter.champion_id) ?? []
   }
 }
@@ -180,7 +188,13 @@ export function adaptOpggChampionOverview(
   return {
     metadata: metadata(response.meta.version, response.meta.cached_at, options),
     sections: {
-      champions: response.data.map((item) => overviewItem(item, options.position))
+      champions: response.data
+        .filter((item) =>
+          !options.position || ['all', 'none'].includes(options.position)
+            ? true
+            : findPosition(item.positions, options.position) !== null
+        )
+        .map((item) => overviewItem(item, options.position))
     }
   }
 }
@@ -226,6 +240,7 @@ export function adaptOpggChampionDetails(
                   {
                     abilityPriority: [...mastery.ids],
                     levelOrder: [],
+                    priorityPerformance: recommendationPerformance(mastery),
                     performance: recommendationPerformance(mastery)
                   }
                 ]
@@ -233,6 +248,7 @@ export function adaptOpggChampionDetails(
               return mastery.builds.map((build) => ({
                 abilityPriority: [...mastery.ids],
                 levelOrder: [...(build.order ?? [])],
+                priorityPerformance: recommendationPerformance(mastery),
                 performance: recommendationPerformance(build)
               }))
             })

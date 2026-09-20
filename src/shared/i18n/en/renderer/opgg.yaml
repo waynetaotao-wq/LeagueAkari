@@ -94,6 +94,7 @@ opgg:
       tw: Taiwan
       me: Middle East
     tiers:
+      bronze_plat: Bronze – Platinum
       all: All Tiers
       ibsg: Gold -
       gold_plus: Gold +
@@ -192,6 +193,7 @@ opgg:
     plays: Total Games
     banRate: Ban Rate
     counter: Counter
+    counterPerspective: Rates describe the current champion winning a match against each pictured champion, not solo kills. Games use the selected region, tier and patch.
     allCounters: All
     counterC: Counter
     allC: All
@@ -202,6 +204,8 @@ opgg:
     apply: Apply
     runes: Rune Builds
     abilityBuild: Ability Leveling
+    abilityPrioritySample: These games, pick rates and win rates describe the skill priority; level sequences have separate samples.
+    lolpsRuneSample: Win rates describe the primary and secondary runes. Stat shards use the separately measured popular combination for these filters.
     starterItemText: Starting Items
     prismItemText: Prism Tier Items
     coreItemText: Core Items

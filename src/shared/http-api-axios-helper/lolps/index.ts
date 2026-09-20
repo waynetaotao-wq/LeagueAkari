@@ -1,3 +1,4 @@
+import { LOLPS_REGIONS, LOLPS_TIERS } from '@shared/data-adapter/champion-data/lolps'
 import type {
   LolpsChampionBuildPayload,
   LolpsChampionItem,
@@ -9,7 +10,7 @@ import axios, { AxiosInstance } from 'axios'
 import type { HttpApiRequestOptions } from '../request-options'
 
 /**
- * LolpsHttpApiAxiosHelper —— lol.ps (韩服) 数据源的 HTTP 客户端
+ * LolpsHttpApiAxiosHelper —— lol.ps (韩国/北美) 数据源的 HTTP 客户端
  *
  * 抓取 lol.ps 的四个英雄详情接口与梯队列表接口，并把结果整理成
  * OP.GG 线格式的载荷（LolpsChampionsPayload / LolpsChampionBuildPayload），
@@ -67,43 +68,21 @@ const POSITION_TO_LANE: Record<string, number> = {
 /** lane 序号 → OP.GG 线格式位置名（大写） */
 const LANE_TO_POSITION_NAME = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT'] as const
 
-/**
- * 段位筛选 → lol.ps tier 参数。
- * 实测（2026-08-26）：lol.ps 仅三档有效 —— 1=全部, 2=翡翠+(站点默认), 3=最高档(钻石+及以上)；
- * tier=0 与 >3 均返回空数据（切勿映射到 0）。就近映射如下：
- */
-const TIER_TO_LOLPS: Record<string, number> = {
-  all: 1,
-  ibsg: 1,
-  bronze_plat: 1,
-  gold_minus: 1,
-  gold: 1,
-  gold_plus: 1,
-  platinum_plus: 1,
-  emerald_plus: 2,
-  diamond_plus: 13,
-  master: 3,
-  master_plus: 3,
-  grandmaster: 3,
-  challenger: 3
-}
-
-/** lol.ps 接口实测（2026-08-26，按对位样本量指纹逐一比对确认）：
- *  tier=1 青铜~铂金 · tier=2 翡翠+ · tier=13 钻石+ · tier=3 大师+，其余值均返回 500 */
-const LOLPS_VALID_TIERS = new Set([1, 2, 3, 13])
-
+/** 仅接受站点真实支持的选项；不支持的地区/段位由 UI 明示调整。 */
 function toLolpsTier(tier: string | number | undefined): number {
-  if (tier === undefined || tier === null || tier === '') {
-    return 2
+  if (tier === undefined) return LOLPS_TIERS.emerald_plus
+  const value = typeof tier === 'number' ? tier : LOLPS_TIERS[tier]
+  if (value === undefined || !Object.values(LOLPS_TIERS).includes(value)) {
+    throw new Error(`LOL.PS unsupported tier: ${tier}`)
   }
-  if (typeof tier === 'number') {
-    return LOLPS_VALID_TIERS.has(tier) ? tier : 2
-  }
-  return TIER_TO_LOLPS[tier] ?? 2
+  return value
 }
 
-/** lol.ps 基本只有韩服数据，region 固定为 0（UI 上选择的大区将被忽略） */
-const LOLPS_REGION = 0
+function toLolpsRegion(region: string | undefined): number {
+  const key = region ?? 'kr'
+  if (!Object.hasOwn(LOLPS_REGIONS, key)) throw new Error(`LOL.PS unsupported region: ${region}`)
+  return LOLPS_REGIONS[key]
+}
 
 /** 版本列表来源：版本数据嵌在 SSR 页面 HTML 中（无独立 JSON 接口, 实测确认）。
  *  形如 versionId:154,description:"26.17" —— 显示名 "26.17" ↔ 接口值 154 */
@@ -117,8 +96,8 @@ const VERSION_INFO_REGEX = /versionId\s*:\s*(\d+)\s*,\s*description\s*:\s*"([^"]
 interface OpggLikeCombEntry {
   ids: number[]
   play: number
-  win: number
-  pick_rate: number
+  win_rate: number | null
+  pick_rate: number | null
 }
 
 interface OpggLikeRuneEntry {
@@ -129,14 +108,14 @@ interface OpggLikeRuneEntry {
   secondary_rune_ids: number[]
   stat_mod_ids: number[]
   play: number
-  win: number
-  pick_rate: number
+  win_rate: number | null
+  pick_rate: number | null
 }
 
 interface OpggLikeCounter {
   champion_id: number
   play: number
-  win: number
+  win_rate: number | null
 }
 
 // ==================================================================
@@ -160,20 +139,43 @@ function pickField(obj: any, keys: string[]): any {
 }
 
 function toNumber(v: any): number | undefined {
-  if (v === undefined || v === null || v === '') {
+  if ((typeof v !== 'string' && typeof v !== 'number') || (typeof v === 'string' && !v.trim())) {
     return undefined
   }
   const n = Number(v)
   return Number.isFinite(n) ? n : undefined
 }
 
-/** 把 52.61 / "52.61" / 0.5261 统一为 0~1 的比率 */
-function toRate(v: any): number {
+/** LOL.PS 的 winRate / pickRate / banRate 均为百分数，包括 0.5 = 0.5%。 */
+function toRate(v: any): number | null {
   const n = toNumber(v)
-  if (n === undefined) {
-    return 0
+  return n === undefined || n < 0 || n > 100 ? null : n / 100
+}
+
+/** 返回值声明了筛选身份时必须匹配，不能把服务端默认数据套上用户的筛选标签。 */
+function assertIdentity(raw: any, params: Record<string, any>) {
+  if (!raw || typeof raw !== 'object') return
+  const records = Array.isArray(raw) ? raw : [raw, ...Object.values(raw)]
+  for (const record of records) {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) continue
+    for (const key of ['region', 'version', 'tier', 'lane', 'champion']) {
+      if (params[key] === undefined || record[`${key}Id`] === undefined) continue
+      if (Number(record[`${key}Id`]) !== Number(params[key])) {
+        throw new Error(`LOL.PS response ${key} does not match requested filter`)
+      }
+    }
   }
-  return n > 1 ? n / 100 : n
+}
+
+function tierData(row: any) {
+  const grade = toNumber(row?.opTier)
+  const rank = toNumber(row?.ranking) ?? null
+  const change = toNumber(row?.rankingVariation)
+  return {
+    tier: row?.isOp === true ? 0 : grade !== undefined && grade >= 0 && grade <= 5 ? grade : null,
+    rank,
+    rank_prev: rank !== null && change !== undefined ? rank + change : null
+  }
 }
 
 /** 解析 id 列表：兼容 [1,2] / "1,2" / "1/2" / "1|2" / [{itemId:1}] / 单个数字 */
@@ -233,7 +235,10 @@ function findArrayField(obj: any, patterns: RegExp[]): any[] | undefined {
 const RUNE_TO_STYLE: Record<number, number> = (() => {
   const table: Record<number, number[]> = {
     8000: [8005, 8008, 8010, 8021, 9101, 9103, 9104, 9105, 9111, 8009, 8014, 8017, 8299],
-    8100: [8112, 8124, 8128, 9923, 8120, 8126, 8134, 8135, 8136, 8137, 8138, 8139, 8140, 8141, 8143, 8105, 8106],
+    8100: [
+      8112, 8124, 8128, 9923, 8120, 8126, 8134, 8135, 8136, 8137, 8138, 8139, 8140, 8141, 8143,
+      8105, 8106
+    ],
     8200: [8214, 8229, 8230, 8210, 8224, 8226, 8232, 8233, 8234, 8236, 8237, 8242, 8275],
     8300: [8351, 8360, 8369, 8304, 8306, 8313, 8316, 8321, 8345, 8347, 8352, 8410],
     8400: [8437, 8439, 8465, 8401, 8429, 8444, 8446, 8451, 8453, 8463, 8473]
@@ -260,7 +265,7 @@ export class LolpsHttpApiAxiosHelper {
   private _epCache = new Map<string, number>()
 
   /** 版本显示名 → lol.ps 接口实际使用的 version 值 */
-  private _versionMap = new Map<string, string | number>()
+  private _versionMap = new Map<string, number>()
 
   constructor(private _http: AxiosInstance) {
     if (!_http.defaults.baseURL) {
@@ -301,8 +306,10 @@ export class LolpsHttpApiAxiosHelper {
     for (const path of tryList) {
       try {
         const res = await this._http.get(path, { params, signal })
+        const raw = this._unwrap(res.data)
+        if (cacheKey !== 'arguments') assertIdentity(raw, params)
         this._epCache.set(cacheKey, candidates.indexOf(path))
-        return this._unwrap(res.data)
+        return raw
       } catch (error: any) {
         if (isAbort(error)) {
           throw error
@@ -314,42 +321,16 @@ export class LolpsHttpApiAxiosHelper {
     throw lastError ?? new Error(`lol.ps request failed: ${cacheKey}`)
   }
 
-  /** arguments.json 拿到的最新 versionId 缓存（作为版本解析兜底） */
-  private _latestVid: number | null = null
-
-  private async _resolveVersion(
-    display: string | undefined,
-    signal?: AbortSignal
-  ): Promise<string | number | undefined> {
-    if (!display) {
-      return undefined
+  private async _resolveVersion(display: string | undefined, signal?: AbortSignal) {
+    if (display && /^\d+$/.test(display)) return { id: Number(display), display }
+    if (!display || !this._versionMap.has(display)) {
+      const versions = await this.getVersions({ signal })
+      display ??= versions.data[0]
     }
-    const mapped = this._versionMap.get(display)
-    if (mapped !== undefined) {
-      return mapped
-    }
-    // 纯数字视为已经是 lol.ps 内部版本号（实测为 154 这类递增序号）
-    if (/^\d+$/.test(display)) {
-      return Number(display)
-    }
-    // 显示名（如 "26.17"）没有映射时（例如 getVersions 失败），退回最新版本号
-    if (this._latestVid !== null) {
-      return this._latestVid
-    }
-    try {
-      const raw = await this._get('arguments', ENDPOINT_CANDIDATES.arguments(1), {}, signal)
-      const vid = toNumber(pickField(raw, ['versionId', 'version_id', 'version']))
-      if (vid !== undefined) {
-        this._latestVid = vid
-        return vid
-      }
-    } catch (error) {
-      if (isAbort(error)) {
-        throw error
-      }
-      console.warn('[LOL.PS] 解析最新版本号失败', error)
-    }
-    return undefined
+    const id = display ? this._versionMap.get(display) : undefined
+    if (!display || id === undefined)
+      throw new Error(`LOL.PS unknown patch: ${display ?? 'latest'}`)
+    return { id, display }
   }
 
   // ------------------------- 版本列表 -------------------------
@@ -360,7 +341,7 @@ export class LolpsHttpApiAxiosHelper {
    * 因此抓取 /statistics 页面并正则提取 versionId/description 对（154 ↔ "26.17"）。
    */
   async getVersions(options: HttpApiRequestOptions = {}): Promise<{ data: string[] }> {
-    this._versionMap.clear()
+    const nextMap = new Map<string, number>()
     const displays: string[] = []
 
     try {
@@ -375,7 +356,7 @@ export class LolpsHttpApiAxiosHelper {
         const display = m[2]
         if (Number.isFinite(vid) && display && !displays.includes(display)) {
           displays.push(display)
-          this._versionMap.set(display, vid)
+          nextMap.set(display, vid)
         }
       }
     } catch (error) {
@@ -386,7 +367,7 @@ export class LolpsHttpApiAxiosHelper {
     }
 
     if (displays.length) {
-      this._latestVid = this._versionMap.get(displays[0]) as number
+      this._versionMap = nextMap
       return { data: displays }
     }
 
@@ -395,8 +376,8 @@ export class LolpsHttpApiAxiosHelper {
     const vid = toNumber(pickField(raw, ['versionId', 'version_id', 'version']))
     if (vid !== undefined) {
       const display = String(vid)
-      this._versionMap.set(display, vid)
-      this._latestVid = vid
+      nextMap.set(display, vid)
+      this._versionMap = nextMap
       return { data: [display] }
     }
     return { data: [] }
@@ -409,10 +390,11 @@ export class LolpsHttpApiAxiosHelper {
    * 输出 OP.GG 线格式（含 tier_data.rank_prev，供统一翻译器计算排名变化）。
    */
   async getChampions(
-    query: { tier?: string | number; version?: string },
+    query: { region?: string; tier?: string | number; version?: string },
     options: HttpApiRequestOptions = {}
   ): Promise<LolpsChampionsPayload> {
     const lolpsTier = toLolpsTier(query.tier)
+    const region = toLolpsRegion(query.region)
     const version = await this._resolveVersion(query.version, options.signal)
 
     const laneResults = await Promise.all(
@@ -421,7 +403,7 @@ export class LolpsHttpApiAxiosHelper {
           const raw = await this._get(
             'tierList',
             ENDPOINT_CANDIDATES.tierList(),
-            { region: LOLPS_REGION, version, tier: lolpsTier, lane },
+            { region, version: version.id, tier: lolpsTier, lane },
             options.signal
           )
           const arr = Array.isArray(raw) ? raw : (findArrayField(raw, [/list|data|champ/i]) ?? [])
@@ -444,9 +426,7 @@ export class LolpsHttpApiAxiosHelper {
 
     laneResults.forEach((list, lane) => {
       const positionName = LANE_TO_POSITION_NAME[lane]
-      const total = list.length || 1
-
-      list.forEach((c, index) => {
+      list.forEach((c) => {
         const id = toNumber(pickField(c, ['championId', 'champion_id', 'championKey', 'id']))
         if (id === undefined) {
           return
@@ -457,17 +437,9 @@ export class LolpsHttpApiAxiosHelper {
         const banRate = toRate(pickField(c, ['banRate', 'ban_rate', 'banrate']))
         const play = toNumber(pickField(c, ['count', 'play', 'games', 'totalCount'])) ?? 0
 
-        // 段位评级: 优先用接口显式字段, 其次 OP 标记, 最后按榜内名次分位数折算 1~5
-        let tierGrade = toNumber(pickField(c, ['opTier', 'psTier', 'tierGrade', 'grade']))
-        const isOp = Boolean(pickField(c, ['isOp', 'is_op', 'op']))
-        if (tierGrade === undefined || tierGrade < 0 || tierGrade > 5) {
-          tierGrade = Math.min(5, Math.floor((index / total) * 5) + 1)
-        }
-        if (isOp) {
-          tierGrade = 0 // 统一翻译器中 strengthTier 为 0 表示 "OP"
-        }
-
-        const rank = toNumber(pickField(c, ['ranking', 'rank'])) ?? index + 1
+        const grades = tierData(c)
+        const tierGrade = grades.tier
+        const rank = grades.rank
 
         let entry = byId.get(id)
         if (!entry) {
@@ -475,14 +447,14 @@ export class LolpsHttpApiAxiosHelper {
             id,
             average_stats: {
               play,
-              win: Math.round(play * winRate),
+              win: null,
               win_rate: winRate,
               pick_rate: pickRate,
               ban_rate: banRate,
               kda: null,
               tier: tierGrade,
               rank,
-              tier_data: { tier: tierGrade, rank, rank_prev: rank }
+              tier_data: { ...grades }
             },
             positions: []
           }
@@ -493,13 +465,13 @@ export class LolpsHttpApiAxiosHelper {
           name: positionName,
           stats: {
             play,
-            win: Math.round(play * winRate),
+            win: null,
             win_rate: winRate,
             pick_rate: pickRate,
             ban_rate: banRate,
             kda: null,
             role_rate: null,
-            tier_data: { tier: tierGrade, rank, rank_prev: rank }
+            tier_data: { ...grades }
           },
           counters: [] // lol.ps 的对位数据在英雄详情接口中提供 (getChampion → data.counters)
         })
@@ -532,7 +504,7 @@ export class LolpsHttpApiAxiosHelper {
     return {
       data: [...byId.values()],
       meta: {
-        version: query.version ?? '',
+        version: version.display,
         cached_at: new Date().toISOString()
       }
     }
@@ -546,14 +518,23 @@ export class LolpsHttpApiAxiosHelper {
    */
   async getChampion(
     championId: number,
-    query: { position?: ChampionDataPosition; tier?: string | number; version?: string },
+    query: {
+      region?: string
+      position?: ChampionDataPosition
+      tier?: string | number
+      version?: string
+    },
     options: HttpApiRequestOptions = {}
   ): Promise<LolpsChampionBuildPayload> {
-    const lane = POSITION_TO_LANE[query.position ?? 'middle'] ?? 2
+    const lane = POSITION_TO_LANE[query.position ?? 'middle']
+    if (lane === undefined) throw new Error(`LOL.PS unsupported position: ${query.position}`)
+    const region = toLolpsRegion(query.region)
+    const tier = toLolpsTier(query.tier)
+    const version = await this._resolveVersion(query.version, options.signal)
     const requestQuery = {
-      region: LOLPS_REGION,
-      version: await this._resolveVersion(query.version, options.signal),
-      tier: toLolpsTier(query.tier),
+      region,
+      version: version.id,
+      tier,
       lane,
       champion: championId // 站点自身的请求也带上此参数, 保持一致
     }
@@ -576,7 +557,7 @@ export class LolpsHttpApiAxiosHelper {
           'tierList',
           ENDPOINT_CANDIDATES.tierList(),
           {
-            region: LOLPS_REGION,
+            region,
             version: requestQuery.version,
             tier: requestQuery.tier,
             lane
@@ -592,7 +573,7 @@ export class LolpsHttpApiAxiosHelper {
         if (index < 0) {
           return null
         }
-        return { row: arr[index], index, total: arr.length || 1 }
+        return { row: arr[index] }
       } catch (error) {
         if (isAbort(error)) {
           throw error
@@ -629,17 +610,17 @@ export class LolpsHttpApiAxiosHelper {
     return {
       data: {
         summary,
-        summoner_spells: summonerSpells,
-        runes,
+        summoner_spells: summonerSpells.filter((item) => item.win_rate !== null),
+        runes: runes.filter((item) => item.win_rate !== null),
         skill_masteries: skillMasteries,
-        starter_items: starterItems,
-        boots,
-        core_items: coreItems,
-        last_items: lastItems,
-        counters
+        starter_items: starterItems.filter((item) => item.win_rate !== null),
+        boots: boots.filter((item) => item.win_rate !== null),
+        core_items: coreItems.filter((item) => item.win_rate !== null),
+        last_items: lastItems.filter((item) => item.win_rate !== null),
+        counters: counters.filter((item) => item.win_rate !== null)
       },
       meta: {
-        version: query.version ?? '',
+        version: version.display,
         cached_at: new Date().toISOString()
       }
     }
@@ -649,54 +630,47 @@ export class LolpsHttpApiAxiosHelper {
   private _buildSummary(
     championId: number,
     lane: number,
-    summaryRow: { row: any; index: number; total: number } | null
+    summaryRow: { row: any } | null
   ): LolpsChampionBuildPayload['data']['summary'] {
     if (!summaryRow) {
       return { id: championId, average_stats: null, positions: [] }
     }
 
-    const { row, index, total } = summaryRow
+    const { row } = summaryRow
     const winRate = toRate(pickField(row, ['winRate', 'win_rate', 'winrate']))
     const pickRate = toRate(pickField(row, ['pickRate', 'pick_rate', 'pickrate']))
     const banRate = toRate(pickField(row, ['banRate', 'ban_rate', 'banrate']))
     const play = toNumber(pickField(row, ['count', 'play', 'games', 'totalCount'])) ?? 0
 
-    let tierGrade = toNumber(pickField(row, ['opTier', 'psTier', 'tierGrade', 'grade']))
-    const isOp = Boolean(pickField(row, ['isOp', 'is_op', 'op']))
-    if (tierGrade === undefined || tierGrade < 0 || tierGrade > 5) {
-      tierGrade = Math.min(5, Math.floor((index / total) * 5) + 1)
-    }
-    if (isOp) {
-      tierGrade = 0
-    }
-    const rank = toNumber(pickField(row, ['ranking', 'rank'])) ?? index + 1
-    const tierData = { tier: tierGrade, rank, rank_prev: rank }
+    const grades = tierData(row)
+    const tierGrade = grades.tier
+    const rank = grades.rank
 
     return {
       id: championId,
       average_stats: {
         play,
-        win: Math.round(play * winRate),
+        win: null,
         win_rate: winRate,
         pick_rate: pickRate,
         ban_rate: banRate,
         kda: null,
         tier: tierGrade,
         rank,
-        tier_data: { ...tierData }
+        tier_data: { ...grades }
       },
       positions: [
         {
           name: LANE_TO_POSITION_NAME[lane] ?? 'MID',
           stats: {
             play,
-            win: Math.round(play * winRate),
+            win: null,
             win_rate: winRate,
             pick_rate: pickRate,
             ban_rate: banRate,
             kda: null,
             role_rate: null,
-            tier_data: { ...tierData }
+            tier_data: { ...grades }
           },
           counters: []
         }
@@ -747,7 +721,7 @@ export class LolpsHttpApiAxiosHelper {
           secondary_rune_ids: secondaryIds.slice(0, 2),
           stat_mod_ids: topStat,
           play,
-          win: Math.round(play * winRate),
+          win_rate: winRate,
           pick_rate: toRate(r?.pickRate)
         })
       })
@@ -757,8 +731,7 @@ export class LolpsHttpApiAxiosHelper {
     }
 
     // ---- 兜底：旧启发式（站点未来改版时兜住） ----
-    const list =
-      findArrayField(raw, [/rune/i, /perk/i, /list/i]) ?? (Array.isArray(raw) ? raw : [])
+    const list = findArrayField(raw, [/rune/i, /perk/i, /list/i]) ?? (Array.isArray(raw) ? raw : [])
 
     const out: OpggLikeRuneEntry[] = []
 
@@ -863,7 +836,7 @@ export class LolpsHttpApiAxiosHelper {
           secondary_rune_ids: secondaryIds.slice(0, 2),
           stat_mod_ids: statIds.slice(0, 3),
           play,
-          win: Math.round(play * winRate),
+          win_rate: winRate,
           pick_rate: pickRate
         })
       } catch (error) {
@@ -901,13 +874,20 @@ export class LolpsHttpApiAxiosHelper {
       return {
         ids,
         play,
-        win: Math.round(play * winRate),
+        win_rate: winRate,
         pick_rate: toRate(pickField(entry, ['pickRate', 'pick_rate']))
       }
     }
 
     const ITEM_ID_KEYS = ['itemIds', 'itemIdList', 'ids', 'items', 'itemList', 'itemId']
-    const SPELL_ID_KEYS = ['spellIds', 'spellIdList', 'summonerSpellIds', 'ids', 'spells', 'spellList']
+    const SPELL_ID_KEYS = [
+      'spellIds',
+      'spellIdList',
+      'summonerSpellIds',
+      'ids',
+      'spells',
+      'spellList'
+    ]
 
     const routeItemEntry = (entry: any, categoryHint?: string) => {
       const category = String(
@@ -1079,7 +1059,7 @@ export class LolpsHttpApiAxiosHelper {
     /** "QEW" / "Q>E>W" / "Q,E,W" / ['Q','E','W'] / [81,82,...] 等 → 大写字母序列 */
     const parseLetters = (v: any): string[] => {
       if (Array.isArray(v)) {
-        return v.map((x) => String(x).toUpperCase()).filter((c) => 'QWER'.includes(c))
+        return v.map((x) => String(x).toUpperCase()).filter((c) => /^[QWER]$/.test(c))
       }
       if (typeof v === 'string') {
         return v
@@ -1096,54 +1076,61 @@ export class LolpsHttpApiAxiosHelper {
     //           lv1 / lv3 / lv6 / lv11: 同形状的前 N 级序列 (不使用) } }
     const d = raw?.data ?? raw
 
-    /** 按各技能加点次数(排除 R) + 首次出现次序, 推导前三主升并拼成 "QWE" 形式的键 */
-    const priorityOf = (seq: string[]): string => {
+    /** 优先按加点数，再按最后一次升级先后判断主升；不能用一级学谁来打破五点技能的平局。 */
+    const priorityOf = (seq: string[], skills: string[]): string => {
       const count: Record<string, number> = {}
-      const firstIndex: Record<string, number> = {}
+      const lastIndex: Record<string, number> = {}
       seq.forEach((c, i) => {
-        if (c === 'R') {
+        if (!skills.includes(c)) {
           return
         }
         count[c] = (count[c] ?? 0) + 1
-        if (firstIndex[c] === undefined) {
-          firstIndex[c] = i
-        }
+        lastIndex[c] = i
       })
       return Object.keys(count)
-        .sort((a, b) => count[b] - count[a] || firstIndex[a] - firstIndex[b])
-        .slice(0, 3)
+        .sort((a, b) => count[b] - count[a] || lastIndex[a] - lastIndex[b])
         .join('')
     }
 
     if (Array.isArray(d?.master) && d.master.length) {
-      const fullSeqs: string[][] = (Array.isArray(d?.lv15) ? d.lv15 : [])
-        .map((e: any) => parseLetters(e?.skillNameList))
-        .filter((seq: string[]) => seq.length >= 6)
+      const fullSeqs = (Array.isArray(d?.lv15) ? d.lv15 : [])
+        .map((e: any) => ({
+          order: parseLetters(e?.skillNameList),
+          play: toNumber(e?.count) ?? 0,
+          win_rate: toRate(e?.winRate),
+          pick_rate: toRate(e?.pickRate)
+        }))
+        .filter((build: any) => build.order.length === 15 && build.win_rate !== null)
+        .sort((a: any, b: any) => b.play - a.play)
 
       const primary: any[] = []
       const masters = [...d.master].sort(
         (a: any, b: any) => (toNumber(b?.count) ?? 0) - (toNumber(a?.count) ?? 0)
       )
+      const priorities = masters.map((m: any) => parseLetters(m?.skillNameList))
       masters.forEach((m: any) => {
         const ids = parseLetters(m?.skillNameList)
-          .filter((c) => c !== 'R')
-          .slice(0, 3)
         if (ids.length < 2) {
           return
         }
-        // 在 lv15 完整序列里找主升顺序与本条一致的, 作为 builds[0].order;
-        // 找不到就退而求其次用最热门的完整序列, 再不行保底给主升顺序本身
+        // 只关联主升顺序相符的逐级方案，且保留两类样本各自的统计。
         const key = ids.join('')
-        const order = fullSeqs.find((seq) => priorityOf(seq) === key) ?? fullSeqs[0] ?? ids
-        const play = toNumber(m?.count) ?? 0
-        const win = Math.round(play * toRate(m?.winRate))
-        const pickRate = toRate(m?.pickRate)
+        const builds = fullSeqs.filter(
+          (build: any) =>
+            priorityOf(build.order, ids) === key &&
+            // 如乌迪尔，15 级序列可能尚无法区分最后主升哪个技能；歧义时不硬配。
+            priorities.filter(
+              (candidate) => priorityOf(build.order, candidate) === candidate.join('')
+            ).length === 1
+        )
+        const winRate = toRate(m?.winRate)
+        if (winRate === null) return
         primary.push({
           ids,
-          builds: [{ order, play, win, pick_rate: pickRate }],
-          play,
-          win,
-          pick_rate: pickRate
+          builds,
+          play: toNumber(m?.count) ?? 0,
+          win_rate: winRate,
+          pick_rate: toRate(m?.pickRate)
         })
       })
       if (primary.length) {
@@ -1193,19 +1180,17 @@ export class LolpsHttpApiAxiosHelper {
           return
         }
 
-        // OpggChampion.vue 会读取 builds[0].order; 有完整序列用完整序列, 否则保底给主升顺序
-        const order = fullSeq.length ? fullSeq : ids
+        const order = fullSeq.length >= 6 ? fullSeq : []
 
         const play = toNumber(pickField(s, ['count', 'play', 'games'])) ?? 0
         const winRate = toRate(pickField(s, ['winRate', 'win_rate']))
-        const win = Math.round(play * winRate)
         const pickRate = toRate(pickField(s, ['pickRate', 'pick_rate']))
 
         out.push({
           ids,
-          builds: [{ order, play, win, pick_rate: pickRate }],
+          builds: order.length ? [{ order, play, win_rate: winRate, pick_rate: pickRate }] : [],
           play,
-          win,
+          win_rate: winRate,
           pick_rate: pickRate
         })
       } catch (error) {
@@ -1226,19 +1211,19 @@ export class LolpsHttpApiAxiosHelper {
     //           counterWinrateList: [数字百分比, 升序 = 我方最被克制的排最前],
     //           counterCountList: [...], counterPickrateList: [...] } } 四条平行数组
     const vsData = raw?.data ?? raw
-    const vsIds = toIdList(vsData?.counterChampionIdList)
+    const vsIds: unknown[] = Array.isArray(vsData?.counterChampionIdList)
+      ? vsData.counterChampionIdList
+      : []
     if (vsIds.length) {
       const winList = Array.isArray(vsData?.counterWinrateList) ? vsData.counterWinrateList : []
       const countList = Array.isArray(vsData?.counterCountList) ? vsData.counterCountList : []
       return vsIds
-        .map((championId, i) => {
+        .flatMap((value, i) => {
+          const championId = toNumber(value)
           const play = toNumber(countList[i]) ?? 0
-          return {
-            champion_id: championId,
-            play,
-            // 与 OP.GG 语义一致: win/play 即我方对位该英雄的胜率, 组件端自行换算排序
-            win: Math.round(play * toRate(winList[i]))
-          }
+          const winRate = toRate(winList[i])
+          if (!championId || play <= 0 || winRate === null) return []
+          return [{ champion_id: championId, play, win_rate: winRate }]
         })
         .sort((a, b) => b.play - a.play)
         .slice(0, 50)
@@ -1250,7 +1235,13 @@ export class LolpsHttpApiAxiosHelper {
 
     list.forEach((v: any) => {
       const championId = toNumber(
-        pickField(v, ['championId', 'champion_id', 'enemyChampionId', 'vsChampionId', 'targetChampionId'])
+        pickField(v, [
+          'championId',
+          'champion_id',
+          'enemyChampionId',
+          'vsChampionId',
+          'targetChampionId'
+        ])
       )
       if (championId === undefined) {
         return
@@ -1260,7 +1251,7 @@ export class LolpsHttpApiAxiosHelper {
       out.push({
         champion_id: championId,
         play,
-        win: Math.round(play * winRate)
+        win_rate: winRate
       })
     })
 

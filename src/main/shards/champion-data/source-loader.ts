@@ -149,6 +149,9 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
       version,
       signal: options.signal
     })
+    if (response.data.meta?.version !== version) {
+      throw new Error('OP.GG overview patch does not match requested patch')
+    }
     return adaptOpggChampionOverview(response.data, {
       mode: query.mode,
       position: query.position
@@ -215,6 +218,17 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
       version,
       signal: options.signal
     })
+    if (response.data.meta?.version !== version || response.data.data?.summary?.id !== championId) {
+      throw new Error('OP.GG detail champion or patch does not match requested filters')
+    }
+    if (
+      query.mode === 'ranked' &&
+      position !== 'none' &&
+      position !== 'all' &&
+      !response.data.data.summary.positions?.some((item) => item.name.toLowerCase() === position)
+    ) {
+      throw new Error('OP.GG has no data for the requested position')
+    }
     return adaptOpggChampionDetails(response.data, {
       mode: query.mode,
       position: query.position
@@ -229,7 +243,7 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
       throw new Error(`LOL.PS does not support mode ${query.mode}`)
     }
     const response = await this._lolpsApi.getChampions(
-      { tier: query.tier, version: query.patch },
+      { region: query.region, tier: query.tier, version: query.patch },
       options
     )
     return adaptLolpsChampionOverview(response, {
@@ -246,7 +260,7 @@ export class ChampionDataMainSourceLoader implements ChampionDataSourceLoader {
     if (query.mode !== 'ranked') return null
     const response = await this._lolpsApi.getChampion(
       championId,
-      { position: query.position, tier: query.tier, version: query.patch },
+      { region: query.region, position: query.position, tier: query.tier, version: query.patch },
       options
     )
     return adaptLolpsChampionDetails(response, {
