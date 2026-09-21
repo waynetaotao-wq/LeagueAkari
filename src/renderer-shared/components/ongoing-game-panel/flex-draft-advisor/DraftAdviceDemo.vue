@@ -27,9 +27,9 @@
       :history-loading="false"
       :failed="scenario === 'partial'"
       patch="16.18"
-      :loaded-players="scenario === 'empty' ? 0 : 5"
+      :loaded-players="scenario === 'empty' || scenario === 'clashEmpty' ? 0 : 5"
     />
-    <div v-else style="padding: 16px">该模式不显示五排助手</div>
+    <div v-else style="padding: 16px">该模式不显示选人助手</div>
   </div>
 </template>
 
@@ -58,6 +58,8 @@ const selectedRole = ref<DraftRole | null>(null)
 const selectedOpponent = ref<string | null>(null)
 const comfortable = ref<number[] | null>(null)
 const scenarios = [
+  { label: 'Clash · 正常分析', value: 'clash' },
+  { label: 'Clash · 缺少历史', value: 'clashEmpty' },
   { label: '五排 · 正常分析', value: 'normal' },
   { label: '五排 · 对手已锁定', value: 'locked' },
   { label: '五排 · 推测对位', value: 'inferred' },
@@ -65,12 +67,18 @@ const scenarios = [
   { label: '五排 · 候选全不利', value: 'unfavorable' },
   { label: '五排 · 我方已锁冷门英雄', value: 'selfLocked' },
   { label: '五排 · 缺少历史', value: 'empty' },
-  { label: '单排 · 不显示', value: 'solo' }
+  { label: '单排 · 不显示', value: 'solo' },
+  { label: '大乱斗 Clash · 不显示', value: 'aramClash' }
 ]
 const fixture = computed(() => {
-  const { game, session } = createDraftFixture()
+  const { game, session } = createDraftFixture(scenario.value.startsWith('clash') ? 700 : 710)
   if (scenario.value === 'solo' && game.queryStage.phase === 'champ-select')
     game.queryStage.gameInfo.queueId = 420
+  if (scenario.value === 'aramClash' && game.queryStage.phase === 'champ-select') {
+    game.queryStage.gameInfo.queueId = 720
+    game.queryStage.gameInfo.gameMode = 'ARAM'
+    session.queueId = 720
+  }
   if (scenario.value === 'inferred') session.theirTeam.forEach((p) => (p.assignedPosition = ''))
   if (scenario.value === 'locked' || scenario.value === 'selfLocked') {
     const selfLocked = scenario.value === 'selfLocked'
@@ -119,13 +127,17 @@ const histories = computed(() =>
         p.puuid,
         readPlayerHistory(
           p.puuid,
-          scenario.value === 'empty'
+          scenario.value === 'empty' || scenario.value === 'clashEmpty'
             ? []
             : historyFixture(
                 p.puuid,
                 ids,
-                ['top', 'jungle', 'middle', 'bottom', 'utility'][p.cellId % 5] as DraftRole
-              )
+                ['top', 'jungle', 'middle', 'bottom', 'utility'][p.cellId % 5] as DraftRole,
+                Date.now(),
+                context.value?.queueId ?? 710
+              ),
+          Date.now(),
+          context.value?.queueId ?? 710
         )
       ]
     })

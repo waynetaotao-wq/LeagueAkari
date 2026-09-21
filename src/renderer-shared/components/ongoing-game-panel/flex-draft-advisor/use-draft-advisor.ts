@@ -46,16 +46,22 @@ export function useDraftAdvisor() {
     },
     { flush: 'sync' }
   )
-  const histories = computed(() =>
-    Object.fromEntries(
-      context.value
-        ? [context.value.self, ...context.value.enemies].map((player) => [
+  const histories = computed(() => {
+    const current = context.value
+    return Object.fromEntries(
+      current
+        ? [current.self, ...current.enemies].map((player) => [
             player.puuid,
-            readPlayerHistory(player.puuid, game.matchHistory[player.puuid]?.data)
+            readPlayerHistory(
+              player.puuid,
+              game.matchHistory[player.puuid]?.data,
+              Date.now(),
+              current.queueId
+            )
           ])
         : []
     )
-  )
+  })
   const role = computed(
     () =>
       selectedRole.value ??

@@ -1,12 +1,12 @@
 <template>
-  <section class="draft-advice" :aria-label="t('ongoingGame.flexDraft.title')">
+  <section class="draft-advice" :aria-label="t('ongoingGame.flexDraft.title', { mode: modeName })">
     <div class="draft-header">
       <div class="draft-heading">
         <span class="draft-mark">BP</span>
         <div>
-          <strong>{{ t('ongoingGame.flexDraft.title') }}</strong>
+          <strong>{{ t('ongoingGame.flexDraft.title', { mode: modeName }) }}</strong>
           <div class="draft-muted">
-            {{ t('ongoingGame.flexDraft.samples', { players: loadedPlayers }) }}
+            {{ t('ongoingGame.flexDraft.samples', { players: loadedPlayers, mode: modeName }) }}
           </div>
         </div>
       </div>
@@ -82,7 +82,8 @@
                 ? 'ongoingGame.flexDraft.banFinished'
                 : historyLoading
                   ? 'ongoingGame.flexDraft.historyLoading'
-                  : 'ongoingGame.flexDraft.noBans'
+                  : 'ongoingGame.flexDraft.noBans',
+              { mode: modeName }
             )
           }}
         </div>
@@ -136,7 +137,7 @@
                   pick.games
                     ? 'ongoingGame.flexDraft.familiarGames'
                     : 'ongoingGame.flexDraft.noRoleHistory',
-                  { count: pick.games }
+                  { count: pick.games, mode: modeName }
                 )
               }}</span>
               <span v-if="pick.worst && pick.score !== null" class="draft-caution">{{
@@ -176,7 +177,7 @@
           · {{ t('ongoingGame.flexDraft.unknownRole') }}</span
         ></span
       >
-      <span v-if="patch">{{ t('ongoingGame.flexDraft.source', { patch }) }}</span>
+      <span v-if="patch">{{ t('ongoingGame.flexDraft.source', { patch, mode: modeName }) }}</span>
       <span v-if="loading">{{
         t(patch ? 'ongoingGame.flexDraft.updating' : 'ongoingGame.flexDraft.loading')
       }}</span>
@@ -213,13 +214,14 @@
           >{{ t('ongoingGame.flexDraft.autoPool') }}</NButton
         >
       </div>
-      <div class="draft-muted">{{ t('ongoingGame.flexDraft.method') }}</div>
+      <div class="draft-muted">{{ t('ongoingGame.flexDraft.method', { mode: modeName }) }}</div>
       <div class="draft-opponents">
         <span v-for="entry in target.players" :key="entry.player.puuid" class="draft-opponent">
           {{ playerNames[entry.player.puuid] }} ·
           {{
             t('ongoingGame.flexDraft.familiarGames', {
-              count: histories[entry.player.puuid]?.games ?? 0
+              count: histories[entry.player.puuid]?.games ?? 0,
+              mode: modeName
             })
           }}
           <span v-if="entry.player.lockedChampionId">
@@ -307,6 +309,9 @@ const emit = defineEmits<{
   retry: []
 }>()
 const { t } = useTranslation()
+const modeName = computed(() =>
+  t(`ongoingGame.flexDraft.modes.${props.context.queueId === 700 ? 'clash' : 'premadeFive'}`)
+)
 const themeVars = useThemeVars()
 const expanded = ref(false)
 const percent = (value: number) => Math.round(value * 100)

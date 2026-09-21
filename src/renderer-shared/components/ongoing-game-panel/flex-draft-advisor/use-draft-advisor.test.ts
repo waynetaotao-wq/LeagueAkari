@@ -64,6 +64,45 @@ afterEach(() => {
 })
 
 describe('live draft advice lifecycle', () => {
+  it('switches to Clash with its own histories and choices, then hides for ARAM Clash', async () => {
+    const advisor = scope.run(() => useDraftAdvisor())!
+    advisor.selectedRole.value = 'middle'
+    advisor.selectedOpponent.value = 'player-7'
+    advisor.comfortable.value = [13]
+    await vi.advanceTimersByTimeAsync(300)
+    expect(advisor.picks.value[0].championId).toBe(13)
+    const fixture = createDraftFixture(700)
+    // Even if the client reuses selection identifiers, queue-scoped choices must reset.
+    Object.assign(game, { queryStage: fixture.game.queryStage })
+    useLeagueClientStore().champSelect.session = fixture.session
+    await nextTick()
+    expect(advisor.context.value?.queueId).toBe(700)
+    expect(advisor.comfortable.value).toBeNull()
+    expect(advisor.selectedRole.value).toBeNull()
+    expect(advisor.selectedOpponent.value).toBeNull()
+    expect(advisor.histories.value['player-2'].games).toBe(0)
+    expect(advisor.picks.value).toEqual([])
+    expect(advisor.bans.value).toEqual([])
+    game.matchHistory['player-2'] = {
+      data: historyFixture('player-2', [103, 103], 'middle', Date.now(), 700)
+    }
+    game.matchHistory['player-7'] = {
+      data: historyFixture('player-7', [105, 105], 'middle', Date.now(), 700)
+    }
+    await vi.advanceTimersByTimeAsync(300)
+    expect(advisor.picks.value[0]).toMatchObject({ championId: 103, coverage: 1 })
+    expect(advisor.bans.value[0].championId).toBe(105)
+    if (game.queryStage.phase === 'champ-select') {
+      game.queryStage.gameInfo.queueId = 720
+      game.queryStage.gameInfo.gameMode = 'ARAM'
+    }
+    useLeagueClientStore().champSelect.session!.queueId = 720
+    await nextTick()
+    expect(advisor.context.value).toBeNull()
+    expect(advisor.picks.value).toEqual([])
+    expect(advisor.result.value.samples).toEqual({})
+  })
+
   it('loads premade five advice and clears it when switching to ordinary Ranked Flex', async () => {
     const advisor = scope.run(() => useDraftAdvisor())!
     await vi.advanceTimersByTimeAsync(300)

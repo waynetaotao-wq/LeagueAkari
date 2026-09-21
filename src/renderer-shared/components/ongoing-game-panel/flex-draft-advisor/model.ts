@@ -8,6 +8,8 @@ export const MAX_CANDIDATES = 10
 const DAY = 86_400_000
 // LCU identifies 积分对战 五排 as RANKED_PREMADE_5x5 (710), separate from Ranked Flex (440).
 const PREMADE_FIVE_QUEUE_ID = 710
+const CLASH_QUEUE_ID = 700
+export type DraftQueueId = typeof PREMADE_FIVE_QUEUE_ID | typeof CLASH_QUEUE_ID
 
 export interface PoolChampion {
   championId: number
@@ -26,6 +28,7 @@ export interface DraftPlayer {
 
 export interface DraftContext {
   key: string
+  queueId: DraftQueueId
   self: DraftPlayer
   allies: DraftPlayer[]
   enemies: DraftPlayer[]
@@ -107,11 +110,11 @@ export function getDraftContext(
     game.isSpectating ||
     game.draft ||
     game.queryStage.phase !== 'champ-select' ||
-    game.queryStage.gameInfo.queueId !== PREMADE_FIVE_QUEUE_ID ||
+    ![PREMADE_FIVE_QUEUE_ID, CLASH_QUEUE_ID].includes(game.queryStage.gameInfo.queueId) ||
     game.queryStage.gameInfo.gameMode !== 'CLASSIC' ||
     !session ||
     // Gameflow is authoritative; some LCU versions omit queueId on the selection session.
-    (session.queueId > 0 && session.queueId !== PREMADE_FIVE_QUEUE_ID) ||
+    (session.queueId > 0 && session.queueId !== game.queryStage.gameInfo.queueId) ||
     session.isSpectating ||
     session.isCustomGame ||
     session.myTeam.length !== 5 ||
@@ -146,9 +149,11 @@ export function getDraftContext(
   if (!enemies.length) return null
   const roster = [...session.myTeam, ...session.theirTeam]
   const bans = actions.filter((action) => action.type === 'ban')
+  const queueId = game.queryStage.gameInfo.queueId as DraftQueueId
   return {
     // Identities arrive incrementally within one session; they must not reset manual choices.
-    key: `${session.id || session.gameId}:${self.puuid}`,
+    key: `${queueId}:${session.id || session.gameId}:${self.puuid}`,
+    queueId,
     self: player(self),
     allies,
     enemies,
@@ -171,15 +176,20 @@ export function getDraftContext(
         .map((m) => m.championPickIntent || m.championId)
         .filter((id) => id > 0)
     ),
-    banFinished: bans.length > 0 && bans.every((action) => action.completed)
+    // Clash has two ban rounds. Six completed first-round bans do not finish all banning,
+    // including when the client has not yet supplied the second round's actions.
+    banFinished:
+      bans.length >= (queueId === CLASH_QUEUE_ID ? 10 : 1) &&
+      bans.every((action) => action.completed)
   }
 }
 
-/** Only this queue's valid, recent games. A missing identity/result is not a loss. */
+/** Only the selected queue's valid, recent games. A missing identity/result is not a loss. */
 export function readPlayerHistory(
   puuid: string,
   history: LcuOrSgpGameSummary[] = [],
-  now = Date.now()
+  now = Date.now(),
+  queueId: DraftQueueId = PREMADE_FIVE_QUEUE_ID
 ): PlayerHistory {
   const records: Array<{
     gameId: number
@@ -192,7 +202,7 @@ export function readPlayerHistory(
     const game = entry.source === 'sgp' ? entry.data.json : entry.data
     if (
       !game ||
-      game.queueId !== PREMADE_FIVE_QUEUE_ID ||
+      game.queueId !== queueId ||
       game.mapId !== 11 ||
       game.gameMode !== 'CLASSIC' ||
       !Number.isFinite(game.gameCreation) ||

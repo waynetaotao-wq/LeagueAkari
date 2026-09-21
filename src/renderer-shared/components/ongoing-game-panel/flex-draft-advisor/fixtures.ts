@@ -3,10 +3,10 @@ import type { LcuOrSgpGameSummary } from '@shared/data-adapter/wrapper'
 import { createDefaultOngoingGamePanelPlayerCardTagSettings } from '@shared/shards/ongoing-game/settings'
 import type { ChampSelectSession, ChampSelectTeam } from '@shared/types/league-client/champ-select'
 
-import { DRAFT_ROLES, type DraftRole } from './model'
+import { DRAFT_ROLES, type DraftQueueId, type DraftRole } from './model'
 
 /** Synthetic data for the preview and behavior tests; never installed in live state. */
-export function createDraftFixture() {
+export function createDraftFixture(queueId: DraftQueueId = 710) {
   const member = (cellId: number): ChampSelectTeam => ({
     assignedPosition: DRAFT_ROLES[cellId % 5],
     cellId,
@@ -51,7 +51,7 @@ export function createDraftFixture() {
     allowRerolling: false,
     allowSkinSelection: true,
     allowSubsetChampionPicks: false,
-    hasSimultaneousBans: true,
+    hasSimultaneousBans: queueId === 710,
     hasSimultaneousPicks: false,
     rerollsRemaining: 0,
     trades: [],
@@ -60,7 +60,7 @@ export function createDraftFixture() {
       multiUserChatPassword: '',
       mucJwtDto: { channelClaim: '', domain: '', jwt: '', targetRegion: '' }
     },
-    queueId: 710,
+    queueId,
     id: 'draft-101',
     gameId: 101,
     isSpectating: false,
@@ -90,6 +90,43 @@ export function createDraftFixture() {
       totalTimeInPhase: 30_000
     }
   }
+  if (queueId === 700) {
+    const order: Array<['ban' | 'pick', number]> = [
+      ['ban', 0],
+      ['ban', 5],
+      ['ban', 0],
+      ['ban', 5],
+      ['ban', 0],
+      ['ban', 5],
+      ['pick', 0],
+      ['pick', 5],
+      ['pick', 6],
+      ['pick', 1],
+      ['pick', 2],
+      ['pick', 7],
+      ['ban', 5],
+      ['ban', 0],
+      ['ban', 5],
+      ['ban', 0],
+      ['pick', 8],
+      ['pick', 3],
+      ['pick', 4],
+      ['pick', 9]
+    ]
+    session.actions = order.map(([type, actorCellId], id) => [
+      {
+        actorCellId,
+        type,
+        id,
+        championId: 0,
+        completed: false,
+        isAllyAction: actorCellId < 5,
+        isInProgress: id === 0,
+        duration: 30_000,
+        pickTurn: id
+      }
+    ])
+  }
   const game: OngoingGameProviderValue = {
     settings: {
       enabled: true,
@@ -103,7 +140,12 @@ export function createDraftFixture() {
     },
     queryStage: {
       phase: 'champ-select',
-      gameInfo: { queueId: 710, queueType: 'RANKED_PREMADE_5x5', gameMode: 'CLASSIC', gameId: 101 }
+      gameInfo: {
+        queueId,
+        queueType: queueId === 700 ? 'CLASH' : 'RANKED_PREMADE_5x5',
+        gameMode: 'CLASSIC',
+        gameId: 101
+      }
     },
     draft: null,
     teams: {
@@ -136,7 +178,8 @@ export function historyFixture(
   puuid: string,
   champions: number[],
   role: DraftRole = 'middle',
-  now = Date.now()
+  now = Date.now(),
+  queueId: DraftQueueId = 710
 ): LcuOrSgpGameSummary[] {
   return champions.map(
     (championId, index) =>
@@ -148,7 +191,7 @@ export function historyFixture(
             gameId: index + 1,
             gameCreation: now - (index + 1) * 3_600_000,
             gameDuration: 1800,
-            queueId: 710,
+            queueId,
             mapId: 11,
             gameMode: 'CLASSIC',
             endOfGameResult: 'GameComplete',

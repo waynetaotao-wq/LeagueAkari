@@ -11,6 +11,9 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 export const Normal: Story = {}
+export const Clash: Story = { args: { initialScenario: 'clash' } }
+export const ClashEmpty: Story = { args: { initialScenario: 'clashEmpty' } }
+export const AramClash: Story = { args: { initialScenario: 'aramClash' } }
 export const Locked: Story = { args: { initialScenario: 'locked' } }
 export const Inferred: Story = { args: { initialScenario: 'inferred' } }
 export const Partial: Story = { args: { initialScenario: 'partial' } }

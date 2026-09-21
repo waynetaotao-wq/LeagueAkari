@@ -12,7 +12,7 @@ import {
   readPlayerHistory
 } from './model'
 
-describe('Premade five draft eligibility and live choices', () => {
+describe('Premade five and Clash draft eligibility and live choices', () => {
   it.each([420, 400, 430, 440, 450, 490, 720])(
     'never enables in queue %i even if identities are visible',
     (queueId) => {
@@ -41,24 +41,32 @@ describe('Premade five draft eligibility and live choices', () => {
     })
   })
 
-  it('requires the current connected, non-spectating champion-select session', () => {
-    const { game, session } = createDraftFixture()
-    expect(getDraftContext(game, session)?.enemies).toHaveLength(5)
-    expect(getDraftContext({ ...game, isConnected: false }, session)).toBeNull()
-    expect(getDraftContext({ ...game, isSpectating: true }, session)).toBeNull()
-    expect(getDraftContext(game, { ...session, gameId: 999 })).toBeNull()
-    expect(getDraftContext(game, { ...session, queueId: 420 })).toBeNull()
-    expect(
-      getDraftContext({ ...game, queryStage: { phase: 'unavailable', gameInfo: null } }, session)
-    ).toBeNull()
-    if (game.queryStage.phase === 'champ-select')
+  it.each([700, 710] as const)(
+    'requires the current connected, non-spectating session for queue %i',
+    (queueId) => {
+      const { game, session } = createDraftFixture(queueId)
+      expect(getDraftContext(game, session)?.enemies).toHaveLength(5)
+      expect(getDraftContext({ ...game, isConnected: false }, session)).toBeNull()
+      expect(getDraftContext({ ...game, isSpectating: true }, session)).toBeNull()
+      expect(getDraftContext(game, { ...session, gameId: 999 })).toBeNull()
+      expect(getDraftContext(game, { ...session, queueId: 420 })).toBeNull()
+      expect(getDraftContext(game, { ...session, queueId: queueId === 700 ? 710 : 700 })).toBeNull()
+      expect(getDraftContext(game, { ...session, isCustomGame: true })).toBeNull()
       expect(
-        getDraftContext({ ...game, queryStage: { ...game.queryStage, phase: 'in-game' } }, session)
+        getDraftContext({ ...game, queryStage: { phase: 'unavailable', gameInfo: null } }, session)
       ).toBeNull()
-  })
+      if (game.queryStage.phase === 'champ-select')
+        expect(
+          getDraftContext(
+            { ...game, queryStage: { ...game.queryStage, phase: 'in-game' } },
+            session
+          )
+        ).toBeNull()
+    }
+  )
 
-  it('never recovers hidden identities from cached names or obfuscated PUUIDs', () => {
-    const { game, session } = createDraftFixture()
+  it.each([700, 710] as const)('never recovers hidden identities in queue %i', (queueId) => {
+    const { game, session } = createDraftFixture(queueId)
     session.theirTeam[0].nameVisibilityType = 'HIDDEN'
     session.theirTeam[0].obfuscatedPuuid = 'has-data'
     session.theirTeam[1].puuid = '00000000-0000-0000-0000-000000000000'
@@ -68,12 +76,51 @@ describe('Premade five draft eligibility and live choices', () => {
     expect(getDraftContext(game, session)).toBeNull()
   })
 
-  it('uses the verified gameflow queue when LCU omits the redundant session queue field', () => {
-    const { game, session } = createDraftFixture()
-    Reflect.deleteProperty(session, 'queueId')
-    expect(getDraftContext(game, session)?.enemies).toHaveLength(5)
-    if (game.queryStage.phase === 'champ-select') game.queryStage.gameInfo.queueId = 420
-    expect(getDraftContext(game, session)).toBeNull()
+  it.each([700, 710] as const)(
+    'uses gameflow queue %i when LCU omits the redundant session queue field',
+    (queueId) => {
+      const { game, session } = createDraftFixture(queueId)
+      Reflect.deleteProperty(session, 'queueId')
+      expect(getDraftContext(game, session)?.enemies).toHaveLength(5)
+      if (game.queryStage.phase === 'champ-select') game.queryStage.gameInfo.queueId = 420
+      expect(getDraftContext(game, session)).toBeNull()
+    }
+  )
+
+  it('keeps Clash bans open between rounds, excludes locked players, and finishes after ten ban actions', () => {
+    const { game, session } = createDraftFixture(700)
+    const allActions = session.actions
+    session.actions = allActions.slice(0, 6)
+    session.actions.flat().forEach((action) => {
+      action.completed = true
+    })
+    const histories = {
+      'player-7': readPlayerHistory(
+        'player-7',
+        historyFixture('player-7', [105, 105], 'middle', Date.now(), 700),
+        Date.now(),
+        700
+      )
+    }
+    let context = getDraftContext(game, session)!
+    expect(context.banFinished).toBe(false)
+    expect(rankBans(context, histories, new Set([105]), new Set(), [])).toHaveLength(1)
+    session.actions = allActions
+    const pick = session.actions
+      .flat()
+      .find((action) => action.type === 'pick' && action.actorCellId === 7)!
+    pick.completed = true
+    pick.championId = session.theirTeam[2].championId = 105
+    context = getDraftContext(game, session)!
+    expect(context.banFinished).toBe(false)
+    expect(rankBans(context, histories, new Set([105]), new Set(), [])).toEqual([])
+    session.actions
+      .flat()
+      .filter((action) => action.type === 'ban')
+      .forEach((action) => {
+        action.completed = true
+      })
+    expect(getDraftContext(game, session)?.banFinished).toBe(true)
   })
 
   it('distinguishes hover from lock and reads the current traded champion', () => {
@@ -153,10 +200,10 @@ describe('history and ranking evidence', () => {
   })
 
   it.each(['lcu', 'sgp'] as const)(
-    'keeps premade five history separate from ordinary Ranked Flex through %s',
+    'isolates Clash and premade five histories from other queues through %s',
     (source) => {
-      const history = [710, 440].map((queueId, index) => {
-        const championId = index === 0 ? 13 : 105
+      const history = [710, 700, 440, 720].map((queueId, index) => {
+        const championId = [13, 105, 238, 103][index]
         const common = {
           gameId: index + 1,
           queueId,
@@ -189,6 +236,10 @@ describe('history and ranking evidence', () => {
       expect(readPlayerHistory('player', history)).toMatchObject({
         games: 1,
         champions: [{ championId: 13, games: 1, wins: 1 }]
+      })
+      expect(readPlayerHistory('player', history, Date.now(), 700)).toMatchObject({
+        games: 1,
+        champions: [{ championId: 105, games: 1, wins: 1 }]
       })
     }
   )
