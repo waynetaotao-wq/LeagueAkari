@@ -137,7 +137,9 @@ export function getDraftContext(
   )
   const player = (member: ChampSelectTeam): DraftPlayer => ({
     puuid: member.puuid,
-    name: member.gameName,
+    name: member.tagLine?.trim()
+      ? `${member.gameName.trim()}#${member.tagLine.trim()}`
+      : member.gameName.trim(),
     cellId: member.cellId,
     position: draftRole(member.assignedPosition),
     // The member's current champion reflects trades; the original completed action does not.

@@ -643,6 +643,28 @@ export class LeagueClientData {
   }
 
   private _syncLcuChampSelect() {
+    const availability = {
+      pickable: { version: 0, controller: null as AbortController | null },
+      bannable: { version: 0, controller: null as AbortController | null }
+    }
+    const invalidateAvailability = (kind: keyof typeof availability) => {
+      const list = availability[kind]
+      list.version += 1
+      list.controller?.abort()
+      list.controller = null
+    }
+    const beginAvailabilityRead = (kind: keyof typeof availability) => {
+      invalidateAvailability(kind)
+      const list = availability[kind]
+      const version = list.version
+      const controller = new AbortController()
+      list.controller = controller
+      return {
+        signal: controller.signal,
+        isCurrent: () => !controller.signal.aborted && list.version === version
+      }
+    }
+
     this._context.mobxUtils.propSync(this._context.namespace, 'champSelect', this.champSelect, [
       'session',
       'currentPickableChampionIds',
@@ -681,12 +703,18 @@ export class LeagueClientData {
     }
 
     const loadPickables = async () => {
+      const request = beginAvailabilityRead('pickable')
       try {
-        const pickables = (await this._context.leagueClient.api.champSelect.getPickableChampIds())
-          .data
+        const pickables = (
+          await this._context.leagueClient.api.champSelect.getPickableChampIds({
+            signal: request.signal
+          })
+        ).data
+        if (!request.isCurrent()) return
         this.champSelect.setCurrentPickableChampionArray(pickables)
         this._context.logger.debug(`Load pickable champion list, ${pickables.length} champions`)
       } catch (error) {
+        if (!request.isCurrent()) return
         if (isAxiosError(error) && error.response?.status === 404) {
           this.champSelect.setCurrentPickableChampionArray([])
           return
@@ -702,12 +730,18 @@ export class LeagueClientData {
     }
 
     const loadBannables = async () => {
+      const request = beginAvailabilityRead('bannable')
       try {
-        const bannables = (await this._context.leagueClient.api.champSelect.getBannableChampIds())
-          .data
+        const bannables = (
+          await this._context.leagueClient.api.champSelect.getBannableChampIds({
+            signal: request.signal
+          })
+        ).data
+        if (!request.isCurrent()) return
         this.champSelect.setCurrentBannableChampionArray(bannables)
         this._context.logger.debug(`Load bannable champion list, ${bannables.length} champions`)
       } catch (error) {
+        if (!request.isCurrent()) return
         if (isAxiosError(error) && error.response?.status === 404) {
           this.champSelect.setCurrentBannableChampionArray([])
           return
@@ -922,41 +956,39 @@ export class LeagueClientData {
       this.champSelect.setSkinSelectorInfo(null)
     })
 
-    // 额外的检查步骤, 下同
+    // Repair each missing list independently. Only session identity changes invalidate reads;
+    // countdown updates must not restart them. Late reads cannot replace newer list events.
     this._context.mobxUtils.reaction(
-      () => this.gameflow.session?.phase,
-      async (phase) => {
+      () => ({
+        connected: this._context.leagueClient.state.isConnected,
+        phase: this.gameflow.session?.phase,
+        phaseEvent: this.gameflow.phase,
+        gameId: this.gameflow.session?.gameData.gameId,
+        queueId: this.gameflow.session?.gameData.queue.id,
+        hasSession: Boolean(this.champSelect.session),
+        sessionId: this.champSelect.session?.id,
+        sessionGameId: this.champSelect.session?.gameId
+      }),
+      ({ connected, phase, phaseEvent, hasSession }) => {
+        invalidateAvailability('pickable')
+        invalidateAvailability('bannable')
         if (
-          phase === 'ChampSelect' &&
-          this.champSelect.currentPickableChampionIdArray.length === 0
-        ) {
-          const { data } = await this._context.leagueClient.api.champSelect.getPickableChampIds()
-          if (data.length) {
-            this.champSelect.setCurrentPickableChampionArray(data)
-          }
-        }
-      }
-    )
-
-    // 额外的检查步骤
-    this._context.mobxUtils.reaction(
-      () => this.gameflow.session?.phase,
-      async (phase) => {
-        if (
-          phase === 'ChampSelect' &&
-          this.champSelect.currentPickableChampionIdArray.length === 0
-        ) {
-          const { data } = await this._context.leagueClient.api.champSelect.getBannableChampIds()
-          if (data.length) {
-            this.champSelect.setCurrentBannableChampionArray(data)
-          }
-        }
-      }
+          !connected ||
+          phase !== 'ChampSelect' ||
+          (phaseEvent !== null && phaseEvent !== 'ChampSelect') ||
+          !hasSession
+        )
+          return
+        if (this.champSelect.currentPickableChampionIdArray.length === 0) void loadPickables()
+        if (this.champSelect.currentBannableChampionIdArray.length === 0) void loadBannables()
+      },
+      { equals: compareStructural }
     )
 
     this._context.leagueClient.events.on<LcuEvent<number[]>>(
       '/lol-champ-select/v1/bannable-champion-ids',
       (event) => {
+        invalidateAvailability('bannable')
         if (event.eventType === 'Delete') {
           this.champSelect.setCurrentBannableChampionArray([])
         } else {
@@ -990,6 +1022,7 @@ export class LeagueClientData {
     this._context.leagueClient.events.on<LcuEvent<number[]>>(
       '/lol-champ-select/v1/pickable-champion-ids',
       (event) => {
+        invalidateAvailability('pickable')
         if (event.eventType === 'Delete') {
           this.champSelect.setCurrentPickableChampionArray([])
         } else {

@@ -76,6 +76,31 @@ describe('Premade five and Clash draft eligibility and live choices', () => {
     expect(getDraftContext(game, session)).toBeNull()
   })
 
+  it('distinguishes visible opponents with the same name by their Riot ID tags', () => {
+    const { game, session } = createDraftFixture(700)
+    session.theirTeam[0].gameName = ' SameName '
+    session.theirTeam[0].tagLine = ' ONE '
+    session.theirTeam[1].gameName = 'SameName'
+    session.theirTeam[1].tagLine = 'TWO'
+    session.theirTeam[2].gameName = 'NoTag'
+    session.theirTeam[2].tagLine = ''
+    session.theirTeam[3].gameName = 'HiddenName'
+    session.theirTeam[3].tagLine = 'HIDDEN'
+    session.theirTeam[3].nameVisibilityType = 'HIDDEN'
+
+    const context = getDraftContext(game, session)!
+    expect(context.enemies.slice(0, 3).map((player) => player.name)).toEqual([
+      'SameName#ONE',
+      'SameName#TWO',
+      'NoTag'
+    ])
+    expect(context.enemies.some((player) => player.puuid === 'player-8')).toBe(false)
+    expect(buildTargetPool(context, {}, 'middle', 'player-6').players[0].player).toMatchObject({
+      puuid: 'player-6',
+      name: 'SameName#TWO'
+    })
+  })
+
   it.each([700, 710] as const)(
     'uses gameflow queue %i when LCU omits the redundant session queue field',
     (queueId) => {

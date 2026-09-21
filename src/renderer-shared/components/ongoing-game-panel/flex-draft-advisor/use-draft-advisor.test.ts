@@ -64,6 +64,51 @@ afterEach(() => {
 })
 
 describe('live draft advice lifecycle', () => {
+  it('refreshes statistics at the first five-minute interval even after slow initial loading', async () => {
+    source.loadPatches.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      return { status: 'success', effectiveSource: 'opgg', data: ['16.18'] }
+    })
+    let wins = 540
+    source.loadDetails.mockImplementation(async (_query, id) => {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const loaded = response(id)
+      if (loaded.status === 'success') loaded.data.sections.matchups![0].performance.wins = wins
+      return loaded
+    })
+    const advisor = scope.run(() => useDraftAdvisor())!
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(advisor.result.value.samples[13][0].wins).toBe(540)
+    wins = 460
+    advisor.retry()
+    await vi.advanceTimersByTimeAsync(300)
+    expect(source.loadDetails).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    expect(advisor.result.value.samples[13][0].wins).toBe(460)
+    expect(source.loadPatches).toHaveBeenCalledTimes(2)
+    expect(source.loadDetails).toHaveBeenCalledTimes(2)
+  })
+
+  it('distinguishes visible Riot IDs while keeping streamer aliases anonymous', async () => {
+    const store = useLeagueClientStore()
+    store.champSelect.session = {
+      ...store.champSelect.session!,
+      theirTeam: store.champSelect.session!.theirTeam.map((player, index) => ({
+        ...player,
+        gameName: 'SameName',
+        tagLine: `TAG${index}`
+      }))
+    }
+    const advisor = scope.run(() => useDraftAdvisor())!
+    advisor.selectedOpponent.value = 'player-7'
+    expect(advisor.playerNames.value['player-7']).toBe('SameName#TAG2')
+    Object.assign(game, { streamerMode: true })
+    await nextTick()
+    expect(Object.values(advisor.playerNames.value)).toEqual(['#1', '#2', '#3', '#4', '#5'])
+    expect(advisor.selectedOpponent.value).toBe('player-7')
+    expect(advisor.target.value?.players[0].player.puuid).toBe('player-7')
+  })
+
   it('switches to Clash with its own histories and choices, then hides for ARAM Clash', async () => {
     const advisor = scope.run(() => useDraftAdvisor())!
     advisor.selectedRole.value = 'middle'

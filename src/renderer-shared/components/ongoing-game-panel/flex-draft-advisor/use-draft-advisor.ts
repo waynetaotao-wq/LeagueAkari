@@ -186,7 +186,12 @@ export function useDraftAdvisor() {
     { immediate: true }
   )
   const interval = setInterval(() => {
-    if (context.value) refresh.value += 1
+    if (context.value) {
+      // This interval starts before the first response. Force its scheduled refresh so a
+      // still-valid cache does not defer fresh statistics until the next five-minute tick.
+      loader.clear()
+      refresh.value += 1
+    }
   }, 5 * 60_000)
   onScopeDispose(() => clearInterval(interval))
 
