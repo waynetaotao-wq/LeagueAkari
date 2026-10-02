@@ -79,11 +79,17 @@ const EMPTY_PERFORMANCE = {
 export function parseOpggMayhemItems(raw: string, slug: string) {
   const { roots, patch } = mayhemPage(raw, slug, 'items')
   const slots = new Map<string, ChampionItemBuildSlot>()
+  // OP.GG localizes section headings; map both supported page locales to the
+  // same Mayhem slots without treating hidden rates as Mayhem statistics.
   const labels = {
     'Core builds': 'core',
+    核心装备: 'core',
     Boots: 'boots',
+    鞋子: 'boots',
     'Starter items': 'starting',
-    Items: 'last'
+    出门装: 'starting',
+    Items: 'last',
+    装备: 'last'
   } as const
   function visit(value: unknown) {
     if (!Array.isArray(value)) return

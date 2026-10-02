@@ -737,14 +737,17 @@ export function provideOpgg() {
       return null
     }
 
-    const championId = selfActionChampionId ?? self.championId // 可能是 0
+    const queue = lcs.gameflow.session.gameData.queue
+    // Mayhem assigns/replaces champions through the current team slot. A past
+    // pick action can remain after a reroll or trade and must not pin the old build.
+    const championId =
+      queue.gameMode === 'KIWI' ? self.championId : (selfActionChampionId ?? self.championId)
 
     if (!championId) {
       return null
     }
 
     // 避免和 auto champ config 冲突，优先按照那边的来
-    const queue = lcs.gameflow.session.gameData.queue
     const autoChampConfig = resolveAutoChampConfig({
       championId,
       gameMode: queue.gameMode,

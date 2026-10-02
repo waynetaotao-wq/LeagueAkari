@@ -9,6 +9,54 @@ function page(section: string, content: unknown, mode = 'aram_mayhem', slug = 'e
   return `<link rel="canonical" href="https://op.gg/lol/modes/aram-mayhem/${slug}/${section}"/><script>self.__next_f.push(${JSON.stringify([1, flight])})</script>`
 }
 describe('OP.GG Mayhem public page contract', () => {
+  it('reads all four item sections from the localized Mayhem page in source order', () => {
+    const sections = [
+      [
+        '核心装备',
+        [
+          [3134, 126697, 6696, 6699],
+          [3134, 6692, 6696]
+        ]
+      ],
+      ['鞋子', [[3158], [3111]]],
+      ['出门装', [[1036, 3134]]],
+      ['装备', [[126697], [6696]]]
+    ] as const
+    const content = sections.map(([title, builds]) =>
+      node('section', {
+        children: [
+          node('div', { children: node('div', { children: title }) }),
+          node('div', {
+            children: node('$L64', {
+              mode: 'aram_mayhem',
+              data: builds.map((ids) => ({ ids, play: '396', win_rate: 52.02 }))
+            })
+          })
+        ]
+      })
+    )
+    const localized = page('items', content).replace(
+      'https://op.gg/lol/',
+      'https://op.gg/zh-cn/lol/'
+    )
+    const result = parseOpggMayhemItems(localized, 'ekko')
+    expect(
+      result.itemBuilds.map(({ slot, options }) => [slot, options.map((o) => o.itemIds)])
+    ).toEqual([
+      ['core', sections[0][1]],
+      ['boots', sections[1][1]],
+      ['starting', sections[2][1]],
+      ['last', sections[3][1]]
+    ])
+    expect(
+      result.itemBuilds.every((s) => s.options.every((o) => o.performance.winRate === null))
+    ).toBe(true)
+    expect(() => parseOpggMayhemItems(localized, 'zed')).toThrow(/identity/)
+    expect(() =>
+      parseOpggMayhemItems(localized.replaceAll('aram_mayhem', 'aram'), 'ekko')
+    ).toThrow()
+  })
+
   it('restores only mode-bound recommendations, without presenting hidden rates as Mayhem statistics', () => {
     const rows = [{ ids: [3152, 2510, 4645], play: '65', win_rate: 56.9, pick_rate: 13.66 }]
     const content = node('section', {

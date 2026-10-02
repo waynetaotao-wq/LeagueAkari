@@ -1,5 +1,5 @@
 <template>
-  <div class="relative h-full">
+  <div class="relative flex h-full min-h-0 flex-col">
     <!-- spinning... -->
     <NSpin v-if="isLoading" class="absolute inset-0 z-10 dark:bg-black/50">
       <template #description>
@@ -11,16 +11,24 @@
       </template>
     </NSpin>
 
-    <NScrollbar v-if="champion">
+    <NTabs
+      v-if="champion && mode === 'aram_mayhem'"
+      v-model:value="mayhemSection"
+      type="segment"
+      size="small"
+      class="mb-2 shrink-0"
+    >
+      <NTab name="items" :tab="t('opgg.champion.mayhemItemsTab')" />
+      <NTab name="augments" :tab="t('opgg.champion.mayhemAugmentsTab')" />
+    </NTabs>
+
+    <NScrollbar v-if="champion" class="min-h-0 flex-1">
       <div class="grid grid-cols-1 gap-2 lg:grid-cols-2">
         <div
           v-if="mode === 'aram_mayhem'"
           class="col-span-full rounded border border-black/10 px-3 py-2 text-xs leading-relaxed dark:border-white/10"
         >
           {{ t('opgg.champion.mayhemDataNotice', { patch: champion.meta.version || '—' }) }}
-          <div v-if="!champion.data.core_items.length">
-            {{ t('opgg.champion.mayhemItemsUnavailable') }}
-          </div>
         </div>
         <!-- summary -->
         <div class="flex h-20 items-center gap-3 px-2 pt-1 pb-3" v-if="summary && stats">
@@ -129,20 +137,60 @@
         <!-- LOL.PS 使用自身公布的英雄对位胜率；OP.GG 已在顶部克制表展示。 -->
         <OpggChampionCounters v-if="effectiveSource === 'lolps'" />
         <OpggChampionBalance />
-        <OpggChampionKiwiAugments />
+        <OpggChampionKiwiAugments v-if="mode !== 'aram_mayhem' || mayhemSection === 'augments'" />
         <OpggChampionSpells />
         <OpggChampionRunes />
         <OpggChampionSynergies />
         <OpggChampionAugments />
         <OpggChampionSkills />
-        <OpggChampionImportItemSet />
-        <OpggChampionStarterItems />
-        <OpggChampionBoots />
-        <OpggChampionPrismItems />
-        <OpggChampionCoreItems />
-        <OpggChampionLastItems />
+        <template v-if="mode !== 'aram_mayhem' || mayhemSection === 'items'">
+          <OpggChampionImportItemSet />
+          <OpggChampionStarterItems />
+          <OpggChampionBoots />
+          <OpggChampionPrismItems />
+          <OpggChampionCoreItems />
+          <OpggChampionLastItems />
+          <NEmpty
+            v-if="mode === 'aram_mayhem' && !hasMayhemItems"
+            class="col-span-full py-8"
+            :description="
+              t(
+                effectiveSource === 'qq101'
+                  ? 'opgg.champion.mayhemItemsUnsupported'
+                  : 'opgg.champion.mayhemItemsUnavailable'
+              )
+            "
+          >
+            <template #extra>
+              <NButton
+                v-if="effectiveSource === 'qq101'"
+                size="small"
+                @click="changeSource('opgg')"
+              >
+                {{ t('opgg.champion.switchToOpgg') }}
+              </NButton>
+              <NButton v-else size="small" :loading="isLoading" @click="() => refresh()">
+                {{ t('opgg.filters.refresh') }}
+              </NButton>
+            </template>
+          </NEmpty>
+        </template>
 
-        <div v-if="isEmpty">
+        <NEmpty
+          v-if="
+            mode === 'aram_mayhem' && mayhemSection === 'augments' && !kiwiAugments?.data.length
+          "
+          class="col-span-full py-8"
+          :description="t('opgg.champion.mayhemAugmentsUnavailable')"
+        >
+          <template #extra>
+            <NButton size="small" :loading="isLoading" @click="() => refresh()">
+              {{ t('opgg.filters.refresh') }}
+            </NButton>
+          </template>
+        </NEmpty>
+
+        <div v-if="mode !== 'aram_mayhem' && isEmpty">
           <div
             class="rounded border border-black/10 p-2 py-14 text-center text-sm font-bold text-black/60 last:mb-0 dark:border-[#37373c] dark:text-white/60"
           >
@@ -159,8 +207,8 @@ import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import { useTranslation } from 'i18next-vue'
-import { NButton, NScrollbar, NSpin } from 'naive-ui'
-import { computed } from 'vue'
+import { NButton, NEmpty, NScrollbar, NSpin, NTab, NTabs } from 'naive-ui'
+import { computed, ref, watch } from 'vue'
 
 import { useOpgg } from './context'
 import { resolveMatchupSessionIdentity } from './matchup-lifecycle'
@@ -194,6 +242,8 @@ const {
   mode,
   effectiveSource,
   kiwiAugments,
+  changeSource,
+  refresh,
   cancel,
   isLoading
 } = useOpgg()
@@ -203,6 +253,19 @@ const { t } = useTranslation()
 
 const resources = useAkariResourceProvider()
 const lcs = useLeagueClientStore()
+const mayhemSection = ref<'items' | 'augments'>('items')
+watch(mode, () => {
+  mayhemSection.value = 'items'
+})
+const hasMayhemItems = computed(() => {
+  const data = champion.value?.data
+  return (
+    !!data &&
+    [data.core_items, data.boots, data.starter_items, data.last_items].some(
+      (items) => items?.length
+    )
+  )
+})
 
 const activeMatchupGameId = computed(
   () =>

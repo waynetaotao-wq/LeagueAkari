@@ -1,4 +1,5 @@
 import type { ChampionDataOverview, ChampionDataQuery } from '@shared/data-adapter/champion-data'
+import { adaptOpggMayhemDetails, adaptOpggMayhemOverview } from '@shared/data-adapter/champion-data'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRenderer, h, nextTick, reactive } from 'vue'
 
@@ -101,9 +102,11 @@ async function mount() {
     savedPreferences: { flashPosition: 'auto' },
     frontendSettings: {}
   })
-  mocks.lcStore.mockReturnValue(
-    reactive({ champSelect: { session: null }, gameflow: { session: null, phase: 'None' } })
-  )
+  const lcs = reactive({
+    champSelect: { session: null as any, disabledChampionIds: new Set<number>() },
+    gameflow: { session: null as any, phase: 'None' }
+  })
+  mocks.lcStore.mockReturnValue(lcs)
   let context!: OpggContext
   app = renderer.createApp({
     setup() {
@@ -119,16 +122,81 @@ async function mount() {
   })
   app.mount({})
   await settle()
-  return { context, api, store }
+  return { context, api, store, lcs }
 }
 afterEach(() => {
   app?.unmount()
   app = null
   vi.clearAllMocks()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 describe('source/filter request lifecycle', () => {
+  it('opens Mayhem items for the assigned champion and follows rerolls despite an older pick action', async () => {
+    vi.useFakeTimers()
+    const { context, api, lcs } = await mount()
+    const champions = [238, 245].map((champion_id) => ({
+      id: champion_id,
+      champion_id,
+      tier: 2,
+      rank: 10
+    }))
+    api.loadOverview.mockImplementation(async (query) =>
+      success(adaptOpggMayhemOverview({ data: champions }, {}), query.source)
+    )
+    api.loadDetails.mockImplementation(async (query, id) => {
+      const details = adaptOpggMayhemDetails(
+        champions.find((c) => c.champion_id === id)!,
+        { data: [] },
+        {}
+      )
+      details.sections.itemBuilds = [
+        {
+          slot: 'core',
+          options: [
+            {
+              itemIds: id === 238 ? [126697, 6696] : [3152, 4645],
+              performance: {
+                games: null,
+                wins: null,
+                winRate: null,
+                pickRate: null,
+                rank: null,
+                averagePlacement: null,
+                firstPlaceRate: null
+              }
+            }
+          ]
+        }
+      ]
+      return success(details, query.source)
+    })
+    lcs.gameflow.phase = 'ChampSelect'
+    lcs.gameflow.session = { gameData: { queue: { gameMode: 'KIWI', type: 'ARAM_UNRANKED_5x5' } } }
+    lcs.champSelect.session = {
+      id: 'mayhem-session',
+      gameId: 17,
+      localPlayerCellId: 0,
+      myTeam: [{ cellId: 0, championId: 238, assignedPosition: '' }],
+      actions: [[{ actorCellId: 0, type: 'pick', championId: 238, completed: true }]]
+    }
+    await settle()
+    await vi.advanceTimersByTimeAsync(501)
+    await settle()
+    expect(context.currentTab.value).toBe('champion')
+    expect(context.mode.value).toBe('aram_mayhem')
+    expect(context.champion.value?.data.core_items[0].ids).toEqual([126697, 6696])
+    expect(api.loadDetails.mock.lastCall?.[0]).toEqual({ source: 'opgg', mode: 'aram_mayhem' })
+
+    lcs.champSelect.session.myTeam[0].championId = 245
+    await settle()
+    await vi.advanceTimersByTimeAsync(501)
+    await settle()
+    expect(context.champion.value?.data.summary.id).toBe(245)
+    expect(context.champion.value?.data.core_items[0].ids).toEqual([3152, 4645])
+  })
+
   it('switches from unsupported region/rank once, with labels and loaded data agreeing', async () => {
     const { context, api } = await mount()
     api.loadOverview.mockClear()

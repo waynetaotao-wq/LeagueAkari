@@ -183,7 +183,12 @@ opgg:
     unnamedAugments_other: The source is missing the names of {{count}} augments; their IDs are shown.
     recommendationOnly: Recommendation · statistics unavailable
     mayhemDataNotice: 'ARAM Mayhem · resource patch {{patch}}. Augment tiers and scores come from the selected source; scores are not win rates. Items follow the Mayhem page recommendations.'
-    mayhemItemsUnavailable: Item recommendations unavailable; switch to OP.GG or retry refresh.
+    mayhemItemsTab: Item builds
+    mayhemAugmentsTab: Augment tiers
+    mayhemItemsUnavailable: This champion's ARAM Mayhem item recommendations are unavailable. Please refresh to retry.
+    mayhemItemsUnsupported: Tencent 101 does not provide ARAM Mayhem item builds. Switch to OP.GG to view recommendations.
+    mayhemAugmentsUnavailable: This champion's ARAM Mayhem augments are unavailable. Please refresh to retry.
+    switchToOpgg: Switch to OP.GG
     boots: Boots
     adorableRabi: Kawaii Bunny
     avgPlace: Avg. Rank

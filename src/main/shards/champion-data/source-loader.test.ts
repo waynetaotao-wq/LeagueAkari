@@ -109,3 +109,77 @@ describe('champion data source integrity', () => {
     await expect(loader.loadOverview('opgg', query)).rejects.toThrow(/patch/)
   })
 })
+
+describe('Mayhem detail loading', () => {
+  function setupMayhem(augmentPatch: string | null = '16.19') {
+    const api = new OpggHttpApiAxiosHelper(
+      axios.create({
+        adapter: async (config) => ({
+          data: {
+            data: config.url?.endsWith('/tiers')
+              ? [{ id: 238, champion_id: 238, tier: 3, rank: 80 }]
+              : []
+          },
+          config,
+          status: 200,
+          statusText: 'OK',
+          headers: {}
+        })
+      })
+    )
+    const node = (type: string, props: unknown) => ['$', type, null, props]
+    const web = axios.create({
+      adapter: async (config) => {
+        const section = config.url?.endsWith('/items') ? 'items' : 'augments'
+        if (section === 'augments' && !augmentPatch) throw new Error('Augment page unavailable')
+        const content =
+          section === 'items'
+            ? node('section', {
+                children: [
+                  node('div', { children: '核心装备' }),
+                  node('$L64', { mode: 'aram_mayhem', data: [{ ids: [3134, 126697, 6696, 6699] }] })
+                ]
+              })
+            : node('$L65', {
+                data: [{ id: 1029, tier: 0, performance: 90, popular: 5, name: '虚幻武器' }]
+              })
+        const flight = `0:${JSON.stringify(node('$L1', { sub: 'aram_mayhem', detail: section, params: { game_patch_version: section === 'items' ? '16.19' : augmentPatch } }))}\n1:${JSON.stringify(content)}\n`
+        const data = `<link rel="canonical" href="https://op.gg/zh-cn/lol/modes/aram-mayhem/zed/${section}"/><script>self.__next_f.push(${JSON.stringify([1, flight])})</script>`
+        return { data, config, status: 200, statusText: 'OK', headers: {} }
+      }
+    })
+    return new ChampionDataMainSourceLoader({ warn: vi.fn() } as any, api, {} as any, {} as any, {
+      http: web,
+      getSlug: async () => 'zed'
+    })
+  }
+
+  it.each(['16.19', null])(
+    'keeps localized item builds when the augment page patch is %s',
+    async (patch) => {
+      const details = await setupMayhem(patch).loadDetails('opgg', { mode: 'aram_mayhem' }, 238)
+      expect(details).toMatchObject({
+        championId: 238,
+        metadata: { source: 'opgg', mode: 'aram_mayhem', patch: '16.19' },
+        sections: {
+          itemBuilds: [
+            {
+              slot: 'core',
+              options: [
+                { itemIds: [3134, 126697, 6696, 6699], performance: { games: null, winRate: null } }
+              ]
+            }
+          ]
+        }
+      })
+      expect(details?.sections.augments).toHaveLength(patch ? 1 : 0)
+    }
+  )
+
+  it('does not combine item and augment pages from different patches', async () => {
+    const details = await setupMayhem('16.18').loadDetails('opgg', { mode: 'aram_mayhem' }, 238)
+    expect(details?.metadata.patch).toBe('16.18')
+    expect(details?.sections.augments).toHaveLength(1)
+    expect(details?.sections.itemBuilds).toBeUndefined()
+  })
+})
