@@ -461,4 +461,59 @@ describe('visible premade draft history flow', () => {
     ])
     expect(h.state.draftMatchHistoryLoadingState['player-5']).toBe('loaded')
   })
+
+  it('preserves conflicting evidence from a repeated LCU page without requesting more pages', async () => {
+    // Load the actual renderer parser through Vitest without adding renderer aliases to main TS.
+    const { readPlayerHistory } = await vi.importActual<{
+      readPlayerHistory: (
+        puuid: string,
+        history: OngoingGameMainContext['state']['draftMatchHistory'][string]['data'],
+        now: number
+      ) => unknown
+    }>('@renderer-shared/components/ongoing-game-panel/flex-draft-advisor/model')
+    const h = harness('lcu')
+    const now = Date.now()
+    h.lcuApi.mockImplementation((puuid, start) =>
+      Promise.resolve({
+        data: {
+          games: {
+            games:
+              puuid !== 'player-5'
+                ? []
+                : Array.from({ length: 20 }, (_, index) => ({
+                    gameId: index + 1,
+                    queueId: 710,
+                    mapId: 11,
+                    gameMode: 'CLASSIC',
+                    gameCreation: now - (index + 1) * 1000,
+                    gameDuration: 1800,
+                    participantIdentities: [{ participantId: 1, player: { puuid } }],
+                    participants: [
+                      {
+                        participantId: 1,
+                        championId: start === 20 && index === 0 ? 105 : 13,
+                        stats: { win: true }
+                      }
+                    ]
+                  }))
+          }
+        }
+      })
+    )
+    h.loader.watch()
+    await flush()
+    const history = readPlayerHistory('player-5', h.state.draftMatchHistory['player-5'].data, now)
+    expect(history).toMatchObject({
+      games: 19,
+      champions: [{ championId: 13, games: 19, wins: 19 }]
+    })
+    expect(h.state.draftMatchHistory['player-5'].scannedCount).toBe(40)
+    expect(
+      h.lcuApi.mock.calls.filter((call) => call[0] === 'player-5').map((call) => call.slice(1, 3))
+    ).toEqual([
+      [0, 19],
+      [20, 39]
+    ])
+    expect(h.state.draftMatchHistoryLoadingState['player-5']).toBe('loaded')
+  })
 })

@@ -75,6 +75,7 @@ watch(
       comfortable.value = [13, 103, 238, 105, 7, 517, 24, 64, 202, 111]
     if (value === 'fullAutomaticPool') comfortable.value = null
     if (value.startsWith('banCombination')) comfortable.value = [103]
+    if (value.startsWith('fullTarget')) comfortable.value = [103]
   },
   { immediate: true }
 )
@@ -89,6 +90,12 @@ const scenarios = [
   { label: '五排 · 正常分析', value: 'normal' },
   { label: '五排 · 阵容缺口', value: 'composition' },
   { label: '五排 · 混合位置记录', value: 'mixedPosition' },
+  { label: '五排 · 覆盖略低于六成', value: 'coverageBoundary' },
+  { label: '五排 · 覆盖接近完整', value: 'coverageNearFull' },
+  { label: '五排 · 覆盖完整', value: 'coverageFull' },
+  { label: '五排 · 完整二十五英雄池', value: 'fullTargetPool' },
+  { label: '五排 · 完整七英雄池', value: 'fullTargetSeven' },
+  { label: '五排 · 二十五英雄池统计不足', value: 'fullTargetSparse' },
   { label: '五排 · 已禁英雄残留预选', value: 'staleHover' },
   { label: '五排 · 手动池英雄已禁', value: 'unavailablePool' },
   { label: '五排 · 十项手动池英雄已禁', value: 'fullUnavailablePool' },
@@ -249,7 +256,29 @@ const historyScans = computed(() =>
   )
 )
 const championNames = {
+  1: '安妮',
+  3: '加里奥',
+  4: '崔斯特',
+  8: '弗拉基米尔',
+  9: '费德提克',
+  10: '凯尔',
   13: '瑞兹',
+  14: '赛恩',
+  17: '提莫',
+  18: '崔丝塔娜',
+  20: '努努和威朗普',
+  22: '艾希',
+  25: '莫甘娜',
+  26: '基兰',
+  27: '辛吉德',
+  28: '伊芙琳',
+  30: '卡尔萨斯',
+  31: '科加斯',
+  32: '阿木木',
+  33: '拉莫斯',
+  34: '艾尼维亚',
+  35: '萨科',
+  36: '蒙多医生',
   103: '阿狸',
   238: '劫',
   105: '菲兹',
@@ -261,9 +290,52 @@ const championNames = {
   111: '诺提勒斯',
   61: '奥莉安娜'
 }
+const fullTargetIds = [
+  1, 3, 4, 7, 8, 9, 10, 13, 14, 17, 18, 20, 22, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36
+]
 const histories = computed(() =>
   Object.fromEntries(
     [...fixture.value.session.myTeam, ...fixture.value.session.theirTeam].map((p) => {
+      if (scenario.value.startsWith('fullTarget') && [5, 7].includes(p.cellId)) {
+        const now = Date.now()
+        const ids = scenario.value === 'fullTargetSeven' ? fullTargetIds.slice(0, 7) : fullTargetIds
+        const games = historyFixture(
+          p.puuid,
+          ids.flatMap((id) => [id, id]),
+          'middle',
+          now
+        )
+        for (const game of games) {
+          if (game.source === 'sgp') game.data.json.gameCreation = now
+        }
+        return [p.puuid, readPlayerHistory(p.puuid, games, now)]
+      }
+      if (scenario.value.startsWith('coverage') && p.cellId === 7) {
+        const now = Date.now()
+        const knownCount = scenario.value === 'coverageNearFull' ? 49 : 3
+        const unknownCount =
+          scenario.value === 'coverageFull' ? 0 : scenario.value === 'coverageNearFull' ? 1 : 2
+        const games = historyFixture(
+          p.puuid,
+          [...Array(knownCount).fill(105), ...Array(unknownCount).fill(7)],
+          'middle',
+          now
+        )
+        games.forEach((game, index) => {
+          if (game.source !== 'sgp') return
+          game.data.json.participants[0].teamPosition = index < knownCount ? 'MIDDLE' : ''
+          game.data.json.gameCreation =
+            now -
+            (scenario.value === 'coverageBoundary'
+              ? index < knownCount
+                ? 3_600_000
+                : 0
+              : index < knownCount
+                ? 0
+                : 89 * 86_400_000)
+        })
+        return [p.puuid, readPlayerHistory(p.puuid, games, now)]
+      }
       if (scenario.value.startsWith('banCombination')) {
         const now = Date.now()
         const ids =
@@ -398,11 +470,18 @@ const picks = computed(() =>
     ? rankPicks(
         candidates.value,
         target.value,
-        scenario.value === 'partial'
-          ? { 13: samples[13] }
-          : scenario.value === 'unfavorable'
-            ? Object.fromEntries(Object.keys(samples).map((id) => [id, samples[238]]))
-            : samples,
+        scenario.value.startsWith('fullTarget')
+          ? {
+              103: (scenario.value === 'fullTargetSparse'
+                ? fullTargetIds.slice(0, 12)
+                : fullTargetIds
+              ).map((championId) => ({ championId, games: 1000, wins: 550 }))
+            }
+          : scenario.value === 'partial'
+            ? { 13: samples[13] }
+            : scenario.value === 'unfavorable'
+              ? Object.fromEntries(Object.keys(samples).map((id) => [id, samples[238]]))
+              : samples,
         rankingOptions.value
       )
     : []

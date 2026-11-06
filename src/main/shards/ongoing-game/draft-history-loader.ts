@@ -209,10 +209,12 @@ export class OngoingGameDraftHistoryLoader {
         )
         if (!isCurrent()) return
         scannedCount += rows.length
-        const fresh = rows.filter((row) => !seen.has(row.gameId))
-        for (const row of fresh) {
+        const hasFresh = rows.some((row) => !seen.has(row.gameId))
+        for (const row of rows) {
           seen.add(row.gameId)
           const game = row.source === 'sgp' ? row.data.json : row.data
+          // Preserve repeated evidence across pages so the renderer can reject conflicts,
+          // merge compatible positions, and then select its latest 50 valid unique games.
           if (game.queueId === context.queueId) data.push(row)
         }
         const result: OngoingGameDraftHistory = {
@@ -229,7 +231,7 @@ export class OngoingGameDraftHistoryLoader {
         // Queue matches may still be remakes/invalid samples. The renderer selects its latest
         // 50 valid games; keep scanning LCU within the 200-record budget instead of stopping at
         // 50 raw queue matches. No per-game details/timelines are needed.
-        if (context.source === 'sgp' || rows.length < pageSize || !fresh.length) break
+        if (context.source === 'sgp' || rows.length < pageSize || !hasFresh) break
       }
       if (isCurrent()) this._setStatus(puuid, 'loaded')
     } catch (error) {

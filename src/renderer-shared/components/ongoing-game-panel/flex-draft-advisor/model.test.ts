@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createDraftFixture, historyFixture } from './fixtures'
 import {
   type DraftRole,
+  type PlayerHistory,
   type TargetPool,
   buildTargetPool,
   getDraftContext,
@@ -32,6 +33,325 @@ function evenlyPlayedHistory(
   })
   return readPlayerHistory(puuid, data, now)
 }
+
+describe('allied team opportunity cost and constrained draft positions', () => {
+  it('preserves a shared allied alternative before an independently replaceable main', () => {
+    const { game, session } = createDraftFixture()
+    const context = { ...getDraftContext(game, session)!, banBudget: 1 }
+    const histories = {
+      'player-7': evenlyPlayedHistory('player-7', [
+        [13, 20],
+        [238, 20]
+      ]),
+      'player-0': evenlyPlayedHistory(
+        'player-0',
+        [
+          [13, 20],
+          [105, 20]
+        ],
+        'top'
+      ),
+      'player-1': evenlyPlayedHistory(
+        'player-1',
+        [
+          [13, 20],
+          [105, 20]
+        ],
+        'jungle'
+      ),
+      'player-3': evenlyPlayedHistory(
+        'player-3',
+        [
+          [238, 20],
+          [24, 20]
+        ],
+        'bottom'
+      )
+    }
+    const allowed = new Set([13, 238])
+    const input = structuredClone({ context, histories, allowed })
+    const shared = rankBans(context, histories, new Set([13]), new Set(), [])[0]
+    const independent = rankBans(context, histories, new Set([238]), new Set(), [])[0]
+    expect(shared.replacementGap).toBe(independent.replacementGap)
+    expect(shared.allyCost).toBeGreaterThan(0.2)
+    expect(independent.allyCost).toBe(0)
+    expect(shared.score).toBeLessThan(independent.score)
+    expect(rankBans(context, histories, allowed, new Set(), [])[0].championId).toBe(238)
+
+    const reversed = structuredClone(histories)
+    for (const history of Object.values(reversed)) {
+      history.champions.reverse()
+      for (const pool of Object.values(history.byRole)) pool.reverse()
+    }
+    expect(
+      rankBans(
+        {
+          ...context,
+          allies: [...context.allies].reverse(),
+          enemies: [...context.enemies].reverse()
+        },
+        reversed,
+        new Set([...allowed].reverse()),
+        new Set(),
+        []
+      )
+    ).toEqual(rankBans(context, histories, allowed, new Set(), []))
+    expect({ context, histories, allowed }).toEqual(input)
+  })
+
+  it('recomputes allied shared replacements for every hypothetical ban in a combination', () => {
+    const { game, session } = createDraftFixture()
+    const context = { ...getDraftContext(game, session)!, banBudget: 2 }
+    const histories = {
+      'player-7': evenlyPlayedHistory('player-7', [
+        [13, 20],
+        [105, 20]
+      ]),
+      'player-0': evenlyPlayedHistory(
+        'player-0',
+        [
+          [13, 16],
+          [105, 16],
+          [24, 16]
+        ],
+        'top'
+      ),
+      'player-1': evenlyPlayedHistory(
+        'player-1',
+        [
+          [13, 16],
+          [105, 16],
+          [24, 16]
+        ],
+        'jungle'
+      )
+    }
+    const allowed = new Set([13, 105])
+    const before = structuredClone({ context, histories })
+    const plan = rankBans(context, histories, allowed, new Set(), [])
+    expect(plan.map((row) => row.championId)).toEqual([13, 105])
+    expect(plan[0].allyCost).toBe(0)
+    expect(plan[1].allyCost).toBeGreaterThan(0.2)
+    const actual = rankBans(
+      { ...context, banned: new Set([13]), banBudget: 1 },
+      histories,
+      allowed,
+      new Set(),
+      []
+    )
+    expect(actual).toEqual([plan[1]])
+    expect({ context, histories }).toEqual(before)
+  })
+
+  it('uses the same uniquely remaining client position for bans and target evidence', () => {
+    const { game, session } = createDraftFixture()
+    session.theirTeam[0].assignedPosition = ''
+    const context = { ...getDraftContext(game, session)!, banBudget: 1 }
+    const top = evenlyPlayedHistory('player-5', [[13, 2]], 'top')
+    const middle = evenlyPlayedHistory('player-5', [[238, 40]])
+    const histories = {
+      'player-5': {
+        games: 42,
+        champions: [...top.champions, ...middle.champions],
+        roles: { top: 2, middle: 40 },
+        byRole: { top: top.champions, middle: middle.champions },
+        unknownRoleGames: 0
+      }
+    }
+    const input = structuredClone({ context, histories })
+    expect(buildTargetPool(context, histories, 'top', null)).toMatchObject({
+      source: 'assignment',
+      champions: [{ championId: 13, weight: 1 }]
+    })
+    const expected = rankBans(
+      {
+        ...context,
+        enemies: context.enemies.map((player) =>
+          player.cellId === 5 ? { ...player, position: 'top' } : player
+        )
+      },
+      histories,
+      new Set([13, 238]),
+      new Set(),
+      []
+    )
+    expect(
+      rankBans(context, histories, new Set([13, 238]), new Set(), []).map(
+        ({ championId, score }) => ({ championId, score })
+      )
+    ).toEqual(expected.map(({ championId, score }) => ({ championId, score })))
+    expect(expected[0].championId).toBe(13)
+
+    // A hidden slot, a second unknown, or conflicting client positions defeats elimination.
+    const ambiguous = [
+      context.enemies.filter((player) => player.cellId !== 6),
+      context.enemies.map((player) =>
+        player.cellId === 6 ? { ...player, position: null } : player
+      ),
+      context.enemies.map((player) =>
+        player.cellId === 6 ? { ...player, position: 'middle' as const } : player
+      )
+    ]
+    for (const enemies of ambiguous)
+      expect(
+        rankBans({ ...context, enemies }, histories, new Set([13, 238]), new Set(), [])[0]
+          .championId
+      ).toBe(238)
+    expect({ context, histories }).toEqual(input)
+  })
+
+  it('uses a uniquely remaining allied position without overriding the local role choice', () => {
+    const { game, session } = createDraftFixture()
+    session.myTeam[2].assignedPosition = ''
+    const context = { ...getDraftContext(game, session)!, banBudget: 1 }
+    const middle = evenlyPlayedHistory('player-2', [[13, 20]])
+    const top = evenlyPlayedHistory('player-2', [[238, 20]], 'top')
+    const histories = {
+      'player-7': evenlyPlayedHistory('player-7', [
+        [13, 20],
+        [238, 20]
+      ]),
+      'player-2': {
+        games: 40,
+        champions: [...middle.champions, ...top.champions],
+        roles: { middle: 20, top: 20 },
+        byRole: { middle: middle.champions, top: top.champions },
+        unknownRoleGames: 0
+      }
+    }
+    expect(rankBans(context, histories, new Set([13]), new Set(), [])[0].allyCost).toBeGreaterThan(
+      0.2
+    )
+    expect(rankBans(context, histories, new Set([238]), new Set(), [])[0].allyCost).toBe(0)
+    expect(
+      rankBans(context, histories, new Set([13]), new Set(), [], { selfRole: 'top' })[0].allyCost
+    ).toBe(0)
+    expect(
+      rankBans(context, histories, new Set([238]), new Set(), [], { selfRole: 'top' })[0].allyCost
+    ).toBeGreaterThan(0.2)
+    expect(context.self.position).toBeNull()
+  })
+
+  it('requires two allied games for a known main or known replacement', () => {
+    const { game, session } = createDraftFixture()
+    const context = { ...getDraftContext(game, session)!, banBudget: 1 }
+    const enemy = evenlyPlayedHistory('player-7', [[13, 10]])
+    const cost = (groups: Array<[number, number]>) =>
+      rankBans(
+        context,
+        {
+          'player-7': enemy,
+          'player-0': evenlyPlayedHistory('player-0', groups, 'top')
+        },
+        new Set([13]),
+        new Set(),
+        []
+      )[0].allyCost
+    expect(cost([[13, 1]])).toBe(0)
+    const knownCost = cost([[13, 2]])
+    expect(knownCost).toBeGreaterThan(0)
+    expect(
+      cost([
+        [13, 2],
+        [105, 1]
+      ])
+    ).toBe(knownCost)
+    expect(
+      cost([
+        [13, 2],
+        [105, 2]
+      ])
+    ).toBe(0)
+  })
+
+  it('matches independent exhaustive allied assignments after earlier bans and unavailable picks', () => {
+    const { game, session } = createDraftFixture()
+    const context = { ...getDraftContext(game, session)!, banBudget: 1 }
+    const pools = [
+      [
+        [1, 10, 5],
+        [2, 8, 4],
+        [3, 6, 3],
+        [4, 4, 2],
+        [5, 2, 1],
+        [6, 2, 1]
+      ],
+      [
+        [1, 10, 5],
+        [2, 10, 5],
+        [7, 4, 2]
+      ],
+      [
+        [2, 10, 5],
+        [3, 10, 5],
+        [8, 4, 2]
+      ],
+      [
+        [4, 10, 5],
+        [5, 10, 5],
+        [9, 1, 1]
+      ],
+      [
+        [1, 20, 0],
+        [10, 20, 0]
+      ]
+    ].map((pool) => pool.map(([championId, games, wins]) => ({ championId, games, wins })))
+    const histories: Record<string, PlayerHistory> = Object.fromEntries(
+      context.allies.map((player, index) => {
+        const champions = pools[index]
+        const games = champions.reduce((sum, row) => sum + row.games, 0)
+        return [
+          player.puuid,
+          {
+            games,
+            champions,
+            roles: { [player.position!]: games },
+            byRole: { [player.position!]: champions },
+            unknownRoleGames: 0
+          }
+        ]
+      })
+    )
+    histories['player-7'] = evenlyPlayedHistory(
+      'player-7',
+      Array.from({ length: 10 }, (_, index) => [index + 1, 2])
+    )
+    const disabled = new Set([8])
+    context.locked.add(7)
+    const bruteForce = (removed: Set<number>) => {
+      const visit = (index: number, used: Set<number>): number => {
+        if (index === pools.length) return 0
+        let best = 0.2 + visit(index + 1, used)
+        for (const row of pools[index]) {
+          if (row.games < 2 || removed.has(row.championId) || used.has(row.championId)) continue
+          const strength =
+            (Math.sqrt(row.games / (row.games + 4)) * (row.wins + 5)) / (row.games + 10)
+          best = Math.max(best, strength + visit(index + 1, new Set([...used, row.championId])))
+        }
+        return best
+      }
+      return visit(0, new Set())
+    }
+    for (const prior of [[], [1], [1, 2]]) {
+      const removed = new Set([...prior, ...context.locked, ...disabled])
+      const before = bruteForce(removed)
+      for (const championId of [1, 2, 3, 4, 5, 6, 9, 10]) {
+        if (removed.has(championId)) continue
+        const [ban] = rankBans(
+          { ...context, banned: new Set(prior) },
+          histories,
+          new Set([championId]),
+          disabled,
+          []
+        )
+        expect(ban.allyCost).toBeCloseTo(
+          Math.max(0, before - bruteForce(new Set([...removed, championId]))),
+          12
+        )
+      }
+    }
+  })
+})
 
 describe('Premade five and Clash draft eligibility and live choices', () => {
   it.each([420, 400, 430, 440, 450, 490, 720])(
@@ -1516,5 +1836,128 @@ describe('history and ranking evidence', () => {
     expect(rankPicks(candidates, target, samples, { context, championRoles })[0].championId).toBe(
       103
     )
+  })
+})
+
+describe('draft history integrity and complete target evidence', () => {
+  it.each(['champion', 'outcome', 'created'] as const)(
+    'excludes a game whose repeated records disagree on %s regardless of order',
+    (field) => {
+      const now = Date.now()
+      const data = historyFixture('player', [13, 105, 105], 'middle', now)
+      const conflict = structuredClone(data[0])
+      if (conflict.source !== 'sgp') throw new Error('Expected synthetic SGP history')
+      if (field === 'champion') conflict.data.json.participants[0].championId = 238
+      if (field === 'outcome') conflict.data.json.participants[0].win = true
+      if (field === 'created') conflict.data.json.gameCreation -= 1000
+      const entries = [...data, conflict, data[0]]
+      const expected = readPlayerHistory('player', data.slice(1), now)
+      expect(readPlayerHistory('player', entries, now)).toEqual(expected)
+      expect(readPlayerHistory('player', [...entries].reverse(), now)).toEqual(expected)
+    }
+  )
+
+  it('merges compatible position evidence but keeps conflicting known positions unknown', () => {
+    const now = Date.now()
+    const known = historyFixture('player', [13, 13], 'middle', now)
+    const unknown = structuredClone(known[0])
+    const otherRole = structuredClone(known[1])
+    if (unknown.source !== 'sgp' || otherRole.source !== 'sgp')
+      throw new Error('Expected synthetic SGP history')
+    unknown.data.json.participants[0].teamPosition = ''
+    otherRole.data.json.participants[0].teamPosition = 'TOP'
+    const compatible = [unknown, ...known, known[0]]
+    expect(readPlayerHistory('player', compatible, now)).toEqual(
+      readPlayerHistory('player', known, now)
+    )
+    const entries = [...compatible, otherRole]
+    const result = readPlayerHistory('player', entries, now)
+    expect(result).toMatchObject({
+      games: 2,
+      unknownRoleGames: 1,
+      roles: { middle: 1, top: 0 },
+      champions: [{ championId: 13, games: 2, wins: 1 }]
+    })
+    expect(readPlayerHistory('player', [...entries].reverse(), now)).toEqual(result)
+  })
+
+  it('selects the latest fifty valid unique games after resolving duplicate evidence', () => {
+    const now = Date.now()
+    const data = historyFixture('player', [13, ...Array(50).fill(105)], 'middle', now)
+    const conflict = structuredClone(data[0])
+    if (conflict.source !== 'sgp') throw new Error('Expected synthetic SGP history')
+    conflict.data.json.participants[0].championId = 238
+    const entries = [...data, ...data, conflict]
+    const result = readPlayerHistory('player', entries, now)
+    expect(result.games).toBe(50)
+    expect(result.champions.map((row) => [row.championId, row.games])).toEqual([[105, 50]])
+    expect(readPlayerHistory('player', [...entries].reverse(), now)).toEqual(result)
+  })
+
+  it('uses every known target matchup instead of making a broad hero pool look uncovered', () => {
+    const { game, session } = createDraftFixture()
+    const context = getDraftContext(game, session)!
+    const ids = [
+      1, 3, 4, 7, 8, 9, 10, 13, 14, 17, 18, 20, 22, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36
+    ]
+    const histories = {
+      'player-7': evenlyPlayedHistory(
+        'player-7',
+        ids.map((id) => [id, 2])
+      )
+    }
+    const target = buildTargetPool(context, histories, 'middle', null)
+    const candidates = [{ championId: 103, games: 10, wins: 5 }]
+    const samples = ids.map((championId) => ({ championId, games: 1000, wins: 550 }))
+    expect(target.champions.map((row) => row.championId)).toEqual(ids)
+    const [complete] = rankPicks(candidates, target, { 103: samples })
+    expect(complete.coverage).toBeCloseTo(1)
+    expect(complete.score).not.toBeNull()
+    expect(complete.rows).toHaveLength(25)
+    const [partial] = rankPicks(candidates, target, { 103: samples.slice(0, 12) })
+    expect(partial.coverage).toBeCloseTo(0.48)
+    expect(partial.score).toBeNull()
+  })
+
+  it('keeps inferred target weights and picks identical when players and histories are reordered', () => {
+    const { game, session } = createDraftFixture()
+    const context = getDraftContext(game, session)!
+    context.enemies[2].position = null
+    context.enemies[3].position = null
+    const histories = {
+      'player-7': evenlyPlayedHistory(
+        'player-7',
+        Array.from({ length: 7 }, (_, i) => [i + 1, 2])
+      ),
+      'player-8': evenlyPlayedHistory(
+        'player-8',
+        Array.from({ length: 7 }, (_, i) => [i + 8, 2])
+      )
+    }
+    const target = buildTargetPool(context, histories, 'middle', null)
+    const reversed = structuredClone(histories)
+    Object.values(reversed).forEach((history) => {
+      history.champions.reverse()
+      Object.values(history.byRole).forEach((pool) => pool.reverse())
+    })
+    const next = buildTargetPool(
+      { ...context, enemies: [...context.enemies].reverse() },
+      reversed,
+      'middle',
+      null
+    )
+    expect(next).toEqual(target)
+    expect(target.champions).toHaveLength(14)
+    const candidates = [103, 238].map((championId) => ({ championId, games: 10, wins: 5 }))
+    const samples = {
+      103: Array.from({ length: 9 }, (_, i) => ({ championId: i + 1, games: 1000, wins: 550 })),
+      238: [1, 2, 8, 9, 10, 11, 12, 13, 14].map((championId) => ({
+        championId,
+        games: 1000,
+        wins: 550
+      }))
+    }
+    expect(rankPicks(candidates, next, samples)).toEqual(rankPicks(candidates, target, samples))
+    expect(rankPicks(candidates, target, samples).every((row) => row.score !== null)).toBe(true)
   })
 })

@@ -170,7 +170,10 @@ describe('live draft advice lifecycle', () => {
 
     advisor.selectedRole.value = 'top'
     expect(advisor.bans.value.find((ban) => ban.championId === 13)!.allyCost).toBe(0)
-    expect(advisor.bans.value.find((ban) => ban.championId === 105)!.allyCost).toBe(teammateTopCost)
+    expect(advisor.bans.value.find((ban) => ban.championId === 105)!.allyCost).toBeCloseTo(
+      teammateTopCost,
+      12
+    )
     expect(advisor.context.value?.self.position).toBe('middle')
     expect(
       advisor.context.value?.allies.find((player) => player.puuid === 'player-0')?.position

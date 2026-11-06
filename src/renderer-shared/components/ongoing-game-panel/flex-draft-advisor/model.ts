@@ -338,14 +338,33 @@ export function readPlayerHistory(
       continue
     records.push({ gameId: game.gameId, created: game.gameCreation, championId, win, role })
   }
-  const seen = new Set<number>()
-  const recent = records
-    .sort((a, b) => b.created - a.created)
-    .filter((row) => {
-      if (seen.has(row.gameId)) return false
-      seen.add(row.gameId)
-      return true
-    })
+  const unique = new Map<number, { record: (typeof records)[number]; roles: Set<DraftRole> }>()
+  const conflicting = new Set<number>()
+  for (const record of records) {
+    const previous = unique.get(record.gameId)
+    if (!previous) {
+      unique.set(record.gameId, {
+        record,
+        roles: new Set(record.role ? [record.role] : [])
+      })
+      continue
+    }
+    if (
+      previous.record.created !== record.created ||
+      previous.record.championId !== record.championId ||
+      previous.record.win !== record.win
+    )
+      conflicting.add(record.gameId)
+    if (record.role) previous.roles.add(record.role)
+  }
+  // Resolve repeated evidence before the unique-game limit; input order cannot choose a result.
+  const recent = [...unique.values()]
+    .filter(({ record }) => !conflicting.has(record.gameId))
+    .map(({ record, roles }) => ({
+      ...record,
+      role: roles.size === 1 ? [...roles][0] : null
+    }))
+    .sort((a, b) => b.created - a.created || a.gameId - b.gameId)
     .slice(0, 50)
   const pool = (rows: typeof recent): PoolChampion[] => {
     const champions = new Map<number, PoolChampion>()
@@ -401,25 +420,49 @@ function rolePool(history: PlayerHistory | undefined, role: DraftRole) {
     : (history.byRole[role] ?? [])
 }
 
+function clientRoleAssignments(players: DraftPlayer[]): Map<string, DraftRole> | null {
+  const assigned = new Map<string, DraftRole>()
+  const occupied = new Set<DraftRole>()
+  for (const player of players) {
+    if (!player.position) continue
+    // Conflicting client positions cannot prove a unique remaining position.
+    if (occupied.has(player.position)) return null
+    occupied.add(player.position)
+    assigned.set(player.puuid, player.position)
+  }
+  // Missing visible players leave unknown slots; never infer who occupies a hidden slot.
+  if (players.length === DRAFT_ROLES.length && occupied.size === DRAFT_ROLES.length - 1) {
+    const player = players.find((player) => !player.position)!
+    assigned.set(
+      player.puuid,
+      DRAFT_ROLES.find((role) => !occupied.has(role))!
+    )
+  }
+  return assigned
+}
+
 function inferredOpponents(
   context: DraftContext,
   histories: Record<string, PlayerHistory>,
   role: DraftRole
 ): Pick<TargetPool, 'source' | 'players'> | null {
-  const assignedRoles = context.enemies.flatMap((player) =>
-    player.position ? [player.position] : []
-  )
+  const assignments = clientRoleAssignments(context.enemies)
   // Conflicting client assignments are not evidence for a unique lane opponent.
-  if (new Set(assignedRoles).size !== assignedRoles.length) return null
-  const assigned = context.enemies.find((player) => player.position === role)
-  if (assigned) return { source: 'client', players: [{ player: assigned, weight: 1 }] }
+  if (!assignments) return null
+  const assignedRoles = [...assignments.values()]
+  const assigned = context.enemies.find((player) => assignments.get(player.puuid) === role)
+  if (assigned)
+    return {
+      source: assigned.position ? 'client' : 'assignment',
+      players: [{ player: assigned, weight: 1 }]
+    }
 
   const roles = DRAFT_ROLES.filter((position) => !assignedRoles.includes(position))
-  const players: Array<DraftPlayer | null> = context.enemies.filter((player) => !player.position)
+  const players: Array<DraftPlayer | null> = context.enemies
+    .filter((player) => !assignments.has(player.puuid))
+    .sort((a, b) => a.puuid.localeCompare(b.puuid))
   // Keep invisible slots in every assignment; do not recover their identities or history.
   while (players.length < roles.length) players.push(null)
-  if (roles.length === 1 && players[0])
-    return { source: 'assignment', players: [{ player: players[0], weight: 1 }] }
   if (
     !players.some(
       (player) =>
@@ -521,11 +564,10 @@ export function buildTargetPool(
       )
     }
   }
-  // Preserve omitted mass in coverage rather than renormalizing the displayed subset.
+  // Analyze every known target; missing evidence retains its mass independently of UI limits.
   result.champions = [...weighted]
     .map(([championId, weight]) => ({ championId, weight }))
-    .sort((a, b) => b.weight - a.weight)
-    .slice(0, 12)
+    .sort((a, b) => b.weight - a.weight || a.championId - b.championId)
   return result
 }
 
@@ -764,6 +806,19 @@ function teamFamiliarity(pools: PoolChampion[][], excludedChampion?: number) {
   return Math.max(...values)
 }
 
+function teamReplacementGap(pools: PoolChampion[][]) {
+  const before = teamFamiliarity(pools)
+  const gaps = new Map<number, number>()
+  return (championId: number) => {
+    if (!gaps.has(championId)) {
+      const gap = Math.max(0, before - teamFamiliarity(pools, championId))
+      // Equivalent assignments can differ only in floating-point addition order.
+      gaps.set(championId, gap <= Number.EPSILON * Math.max(1, before) * 2 ? 0 : gap)
+    }
+    return gaps.get(championId)!
+  }
+}
+
 function rankAvailableBans(
   context: DraftContext,
   histories: Record<string, PlayerHistory>,
@@ -776,27 +831,32 @@ function rankAvailableBans(
     !context.banned.has(champion.championId) &&
     !context.locked.has(champion.championId) &&
     !disabled.has(champion.championId)
+  const enemyPositions = clientRoleAssignments(context.enemies)
+  const allyPositions = clientRoleAssignments(context.allies)
   const pools = context.enemies
     .filter((player) => !player.lockedChampionId)
     .sort((a, b) => a.puuid.localeCompare(b.puuid))
     .map((player) => {
       const history = histories[player.puuid]
-      const pool = (
-        player.position ? rolePool(history, player.position) : (history?.champions ?? [])
-      ).filter(available)
+      const role = enemyPositions?.get(player.puuid) ?? player.position
+      const pool = (role ? rolePool(history, role) : (history?.champions ?? [])).filter(available)
       return { player, history, pool }
     })
-  const teamPools = pools.map(({ pool }) => pool)
-  const before = teamFamiliarity(teamPools)
-  const replacementGaps = new Map<number, number>()
-  const replacementGapFor = (championId: number) => {
-    if (!replacementGaps.has(championId)) {
-      const gap = Math.max(0, before - teamFamiliarity(teamPools, championId))
-      // Equivalent assignments can differ only in floating-point addition order.
-      replacementGaps.set(championId, gap <= Number.EPSILON * Math.max(1, before) * 2 ? 0 : gap)
-    }
-    return replacementGaps.get(championId)!
-  }
+  const replacementGapFor = teamReplacementGap(pools.map(({ pool }) => pool))
+  const alliedPools = context.allies
+    .filter((player) => !player.lockedChampionId)
+    .sort((a, b) => a.puuid.localeCompare(b.puuid))
+    .map((player) => {
+      const history = histories[player.puuid]
+      const clientRole = allyPositions?.get(player.puuid) ?? player.position
+      const role =
+        player.puuid === context.self.puuid ? (options.selfRole ?? clientRole) : clientRole
+      // Keep the existing two-game allied evidence gate; smaller samples use the unknown floor.
+      return (role ? rolePool(history, role) : (history?.champions ?? [])).filter(
+        (champion) => champion.games >= 2 && available(champion)
+      )
+    })
+  const allyCostFor = teamReplacementGap(alliedPools)
   const withoutBannedHover = (players: DraftPlayer[]) =>
     players.map((player) =>
       context.banned.has(player.hoverChampionId) ? { ...player, hoverChampionId: 0 } : player
@@ -860,18 +920,7 @@ function rankAvailableBans(
           b.score - a.score || b.games - a.games || a.player.puuid.localeCompare(b.player.puuid)
       )
       const championId = group[0].championId
-      let allyCost = 0
-      for (const ally of context.allies) {
-        if (ally.lockedChampionId) continue
-        const history = histories[ally.puuid]
-        const role =
-          ally.puuid === context.self.puuid ? (options.selfRole ?? ally.position) : ally.position
-        const pool = (role ? rolePool(history, role) : (history?.champions ?? [])).filter(available)
-        const champion = pool.find((row) => row.championId === championId && row.games >= 2)
-        if (!champion) continue
-        const total = pool.reduce((sum, row) => sum + effectiveGames(row), 0)
-        allyCost = Math.max(allyCost, effectiveGames(champion) / (total + 10))
-      }
+      const allyCost = allyCostFor(championId)
       const advice: BanAdvice = {
         ...group[0],
         // One unique champion can only be picked once: shared mains add bounded coverage.

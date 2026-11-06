@@ -156,7 +156,9 @@
                 }}</span
               >
               <span v-if="pick.coverage > 0" class="draft-muted">{{
-                t('ongoingGame.flexDraft.coverage', { rate: percent(pick.coverage) })
+                t('ongoingGame.flexDraft.coverage', {
+                  rate: Math.floor(Math.min(1, pick.coverage + Number.EPSILON * 32) * 1000) / 10
+                })
               }}</span>
               <span class="draft-muted">{{
                 t(
@@ -293,6 +295,30 @@
           </span>
         </div>
       </div>
+      <div v-if="target.champions.length && picks.length" class="draft-table-controls">
+        <span class="draft-muted">{{
+          t('ongoingGame.flexDraft.tableScope', {
+            shown: visibleMatchups.length,
+            count: target.champions.length
+          })
+        }}</span>
+        <NButton
+          v-if="target.champions.length > 12"
+          text
+          type="primary"
+          size="small"
+          :aria-expanded="showAllMatchups"
+          @click="showAllMatchups = !showAllMatchups"
+        >
+          {{
+            t(
+              showAllMatchups
+                ? 'ongoingGame.flexDraft.showFewerMatchups'
+                : 'ongoingGame.flexDraft.showAllMatchups'
+            )
+          }}
+        </NButton>
+      </div>
       <div v-if="target.champions.length && picks.length" class="draft-table-scroll">
         <table class="draft-table">
           <caption>
@@ -309,7 +335,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="enemy in target.champions" :key="enemy.championId">
+            <tr v-for="enemy in visibleMatchups" :key="enemy.championId">
               <th>
                 {{ championName(enemy.championId) }}
                 <span class="draft-muted">{{ percent(enemy.weight) }}%</span>
@@ -329,7 +355,7 @@
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { TranslationComponent, useTranslation } from 'i18next-vue'
 import { NButton, NSelect, useThemeVars } from 'naive-ui'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import {
   DRAFT_ROLES,
@@ -377,6 +403,23 @@ const modeName = computed(() =>
 )
 const themeVars = useThemeVars()
 const expanded = ref(false)
+const showAllMatchups = ref(false)
+const visibleMatchups = computed(() =>
+  showAllMatchups.value ? props.target.champions : props.target.champions.slice(0, 12)
+)
+watch(
+  [
+    () => props.context.key,
+    () => props.role,
+    () => props.selectedOpponent,
+    () =>
+      props.target.players
+        .map(({ player }) => player.puuid)
+        .sort()
+        .join(',')
+  ],
+  () => (showAllMatchups.value = false)
+)
 const percent = (value: number) => Math.round(value * 100)
 const championName = (id: number) => props.championNames[id] ?? `#${id}`
 const hasHistoryErrors = computed(() => Object.values(props.historyStatuses).includes('error'))
@@ -599,6 +642,14 @@ function pairLabel(pick: PickAdvice, id: number) {
 }
 .draft-pool-editor > span {
   flex-shrink: 0;
+}
+.draft-table-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
 }
 .draft-history-group {
   margin-top: 10px;
