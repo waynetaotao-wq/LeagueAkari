@@ -5,8 +5,10 @@ import type {
 } from '@shared/data-adapter/wrapper'
 import lcuRankedGameRaw from '@shared/test-fixtures/api/snapshots/2026-05-16-tencent-hn10/lcu/match-history/games/q_420.json?raw'
 import lcuArenaGameRaw from '@shared/test-fixtures/api/snapshots/2026-05-16-tencent-hn10/lcu/match-history/games/q_1700.json?raw'
+import lcuMayhemGameRaw from '@shared/test-fixtures/api/snapshots/2026-05-16-tencent-hn10/lcu/match-history/games/q_2400.json?raw'
 import lcuRankedTimelineRaw from '@shared/test-fixtures/api/snapshots/2026-05-16-tencent-hn10/lcu/match-history/timelines/q_420.json?raw'
 import lcuArenaTimelineRaw from '@shared/test-fixtures/api/snapshots/2026-05-16-tencent-hn10/lcu/match-history/timelines/q_1700.json?raw'
+import lcuMayhemTimelineRaw from '@shared/test-fixtures/api/snapshots/2026-05-16-tencent-hn10/lcu/match-history/timelines/q_2400.json?raw'
 import sgpArenaRaw from '@shared/test-fixtures/api/snapshots/2026-05-16-tencent-hn10/sgp/match-history-query/q_1700.json?raw'
 import type { Game, GameTimeline, TimelineFrame } from '@shared/types/league-client/match-history'
 import type {
@@ -192,10 +194,14 @@ const lcuRankedGame = readFixture<Game>(lcuRankedGameRaw)
 const lcuRankedTimeline = readFixture<GameTimeline>(lcuRankedTimelineRaw)
 const lcuArenaGame = readFixture<Game>(lcuArenaGameRaw)
 const lcuArenaTimeline = readFixture<GameTimeline>(lcuArenaTimelineRaw)
+const lcuMayhemGame = readFixture<Game>(lcuMayhemGameRaw)
+const lcuMayhemTimeline = readFixture<GameTimeline>(lcuMayhemTimelineRaw)
 const sgpArenaGame = readFixture<SgpMatchHistoryLol>(sgpArenaRaw).games[0]
 
 function collectStoryGameResourceSamples(): StoryGameResourceSamples {
-  const lcuParticipants = [lcuRankedGame, lcuArenaGame].flatMap((game) => game.participants)
+  const lcuParticipants = [lcuRankedGame, lcuArenaGame, lcuMayhemGame].flatMap(
+    (game) => game.participants
+  )
   const sgpParticipants = sgpArenaGame.json.participants
 
   return {
@@ -284,5 +290,6 @@ function collectStoryGameResourceSamples(): StoryGameResourceSamples {
 
 export const storyLcuRankedMatchCard = lcuFixture(lcuRankedGame, lcuRankedTimeline)
 export const storyLcuArenaMatchCard = lcuFixture(lcuArenaGame, lcuArenaTimeline)
+export const storyLcuMayhemMatchCard = lcuFixture(lcuMayhemGame, lcuMayhemTimeline)
 export const storySgpArenaMatchCard = sgpFixture(sgpArenaGame, lcuArenaTimeline)
 export const storyGameResourceSamples = collectStoryGameResourceSamples()

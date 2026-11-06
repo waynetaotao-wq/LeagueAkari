@@ -238,6 +238,29 @@ export function provideMatchHistory(
   const lcuReplayMetadataQueue = new PQueue({ concurrency: 5 })
   const gameDetailsQueue = new PQueue({ concurrency: 5 })
 
+  let contextController = new AbortController()
+  let backgroundController = new AbortController()
+  // Keep this tab's queue choice when temporarily switching to a source without queue filtering.
+  let rememberedSgpQueue: Pick<MatchHistoryQueryParams, 'tag' | 'tagsQueryType'> | undefined
+
+  const stopBackgroundLoads = () => {
+    backgroundController.abort()
+    backgroundController = new AbortController()
+    if (page.value) page.value.detailsLoading = {}
+  }
+
+  const replacePage = (nextPage: MatchHistoryPage, source: 'sgp' | 'lcu') => {
+    stopBackgroundLoads()
+    page.value = nextPage
+    if (source === 'sgp') {
+      rememberedSgpQueue = {
+        tag: nextPage.queryParams.tag,
+        tagsQueryType: nextPage.queryParams.tagsQueryType
+      }
+    }
+    return page.value
+  }
+
   const dataSourceDecision = computed<PlayerTabDataSourceDecision>(() =>
     toLoadStatus({
       preferredSource: preferredSource.value,
@@ -269,106 +292,131 @@ export function provideMatchHistory(
   }
 
   const loadReplayMetadata = async (games: LcuOrSgpGameSummary[]) => {
-    const { data: conf } = await lc.api.replays.getConfiguration()
+    const targetPage = page.value
+    const signal = AbortSignal.any([contextController.signal, backgroundController.signal])
+    const isCurrentPage = () => !signal.aborted && page.value === targetPage
+    if (!targetPage || games.length === 0 || !isCurrentPage()) return
 
-    if (!conf.isReplaysEnabled) {
-      return
-    }
+    try {
+      const { data: conf } = await lc.api.replays.getConfiguration({ signal })
+      if (!conf.isReplaysEnabled || !isCurrentPage()) return
 
-    const task = async (game: LcuOrSgpGameSummary) => {
-      let gameId = 0
-      let gameMeta = {
-        gameVersion: '',
-        gameType: '',
-        queueId: 0,
-        gameEnd: 0
-      }
-
-      if (game.source === 'sgp') {
-        gameId = game.data.json.gameId
-        gameMeta = {
-          gameVersion: game.data.json.gameVersion,
-          gameType: game.data.json.gameType,
-          queueId: game.data.json.queueId,
-          gameEnd: game.data.json.gameEndTimestamp
+      const task = async (game: LcuOrSgpGameSummary) => {
+        if (!isCurrentPage()) return
+        let gameId = 0
+        let gameMeta = {
+          gameVersion: '',
+          gameType: '',
+          queueId: 0,
+          gameEnd: 0
         }
-      } else {
-        gameId = game.data.gameId
-        gameMeta = {
-          gameVersion: conf.gameVersion,
-          gameType: game.data.gameType,
-          queueId: game.data.queueId,
-          gameEnd: game.data.gameCreation + game.data.gameDuration * 1000
+
+        if (game.source === 'sgp') {
+          gameId = game.data.json.gameId
+          gameMeta = {
+            gameVersion: game.data.json.gameVersion,
+            gameType: game.data.json.gameType,
+            queueId: game.data.json.queueId,
+            gameEnd: game.data.json.gameEndTimestamp
+          }
+        } else {
+          gameId = game.data.gameId
+          gameMeta = {
+            gameVersion: conf.gameVersion,
+            gameType: game.data.gameType,
+            queueId: game.data.queueId,
+            gameEnd: game.data.gameCreation + game.data.gameDuration * 1000
+          }
+        }
+
+        await lc.api.replays.createMetadata(gameId, gameMeta, { signal })
+        if (!isCurrentPage()) return
+
+        const { data } = await lc.api.replays.getMetadata(gameId, { signal })
+
+        if (isCurrentPage()) {
+          targetPage.replayMetadata[gameId] = markRaw(data)
         }
       }
 
-      try {
-        await lc.api.replays.createMetadata(gameId, gameMeta)
-      } catch (error) {
-        log.warn(componentName, 'Failed to create replay metadata', gameId, error)
-        throw error
-      }
-
-      const { data } = await lc.api.replays.getMetadata(gameId)
-
-      if (page.value) {
-        page.value.replayMetadata[gameId] = markRaw(data)
-      }
+      await Promise.all(games.map((g) => lcuReplayMetadataQueue.add(() => task(g), { signal })))
+    } catch (error) {
+      if (isCurrentPage()) log.warn(componentName, 'Failed to load replay metadata', error)
     }
-
-    await Promise.all(games.map((g) => lcuReplayMetadataQueue.add(() => task(g))))
   }
 
   const loadGameDetails = async (games: LcuOrSgpGameSummary[]) => {
-    const task = async (game: LcuOrSgpGameSummary) => {
-      if (!page.value || page.value.detailsLoading[game.gameId]) {
-        return
-      }
+    const targetPage = page.value
+    const serverId = sgpServerId.value
+    const signal = AbortSignal.any([contextController.signal, backgroundController.signal])
+    const isCurrentPage = () => !signal.aborted && page.value === targetPage
+    if (!targetPage || !isCurrentPage()) return
 
-      if (
-        page.value.details[game.gameId] &&
-        page.value.details[game.gameId].source === game.source
-      ) {
-        return
-      }
+    const task = async (game: LcuOrSgpGameSummary) => {
+      if (!isCurrentPage()) return
 
       try {
         let wrappedGame: LcuOrSgpGameDetails
 
         if (game.source === 'sgp') {
           const { data } = await sgp.api.matchHistoryQuery.getGameDetailsByGameId(game.gameId, {
-            __sgpServerId: sgpServerId.value
+            __sgpServerId: serverId,
+            signal
           })
 
           wrappedGame = markRaw({ source: 'sgp', gameId: game.gameId, data })
         } else {
-          const { data } = await lc.api.matchHistory.getTimeline(game.gameId)
+          const { data } = await lc.api.matchHistory.getTimeline(game.gameId, { signal })
           wrappedGame = markRaw({ source: 'lcu', gameId: game.gameId, data })
         }
 
-        if (page.value) {
-          page.value.details[game.gameId] = wrappedGame
+        if (isCurrentPage()) {
+          targetPage.details[game.gameId] = wrappedGame
         }
       } catch (error) {
-        log.warn(componentName, error)
+        if (isCurrentPage()) log.warn(componentName, error)
       } finally {
-        if (page.value) {
-          page.value.detailsLoading[game.gameId] = false
+        if (isCurrentPage()) {
+          targetPage.detailsLoading[game.gameId] = false
         }
       }
     }
 
-    await Promise.all(games.map((g) => gameDetailsQueue.add(() => task(g))))
+    const tasks: Promise<unknown>[] = []
+    for (const game of games) {
+      if (
+        targetPage.detailsLoading[game.gameId] ||
+        targetPage.details[game.gameId]?.source === game.source
+      )
+        continue
+
+      // Mark queued requests too, so expanding a card cannot enqueue the same timeline again.
+      targetPage.detailsLoading[game.gameId] = true
+      tasks.push(
+        gameDetailsQueue
+          .add(() => task(game), { signal })
+          .catch((error) => {
+            if (isCurrentPage()) {
+              targetPage.detailsLoading[game.gameId] = false
+              log.warn(componentName, error)
+            }
+          })
+      )
+    }
+    await Promise.all(tasks)
   }
 
-  const completeLcuGame = async (g: Game): Promise<LcuGameSummary> => {
+  const completeLcuGame = async (g: Game, signal: AbortSignal): Promise<LcuGameSummary> => {
     const cached = pts.gameSummaryLruMap.get(`lcu:${g.gameId}`) as LcuGameSummary | undefined
     if (cached) {
       return cached
     }
 
     try {
-      const { data } = await lcuCompleteGameQueue.add(() => lc.api.matchHistory.getGame(g.gameId))
+      const { data } = await lcuCompleteGameQueue.add(
+        () => lc.api.matchHistory.getGame(g.gameId, { signal }),
+        { signal }
+      )
       return { source: 'lcu', data: data, gameId: g.gameId }
     } catch (error) {
       return { source: 'lcu', data: g, gameId: g.gameId }
@@ -376,7 +424,11 @@ export function provideMatchHistory(
   }
 
   const loadMatchHistory = async (params: MatchHistoryQueryParams = {}) => {
-    if (isLoading.value) return
+    const signal = contextController.signal
+    const playerPuuid = puuid.value
+    const serverId = sgpServerId.value
+    const crossRegion = isCrossRegion.value
+    if (isLoading.value || signal.aborted) return
 
     const decision = dataSourceDecision.value
     logDataSourceDecision(decision)
@@ -394,6 +446,7 @@ export function provideMatchHistory(
         !page.value && decision.source === 'sgp' && defaultTag !== ALL_SGPTAG_VALUE
           ? defaultTag
           : undefined,
+      ...(!page.value && decision.source === 'sgp' ? rememberedSgpQueue : undefined),
       ...page.value?.queryParams,
       ...params
     }
@@ -410,12 +463,14 @@ export function provideMatchHistory(
     try {
       if (decision.source === 'sgp') {
         const { data } = await sgp.api.matchHistoryQuery.getMatchHistorySummaryByPlayerPuuid(
-          puuid.value,
+          playerPuuid,
           {
             ...params,
-            __sgpServerId: sgpServerId.value
+            __sgpServerId: serverId,
+            signal
           }
         )
+        if (signal.aborted) return
 
         const games = data.games
           .filter((g) => g.json) // 有时候服务器内容错误，没有这个 json 字段，原因不明
@@ -436,22 +491,27 @@ export function provideMatchHistory(
           {} as Record<number, LcuOrSgpGameDetails>
         )
 
-        page.value = {
-          games: markRaw(games),
-          replayMetadata: {}, // must be shallow
-          details: prevDetails,
-          detailsLoading: {}, // must be shallow
-          queryParams: params,
-          isLoadedByCollectMode: false
-        }
+        replacePage(
+          {
+            games: markRaw(games),
+            replayMetadata: {}, // must be shallow
+            details: prevDetails,
+            detailsLoading: {}, // must be shallow
+            queryParams: params,
+            isLoadedByCollectMode: false
+          },
+          decision.source
+        )
 
         loadGameDetails(games)
       } else {
         const { data } = await lc.api.matchHistory.getMatchHistory(
-          puuid.value,
+          playerPuuid,
           startIndex,
-          startIndex + count - 1
+          startIndex + count - 1,
+          { signal }
         )
+        if (signal.aborted) return
 
         const games = data.games.games
           .filter((g) => !!g && typeof g.gameId === 'number')
@@ -463,11 +523,13 @@ export function provideMatchHistory(
               return g
             }
 
-            const complete = await completeLcuGame(g.data)
-            pts.gameSummaryLruMap.set(`lcu:${complete.gameId}`, markRaw(complete))
+            const complete = await completeLcuGame(g.data, signal)
+            if (!signal.aborted)
+              pts.gameSummaryLruMap.set(`lcu:${complete.gameId}`, markRaw(complete))
             return markRaw(complete) as LcuOrSgpGameSummary
           })
         )
+        if (signal.aborted) return
 
         completedGames.forEach((g) => {
           if (g.source === 'lcu') {
@@ -486,22 +548,26 @@ export function provideMatchHistory(
           {} as Record<number, LcuOrSgpGameDetails>
         )
 
-        page.value = {
-          games: markRaw(completedGames),
-          replayMetadata: {}, // must be shallow
-          details: prevDetails,
-          detailsLoading: {}, // must be shallow
-          queryParams: params,
-          isLoadedByCollectMode: false
-        }
+        replacePage(
+          {
+            games: markRaw(completedGames),
+            replayMetadata: {}, // must be shallow
+            details: prevDetails,
+            detailsLoading: {}, // must be shallow
+            queryParams: params,
+            isLoadedByCollectMode: false
+          },
+          decision.source
+        )
 
         loadGameDetails(games)
       }
 
-      if (!isCrossRegion.value) {
+      if (!crossRegion && page.value) {
         loadReplayMetadata(page.value.games)
       }
     } catch (error: any) {
+      if (signal.aborted) return
       notification.error({
         title: () => t('playerTabs.profile.failedToLoadMatchHistoryTitle'),
         content: () =>
@@ -510,12 +576,16 @@ export function provideMatchHistory(
       })
       log.error(componentName, error)
     } finally {
-      isLoading.value = false
+      if (!signal.aborted) isLoading.value = false
     }
   }
 
   const collectMatchHistory = async (params: MatchHistoryCollectParams) => {
-    if (isLoading.value) return
+    const signal = contextController.signal
+    const playerPuuid = puuid.value
+    const serverId = sgpServerId.value
+    const crossRegion = isCrossRegion.value
+    if (isLoading.value || signal.aborted) return
 
     const decision = dataSourceDecision.value
     logDataSourceDecision(decision, 'match history collection')
@@ -551,36 +621,41 @@ export function provideMatchHistory(
         const lastPageGameIds = new Set<number>()
 
         collectState.value.currentIteration = 0
-        page.value = {
-          games: markRaw([]),
-          replayMetadata: {},
-          details: {},
-          detailsLoading: {},
-          queryParams: collectPageQueryParams,
-          isLoadedByCollectMode: true,
-          collectModeSettings,
-          collectModeStats: {
-            scannedGamesCount: 0
-          }
-        }
+        const collectedPage = replacePage(
+          {
+            games: markRaw([]),
+            replayMetadata: {},
+            details: {},
+            detailsLoading: {},
+            queryParams: collectPageQueryParams,
+            isLoadedByCollectMode: true,
+            collectModeSettings,
+            collectModeStats: {
+              scannedGamesCount: 0
+            }
+          },
+          decision.source
+        )
 
         while (
-          page.value.games.length < params.expectedCount &&
+          collectedPage.games.length < params.expectedCount &&
           collectState.value.currentIteration < collectState.value.params.maxIteration &&
+          !signal.aborted &&
           shouldContinueCollecting()
         ) {
           const { data } = await sgp.api.matchHistoryQuery.getMatchHistorySummaryByPlayerPuuid(
-            puuid.value,
+            playerPuuid,
             {
               ...params.queryParams,
               startIndex:
                 collectState.value.currentIteration * collectState.value.params.countPerIteration,
               count: collectState.value.params.countPerIteration,
-              __sgpServerId: sgpServerId.value
+              __sgpServerId: serverId,
+              signal
             }
           )
 
-          if (!shouldContinueCollecting()) {
+          if (signal.aborted || !shouldContinueCollecting()) {
             break
           }
 
@@ -594,7 +669,7 @@ export function provideMatchHistory(
             break
           }
 
-          page.value.collectModeStats!.scannedGamesCount += rawSummaryList.length
+          collectedPage.collectModeStats!.scannedGamesCount += rawSummaryList.length
 
           const gamesToAppend = rawSummaryList
             .filter((g) => collectPredicate(g) && !lastPageGameIds.has(g.gameId))
@@ -605,7 +680,7 @@ export function provideMatchHistory(
 
           loadGameDetails(gamesToAppend)
 
-          if (!isCrossRegion.value) {
+          if (!crossRegion) {
             loadReplayMetadata(gamesToAppend)
           }
 
@@ -615,33 +690,38 @@ export function provideMatchHistory(
         const lastPageGameIds = new Set<number>()
 
         collectState.value.currentIteration = 0
-        page.value = {
-          games: markRaw([]),
-          replayMetadata: {},
-          details: {},
-          detailsLoading: {},
-          queryParams: collectPageQueryParams,
-          isLoadedByCollectMode: true,
-          collectModeSettings,
-          collectModeStats: {
-            scannedGamesCount: 0
-          }
-        }
+        const collectedPage = replacePage(
+          {
+            games: markRaw([]),
+            replayMetadata: {},
+            details: {},
+            detailsLoading: {},
+            queryParams: collectPageQueryParams,
+            isLoadedByCollectMode: true,
+            collectModeSettings,
+            collectModeStats: {
+              scannedGamesCount: 0
+            }
+          },
+          decision.source
+        )
 
         while (
-          page.value.games.length < params.expectedCount &&
+          collectedPage.games.length < params.expectedCount &&
           collectState.value.currentIteration < collectState.value.params.maxIteration &&
+          !signal.aborted &&
           shouldContinueCollecting()
         ) {
           const { data } = await lc.api.matchHistory.getMatchHistory(
-            puuid.value,
+            playerPuuid,
             collectState.value.currentIteration * collectState.value.params.countPerIteration,
             (collectState.value.currentIteration + 1) *
               collectState.value.params.countPerIteration -
-              1
+              1,
+            { signal }
           )
 
-          if (!shouldContinueCollecting()) {
+          if (signal.aborted || !shouldContinueCollecting()) {
             break
           }
 
@@ -655,7 +735,7 @@ export function provideMatchHistory(
             break
           }
 
-          page.value.collectModeStats!.scannedGamesCount += rawSummaryList.length
+          collectedPage.collectModeStats!.scannedGamesCount += rawSummaryList.length
 
           const games = rawSummaryList
             .filter((g) => collectPredicate(g) && !lastPageGameIds.has(g.gameId))
@@ -667,13 +747,14 @@ export function provideMatchHistory(
                 return g
               }
 
-              const complete = await completeLcuGame(g.data)
-              pts.gameSummaryLruMap.set(`lcu:${complete.gameId}`, markRaw(complete))
+              const complete = await completeLcuGame(g.data, signal)
+              if (!signal.aborted)
+                pts.gameSummaryLruMap.set(`lcu:${complete.gameId}`, markRaw(complete))
               return markRaw(complete) as LcuOrSgpGameSummary
             })
           )
 
-          if (!shouldContinueCollecting()) {
+          if (signal.aborted || !shouldContinueCollecting()) {
             break
           }
 
@@ -682,7 +763,7 @@ export function provideMatchHistory(
 
           loadGameDetails(completedGamesToAppend)
 
-          if (!isCrossRegion.value) {
+          if (!crossRegion) {
             loadReplayMetadata(completedGamesToAppend)
           }
 
@@ -690,6 +771,7 @@ export function provideMatchHistory(
         }
       }
     } catch (error: any) {
+      if (signal.aborted) return
       notification.error({
         title: () => t('playerTabs.profile.failedToLoadMatchHistoryTitle'),
         content: () =>
@@ -698,8 +780,10 @@ export function provideMatchHistory(
       })
       log.error(componentName, error)
     } finally {
-      isLoading.value = false
-      collectState.value = null
+      if (!signal.aborted) {
+        isLoading.value = false
+        collectState.value = null
+      }
     }
   }
 
@@ -733,39 +817,21 @@ export function provideMatchHistory(
     }
 
     collectState.value.isStopping = true
-    lcuReplayMetadataQueue.clear()
-    gameDetailsQueue.clear()
+    stopBackgroundLoads()
   }
 
   const loadDetails = async (gameId: number) => {
-    if (!page.value || page.value.detailsLoading[gameId]) return
+    const game = page.value?.games.find((game) => game.gameId === gameId)
+    if (!game || page.value?.detailsLoading[gameId]) return
 
     const decision = dataSourceDecision.value
     logDataSourceDecision(decision, 'match history details')
 
-    if (decision.type !== 'load') {
+    if (decision.type !== 'load' || decision.source !== game.source) {
       return
     }
 
-    page.value.detailsLoading[gameId] = true
-
-    try {
-      if (decision.source === 'sgp') {
-        const { data } = await sgp.api.matchHistoryQuery.getGameDetailsByGameId(gameId, {
-          __sgpServerId: sgpServerId.value
-        })
-
-        page.value.details[gameId] = markRaw({ source: 'sgp', gameId, data })
-      } else {
-        const { data } = await lc.api.matchHistory.getTimeline(gameId)
-
-        page.value.details[gameId] = markRaw({ source: 'lcu', gameId, data })
-      }
-    } catch (error) {
-      log.error(componentName, error)
-    } finally {
-      page.value.detailsLoading[gameId] = false
-    }
+    await loadGameDetails([game])
   }
 
   const message = useMessage()
@@ -820,11 +886,30 @@ export function provideMatchHistory(
     return true
   }
 
+  let activeSource: 'lcu' | 'sgp' | undefined
   watch(
-    [dataSourceDecision, puuid, sgpServerId],
-    () => {
+    [
+      () => `${dataSourceDecision.value.type}:${dataSourceDecision.value.source}`,
+      puuid,
+      sgpServerId,
+      isCrossRegion
+    ],
+    (current, previous, onCleanup) => {
+      const controller = new AbortController()
+      contextController = controller
+      // Retire the old requests before starting a new context, and also when the tab unmounts.
+      onCleanup(() => controller.abort())
+      stopBackgroundLoads()
+      isLoading.value = false
+      collectState.value = null
       lcuCompleteGameQueue.clear()
       lcuReplayMetadataQueue.clear()
+      gameDetailsQueue.clear()
+
+      if (previous.length && (current[1] !== previous[1] || current[2] !== previous[2])) {
+        page.value = null
+        rememberedSgpQueue = undefined
+      }
 
       const decision = dataSourceDecision.value
 
@@ -832,6 +917,9 @@ export function provideMatchHistory(
         logDataSourceDecision(decision)
         return
       }
+
+      if (activeSource !== decision.source) page.value = null
+      activeSource = decision.source
 
       const initParams = initParamsTool.consumeMatchHistoryInitParams()
 

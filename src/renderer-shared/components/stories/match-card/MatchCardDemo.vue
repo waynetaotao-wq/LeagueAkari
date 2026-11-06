@@ -39,6 +39,22 @@
     </StoryPanel>
 
     <StoryPanel
+      title="LCU ARAM Mayhem match"
+      description="Raw summary and timeline use the existing q_2400 fixtures. This scene covers KIWI augments, equipment, custom ratings, and narrow team-table layouts."
+    >
+      <div class="match-card-story-frame">
+        <MatchCard
+          v-model:is-expanded="mayhemExpanded"
+          :summary="storyLcuMayhemMatchCard.summary"
+          :details="storyLcuMayhemMatchCard.details"
+          :puuid="storyLcuMayhemMatchCard.puuid"
+          @navigate-to-summoner-by-puuid="handleNavigate"
+          @load-details="handleLoadDetails"
+        />
+      </div>
+    </StoryPanel>
+
+    <StoryPanel
       title="SGP arena match with synthetic details"
       description="Raw summary comes from the existing SGP match-history-query q_1700 fixture. The details payload is generated from the LCU q_1700 timeline to cover SGP-only builds and stats-line tabs while keeping participant and event data fixture-backed."
     >
@@ -95,12 +111,14 @@ import { ref } from 'vue'
 import StoryPanel from '../StoryPanel.vue'
 import {
   storyLcuArenaMatchCard,
+  storyLcuMayhemMatchCard,
   storyLcuRankedMatchCard,
   storySgpArenaMatchCard
 } from './match-card-fixtures'
 
 const rankedExpanded = ref(true)
 const arenaExpanded = ref(false)
+const mayhemExpanded = ref(true)
 const sgpExpanded = ref(true)
 
 const rankedReplayState: ReplayDownloadProgress = {

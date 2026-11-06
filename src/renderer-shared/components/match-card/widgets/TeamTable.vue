@@ -357,20 +357,32 @@ const extraColumns = computed<ColumnConfig[]>(() => {
     case 'CHERRY':
       return [
         { name: 'kda', class: 'basis-26 min-w-26 text-center' },
-        { name: 'augments', class: 'basis-30 min-w-30 flex gap-0.5 justify-center' },
+        {
+          name: 'augments',
+          class: `${someoneHas6Augments.value ? 'basis-33 min-w-33' : 'basis-30 min-w-30'} flex gap-0.5 justify-center`
+        },
         { name: 'damage', class: 'basis-32 min-w-32 flex gap-2 justify-center' },
-        { name: 'cs', class: 'hidden @[740px]:block basis-18 min-w-18 text-center' },
-        { name: 'gold', class: 'hidden @[700px]:block basis-18 min-w-18 text-xs text-center' },
-        { name: 'items', class: 'basis-40 w-40 flex gap-0.5 justify-center' }
+        { name: 'cs', class: 'hidden @[880px]:block basis-18 min-w-18 text-center' },
+        { name: 'gold', class: 'hidden @[800px]:block basis-18 min-w-18 text-xs text-center' },
+        {
+          name: 'items',
+          class: `${hasRoleBoundItems.value ? 'basis-45 min-w-45' : 'basis-40 min-w-40'} flex gap-0.5 justify-center`
+        }
       ]
     case 'KIWI':
       return [
         { name: 'kda', class: 'basis-26 min-w-26 text-center' },
-        { name: 'augments', class: 'basis-29 min-w-29 flex gap-0.5 justify-center' },
+        {
+          name: 'augments',
+          class: `${someoneHas6Augments.value ? 'basis-33 min-w-33' : 'basis-29 min-w-29'} flex gap-0.5 justify-center`
+        },
         { name: 'damage', class: 'basis-30 min-w-30 flex gap-2 justify-center' },
-        { name: 'cs', class: 'hidden @[740px]:block basis-18 min-w-18 text-center' },
-        { name: 'gold', class: 'hidden @[700px]:block basis-18 min-w-18 text-xs text-center' },
-        { name: 'items', class: 'basis-40 min-w-40 flex gap-0.5 justify-center' }
+        { name: 'cs', class: 'hidden @[880px]:block basis-18 min-w-18 text-center' },
+        { name: 'gold', class: 'hidden @[800px]:block basis-18 min-w-18 text-xs text-center' },
+        {
+          name: 'items',
+          class: `${hasRoleBoundItems.value ? 'basis-45 min-w-45' : 'basis-40 min-w-40'} flex gap-0.5 justify-center`
+        }
       ]
     default:
       return [
