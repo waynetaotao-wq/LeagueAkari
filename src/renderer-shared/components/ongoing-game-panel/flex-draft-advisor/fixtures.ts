@@ -164,12 +164,15 @@ export function createDraftFixture(queueId: DraftQueueId = 710) {
     gameDetails: {},
     matchHistory: {},
     matchHistoryLoadingState: {},
+    draftMatchHistory: {},
+    draftMatchHistoryLoadingState: {},
     spells: {},
     isConnected: true,
     isSpectating: false,
     streamerMode: false,
     selfPuuid: 'player-2',
-    reloadPlayer: () => {}
+    reloadPlayer: () => {},
+    retryDraftHistories: () => {}
   }
   return { game, session }
 }

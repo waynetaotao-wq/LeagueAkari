@@ -8,6 +8,7 @@ import { toJS } from 'mobx'
 
 import type { OngoingGameAdditionalInfoController } from './additional-info-controller'
 import { ONGOING_GAME_MAIN_NAMESPACE, type OngoingGameMainContext } from './context'
+import type { OngoingGameDraftHistoryLoader } from './draft-history-loader'
 import type { OngoingGameMatchHistoryLoader } from './match-history-loader'
 import type { OngoingGamePlayerDataLoader } from './player-data-loader'
 
@@ -16,11 +17,16 @@ export class OngoingGameIpcHandlers {
     private readonly _context: OngoingGameMainContext,
     private readonly _matchHistory: OngoingGameMatchHistoryLoader,
     private readonly _playerData: OngoingGamePlayerDataLoader,
-    private readonly _additionalInfo: OngoingGameAdditionalInfoController
+    private readonly _additionalInfo: OngoingGameAdditionalInfoController,
+    private readonly _draftHistory?: OngoingGameDraftHistoryLoader
   ) {}
 
   register() {
     const { ipc, state } = this._context
+
+    ipc.onCall(ONGOING_GAME_MAIN_NAMESPACE, 'retryDraftHistories', () =>
+      this._draftHistory?.update(true)
+    )
 
     ipc.onCall(ONGOING_GAME_MAIN_NAMESPACE, 'getAll', () => {
       const matchHistory = toJS(state.matchHistory)
@@ -32,6 +38,7 @@ export class OngoingGameIpcHandlers {
       const additionalGames = toJS(state.additionalGame)
 
       return {
+        draftMatchHistory: toJS(state.draftMatchHistory),
         matchHistory,
         summoner,
         rankedStats,

@@ -4,6 +4,41 @@ import { OngoingGameIpcHandlers } from './ipc-handlers'
 import { OngoingGamePlayerDataLoader } from './player-data-loader'
 
 describe('ongoing-game player reload flow', () => {
+  it('provides dedicated draft history to later windows and routes retry only to its loader', () => {
+    const handlers: Record<string, (...args: any[]) => any> = {}
+    const draftMatchHistory = {
+      enemy: { source: 'sgp', queueId: 710, scannedCount: 0, scanLimit: 50, data: [] }
+    }
+    const draftLoader = { update: vi.fn() }
+    const matchHistory = { updateMatchHistories: vi.fn() }
+    new OngoingGameIpcHandlers(
+      {
+        ipc: {
+          onCall: (_namespace: string, name: string, handler: (...args: any[]) => any) => {
+            handlers[name] = handler
+          }
+        },
+        state: {
+          draftMatchHistory,
+          matchHistory: {},
+          summoner: {},
+          rankedStats: {},
+          savedInfo: {},
+          championMastery: {},
+          gameDetails: {},
+          additionalGame: {}
+        }
+      } as any,
+      matchHistory as any,
+      {} as any,
+      {} as any,
+      draftLoader as any
+    ).register()
+    expect(handlers.getAll().draftMatchHistory).toEqual(draftMatchHistory)
+    handlers.retryDraftHistories()
+    expect(draftLoader.update).toHaveBeenCalledWith(true)
+    expect(matchHistory.updateMatchHistories).not.toHaveBeenCalled()
+  })
   it('routes a saved-info-only IPC reload through the real loader without touching other scopes', () => {
     const handlers: Record<string, (...args: any[]) => void> = {}
     const context = {

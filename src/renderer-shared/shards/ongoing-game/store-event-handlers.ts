@@ -1,3 +1,4 @@
+import type { OngoingGameDraftHistory } from '@shared/shards/ongoing-game'
 import { markRaw } from 'vue'
 
 import {
@@ -14,6 +15,22 @@ export class OngoingGameStoreEventHandlers {
   register() {
     const store = useOngoingGameStore()
     const { ipc } = this.context
+
+    ipc.onEvent(MAIN_SHARD_NAMESPACE, 'draft-match-history-clear', () => {
+      store.draftMatchHistory = {}
+    })
+    ipc.onEvent(MAIN_SHARD_NAMESPACE, 'draft-match-history-removed', (puuid: string) => {
+      const next = { ...store.draftMatchHistory }
+      delete next[puuid]
+      store.draftMatchHistory = next
+    })
+    ipc.onEvent(
+      MAIN_SHARD_NAMESPACE,
+      'draft-match-history-loaded',
+      (puuid: string, data: OngoingGameDraftHistory) => {
+        store.draftMatchHistory = { ...store.draftMatchHistory, [puuid]: markRaw(data) }
+      }
+    )
 
     ipc.onEvent(MAIN_SHARD_NAMESPACE, 'clear', () => {
       store.summoner = {}
@@ -102,6 +119,7 @@ export class OngoingGameStoreEventHandlers {
     } = data
 
     store.championMastery = this._toShallowedMarkRaw(championMastery)
+    store.draftMatchHistory = this._toShallowedMarkRaw(data.draftMatchHistory)
     store.matchHistory = this._toShallowedMarkRaw(matchHistory)
     store.rankedStats = this._toShallowedMarkRaw(rankedStats)
     store.savedInfo = this._toShallowedMarkRaw(savedInfo)

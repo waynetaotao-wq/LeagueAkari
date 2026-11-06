@@ -2,6 +2,8 @@ import type { LcuOrSgpGameDetails, LcuOrSgpGameSummary } from '@shared/data-adap
 import type {
   DraftOptions,
   OngoingGameAnalysis,
+  OngoingGameDraftHistory,
+  OngoingGameDraftHistoryStatus,
   OngoingGamePanelSettings,
   OngoingGamePlayerReloadOptions,
   OngoingGamePositionAssignment,
@@ -42,6 +44,8 @@ export interface OngoingGameProviderValue {
   readonly gameDetails: Record<number, LcuOrSgpGameDetails>
   readonly matchHistory: Record<string, OngoingGamePanelMatchHistory>
   readonly matchHistoryLoadingState: Record<string, string>
+  readonly draftMatchHistory: Record<string, OngoingGameDraftHistory>
+  readonly draftMatchHistoryLoadingState: Record<string, OngoingGameDraftHistoryStatus>
 
   readonly spells: Record<string, OngoingGamePanelSummonerSpellSelection>
   readonly isConnected: boolean
@@ -50,4 +54,5 @@ export interface OngoingGameProviderValue {
   readonly selfPuuid: string | null
 
   reloadPlayer(puuid: string, options?: OngoingGamePlayerReloadOptions): void
+  retryDraftHistories(): void
 }

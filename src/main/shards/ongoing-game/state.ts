@@ -5,6 +5,8 @@ import type {
   AdditionalResult,
   DraftOptions,
   OngoingGameAnalysis,
+  OngoingGameDraftHistory,
+  OngoingGameDraftHistoryStatus,
   OngoingGameMatchHistoryTagPreference,
   OngoingGamePanelChampionUsage,
   OngoingGamePanelOrderPlayerBy,
@@ -238,6 +240,9 @@ export class OngoingGameState {
 
   matchHistoryLoadingState: Record<string, string> = {}
 
+  draftMatchHistory: Record<string, OngoingGameDraftHistory> = {}
+  draftMatchHistoryLoadingState: Record<string, OngoingGameDraftHistoryStatus> = {}
+
   setMatchHistoryLoadingState(player: string, state: string) {
     this.matchHistoryLoadingState = {
       ...this.matchHistoryLoadingState,
@@ -378,6 +383,8 @@ export class OngoingGameState {
   ) {
     makeAutoObservable(this, {
       matchHistory: observableShallow,
+      draftMatchHistory: observableShallow,
+      draftMatchHistoryLoadingState: observableRef,
       summoner: observableShallow,
       rankedStats: observableShallow,
       savedInfo: observableShallow,

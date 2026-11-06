@@ -61,6 +61,15 @@ export function createAkariOngoingGameProvider(): OngoingGameProviderValue {
     get matchHistoryLoadingState() {
       return ongoingGame.matchHistoryLoadingState
     },
+    get draftMatchHistory() {
+      return ongoingGame.draftMatchHistory
+    },
+    get draftMatchHistoryLoadingState() {
+      return ongoingGame.draftMatchHistoryLoadingState
+    },
+    retryDraftHistories() {
+      void ongoingGameRenderer.retryDraftHistories().catch(() => {})
+    },
     get spells() {
       return ongoingGame.additional.spells
     },

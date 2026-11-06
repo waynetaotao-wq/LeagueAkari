@@ -313,6 +313,9 @@ export function createStoryOngoingGameProviderValue(
     get matchHistoryLoadingState() {
       return {}
     },
+    draftMatchHistory: {},
+    draftMatchHistoryLoadingState: {},
+    retryDraftHistories() {},
     get spells() {
       return active ? createSpellSelections() : {}
     },

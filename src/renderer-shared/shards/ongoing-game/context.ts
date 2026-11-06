@@ -2,6 +2,7 @@ import type { LcuOrSgpGameDetails, LcuOrSgpGameSummary } from '@shared/data-adap
 import type { MatchHistoryQueryParams } from '@shared/http-api-axios-helper/sgp/match-history-query'
 import type {
   DraftOptions,
+  OngoingGameDraftHistory,
   OngoingGamePlayerReloadOptions,
   OngoingGameSimplifiedChampMastery
 } from '@shared/shards/ongoing-game'
@@ -27,6 +28,7 @@ export interface OngoingGameRendererContext {
 }
 
 export interface OngoingGameAllData {
+  draftMatchHistory: Record<string, OngoingGameDraftHistory>
   matchHistory: Record<string, MatchHistoryPlayer>
   summoner: Record<string, SummonerInfo>
   rankedStats: Record<string, RankedStats>

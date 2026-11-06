@@ -6,11 +6,26 @@
         <div>
           <strong>{{ t('ongoingGame.flexDraft.title', { mode: modeName }) }}</strong>
           <div class="draft-muted">
-            {{ t('ongoingGame.flexDraft.samples', { players: loadedPlayers, mode: modeName }) }}
+            {{
+              t('ongoingGame.flexDraft.samples', {
+                players: loadedPlayers,
+                visible: context.enemies.length,
+                mode: modeName
+              })
+            }}
           </div>
         </div>
       </div>
       <div class="draft-controls">
+        <NButton
+          v-if="hasHistoryErrors"
+          size="small"
+          secondary
+          type="warning"
+          @click="emit('retryHistories')"
+        >
+          {{ t('ongoingGame.flexDraft.retryHistories') }}
+        </NButton>
         <NSelect
           :value="selectedRole"
           :options="roleOptions"
@@ -72,6 +87,12 @@
                   }}</template>
                 </TranslationComponent>
               </span>
+              <span v-if="ban.replacementGap >= 0.1" class="draft-caution">{{
+                t('ongoingGame.flexDraft.replacementGap')
+              }}</span>
+              <span v-if="expanded && ban.allyCost >= 0.03" class="draft-caution">{{
+                t('ongoingGame.flexDraft.allyCost')
+              }}</span>
             </div>
           </div>
         </div>
@@ -145,6 +166,15 @@
                   champion: championName(pick.worst.championId)
                 })
               }}</span>
+              <span
+                v-for="signal in expanded
+                  ? pick.composition.signals
+                  : pick.composition.signals.slice(0, 1)"
+                :key="signal"
+                class="draft-caution"
+              >
+                {{ t(`ongoingGame.flexDraft.composition.${signal}`) }}
+              </span>
             </div>
           </div>
         </div>
@@ -216,19 +246,32 @@
       </div>
       <div class="draft-muted">{{ t('ongoingGame.flexDraft.method', { mode: modeName }) }}</div>
       <div class="draft-opponents">
-        <span v-for="entry in target.players" :key="entry.player.puuid" class="draft-opponent">
-          {{ playerNames[entry.player.puuid] }} ·
+        <span v-for="player in context.enemies" :key="player.puuid" class="draft-opponent">
+          {{ playerNames[player.puuid] }} ·
+          {{
+            t(`ongoingGame.flexDraft.historyStatus.${historyStatuses[player.puuid] ?? 'pending'}`)
+          }}
+          ·
           {{
             t('ongoingGame.flexDraft.familiarGames', {
-              count: histories[entry.player.puuid]?.games ?? 0,
+              count: histories[player.puuid]?.games ?? 0,
               mode: modeName
             })
           }}
-          <span v-if="entry.player.lockedChampionId">
+          <span v-if="historyScans[player.puuid]" class="draft-muted">
+            ·
+            {{
+              t('ongoingGame.flexDraft.historyScan', {
+                source: historyScans[player.puuid].source.toUpperCase(),
+                count: historyScans[player.puuid].scannedCount
+              })
+            }}</span
+          >
+          <span v-if="player.lockedChampionId">
             ·
             {{
               t('ongoingGame.flexDraft.locked', {
-                champion: championName(entry.player.lockedChampionId)
+                champion: championName(player.lockedChampionId)
               })
             }}</span
           >
@@ -282,6 +325,7 @@ import {
   type PlayerHistory,
   type TargetPool
 } from './model'
+import type { DraftHistoryStatus } from './use-draft-advisor'
 
 const props = defineProps<{
   context: DraftContext
@@ -301,12 +345,15 @@ const props = defineProps<{
   failed: boolean
   patch: string | null
   loadedPlayers: number
+  historyStatuses: Record<string, DraftHistoryStatus>
+  historyScans: Record<string, { source: 'sgp' | 'lcu'; scannedCount: number }>
 }>()
 const emit = defineEmits<{
   'update:selectedRole': [value: DraftRole | null]
   'update:selectedOpponent': [value: string | null]
   'update:comfortable': [value: number[] | null]
   retry: []
+  retryHistories: []
 }>()
 const { t } = useTranslation()
 const modeName = computed(() =>
@@ -316,6 +363,7 @@ const themeVars = useThemeVars()
 const expanded = ref(false)
 const percent = (value: number) => Math.round(value * 100)
 const championName = (id: number) => props.championNames[id] ?? `#${id}`
+const hasHistoryErrors = computed(() => Object.values(props.historyStatuses).includes('error'))
 const noFavorablePick = computed(
   () =>
     !props.loading &&
@@ -405,10 +453,10 @@ function pairLabel(pick: PickAdvice, id: number) {
 .draft-controls {
   flex-wrap: wrap;
 }
-.draft-controls .n-select:first-child {
+.draft-controls .n-select:first-of-type {
   width: 112px;
 }
-.draft-controls .n-select:nth-child(2) {
+.draft-controls .n-select:nth-of-type(2) {
   width: 205px;
 }
 .draft-muted,

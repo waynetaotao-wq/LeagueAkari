@@ -43,8 +43,20 @@ beforeEach(() => {
   setActivePinia(createPinia())
   const fixture = createDraftFixture()
   game = reactive(fixture.game)
-  game.matchHistory['player-2'] = { data: historyFixture('player-2', [13, 13]) }
-  game.matchHistory['player-7'] = { data: historyFixture('player-7', [105, 105]) }
+  game.draftMatchHistory['player-2'] = {
+    source: 'sgp',
+    queueId: 710,
+    scannedCount: 2,
+    scanLimit: 50,
+    data: historyFixture('player-2', [13, 13])
+  }
+  game.draftMatchHistory['player-7'] = {
+    source: 'sgp',
+    queueId: 710,
+    scannedCount: 2,
+    scanLimit: 50,
+    data: historyFixture('player-7', [105, 105])
+  }
   const store = useLeagueClientStore()
   store.champSelect.session = fixture.session
   store.champSelect.currentPickableChampionIds = new Set([13, 103])
@@ -64,6 +76,121 @@ afterEach(() => {
 })
 
 describe('live draft advice lifecycle', () => {
+  it('reranks equal matchups as known ally classes change without refetching statistics', async () => {
+    const store = useLeagueClientStore()
+    store.champSelect.currentPickableChampionIds = new Set([13, 111])
+    store.gameData.champions = {
+      13: { id: 13, name: 'Ryze', alias: 'Ryze', squarePortraitPath: '', roles: ['mage'] },
+      111: {
+        id: 111,
+        name: 'Nautilus',
+        alias: 'Nautilus',
+        squarePortraitPath: '',
+        roles: ['tank', 'support']
+      },
+      103: {
+        id: 103,
+        name: 'Ahri',
+        alias: 'Ahri',
+        squarePortraitPath: '',
+        roles: ['mage', 'assassin']
+      },
+      202: { id: 202, name: 'Jhin', alias: 'Jhin', squarePortraitPath: '', roles: ['marksman'] },
+      89: {
+        id: 89,
+        name: 'Leona',
+        alias: 'Leona',
+        squarePortraitPath: '',
+        roles: ['tank', 'support']
+      }
+    }
+    game.draftMatchHistory['player-2'].data = historyFixture('player-2', [13, 111, 13, 111])
+    const session = store.champSelect.session!
+    for (const [cellId, championId] of [
+      [0, 103],
+      [1, 202]
+    ]) {
+      session.myTeam[cellId].championId = championId
+      session.actions.push([
+        {
+          actorCellId: cellId,
+          championId,
+          completed: true,
+          id: 30 + cellId,
+          isAllyAction: true,
+          isInProgress: false,
+          type: 'pick',
+          duration: 30_000,
+          pickTurn: cellId
+        }
+      ])
+    }
+    store.champSelect.session = { ...session }
+    const advisor = scope.run(() => useDraftAdvisor())!
+    await vi.advanceTimersByTimeAsync(300)
+    expect(advisor.picks.value[0].championId).toBe(111)
+    expect(advisor.picks.value[0].composition.signals).toContain('adds-frontline')
+    store.champSelect.session = {
+      ...store.champSelect.session!,
+      myTeam: session.myTeam.map((p) => (p.cellId === 0 ? { ...p, championId: 89 } : p))
+    }
+    await nextTick()
+    expect(advisor.picks.value[0].championId).toBe(13)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(source.loadDetails).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses dedicated queue histories for all allies and distinguishes missing, empty, failed and hidden opponents', async () => {
+    const retry = vi.fn()
+    Object.assign(game, { retryDraftHistories: retry })
+    game.matchHistory['player-5'] = { data: historyFixture('player-5', [24, 24]) }
+    game.draftMatchHistory['player-0'] = {
+      source: 'sgp',
+      queueId: 710,
+      scannedCount: 2,
+      scanLimit: 50,
+      data: historyFixture('player-0', [24, 24], 'top')
+    }
+    game.draftMatchHistory['player-6'] = {
+      source: 'lcu',
+      queueId: 710,
+      scannedCount: 200,
+      scanLimit: 200,
+      data: historyFixture('player-6', [64, 64], 'jungle', Date.now(), 700)
+    }
+    game.draftMatchHistoryLoadingState['player-8'] = 'error'
+    game.draftMatchHistoryLoadingState['player-9'] = 'waiting'
+    const advisor = scope.run(() => useDraftAdvisor())!
+    expect(advisor.histories.value['player-0'].games).toBe(2)
+    expect(advisor.histories.value['player-5'].games).toBe(0)
+    expect(advisor.historyStatuses.value).toEqual({
+      'player-5': 'pending',
+      'player-6': 'empty',
+      'player-7': 'ready',
+      'player-8': 'error',
+      'player-9': 'waiting'
+    })
+    expect(advisor.historyScans.value['player-6']).toMatchObject({
+      source: 'lcu',
+      scannedCount: 200
+    })
+    advisor.retryHistories()
+    expect(retry).toHaveBeenCalledTimes(1)
+    const store = useLeagueClientStore()
+    store.champSelect.session = {
+      ...store.champSelect.session!,
+      theirTeam: store.champSelect.session!.theirTeam.map((player) =>
+        player.puuid === 'player-8' ? { ...player, nameVisibilityType: 'HIDDEN' } : player
+      )
+    }
+    await nextTick()
+    expect(advisor.historyStatuses.value['player-8']).toBeUndefined()
+    if (game.queryStage.phase === 'champ-select') game.queryStage.gameInfo.queueId = 440
+    await nextTick()
+    advisor.retryHistories()
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
+
   it('refreshes statistics at the first five-minute interval even after slow initial loading', async () => {
     source.loadPatches.mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 1000))
@@ -128,10 +255,18 @@ describe('live draft advice lifecycle', () => {
     expect(advisor.histories.value['player-2'].games).toBe(0)
     expect(advisor.picks.value).toEqual([])
     expect(advisor.bans.value).toEqual([])
-    game.matchHistory['player-2'] = {
+    game.draftMatchHistory['player-2'] = {
+      source: 'sgp',
+      queueId: 700,
+      scannedCount: 2,
+      scanLimit: 50,
       data: historyFixture('player-2', [103, 103], 'middle', Date.now(), 700)
     }
-    game.matchHistory['player-7'] = {
+    game.draftMatchHistory['player-7'] = {
+      source: 'sgp',
+      queueId: 700,
+      scannedCount: 2,
+      scanLimit: 50,
       data: historyFixture('player-7', [105, 105], 'middle', Date.now(), 700)
     }
     await vi.advanceTimersByTimeAsync(300)

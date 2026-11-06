@@ -1,9 +1,20 @@
 import type { AggregatedAnalysis } from '@shared/data-adapter/analysis/player'
 import type { AggregatedTeamAnalysis } from '@shared/data-adapter/analysis/team'
+import type { LcuOrSgpGameSummary } from '@shared/data-adapter/wrapper'
 import type { ParsedRole } from '@shared/utils/ranked'
 
 export * from './reload'
 export * from './settings'
+
+export interface OngoingGameDraftHistory {
+  source: 'sgp' | 'lcu'
+  queueId: 700 | 710
+  scannedCount: number
+  scanLimit: number
+  data: LcuOrSgpGameSummary[]
+}
+
+export type OngoingGameDraftHistoryStatus = 'waiting' | 'loading' | 'loaded' | 'error'
 
 export interface OngoingGameAnalysis {
   players: Record<string, AggregatedAnalysis>

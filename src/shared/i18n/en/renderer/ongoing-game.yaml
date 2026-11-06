@@ -4,13 +4,35 @@ ongoingGame:
     modes:
       premadeFive: Premade Five
       clash: Clash
-    samples: '{{mode}} history only · Recent samples for {{players}}/5 opponents'
+    samples: 'Visible opponents: {{visible}}/5 · Valid recent {{mode}} samples: {{players}}'
+    retryHistories: Retry unavailable histories
+    historyScan_one: '{{source}} · {{count}} game scanned'
+    historyScan_other: '{{source}} · {{count}} games scanned'
+    historyStatus:
+      loading: Loading
+      error: Incomplete; retry available
+      ready: Valid samples loaded
+      empty: No valid mode samples in scanned history
+      pending: Not loaded yet
+      waiting: Waiting for data source
+    replacementGap: Known alternatives have less practice
+    allyCost: Ally practice included in ban cost
+    composition:
+      adds-frontline: 'Class reference: adds tank/fighter coverage'
+      frontline-needed: 'Class reference: few tank/fighter tags'
+      adds-backline: 'Class reference: adds mage/marksman coverage'
+      backline-needed: 'Class reference: few mage/marksman tags'
+      adds-utility: 'Team reference: adds a support class'
+      utility-needed: 'Team reference: few support classes'
+      limited-data: Incomplete team data; known parts only
+      enemy-frontline: Enemy tank/fighter-heavy; sustained-damage class reference
+      enemy-backline: Enemy mage/marksman-heavy; diver class reference
     chooseRole: My position
     chooseOpponent: Lane opponent
     details: Pool & evidence
     collapse: Hide details
     bans: Ban priorities
-    banBasis: Opponent mains · Ally intents protected
+    banBasis: Mains · Alternatives · Ally cost
     poolUsage_one: '{{games}} of {{count}} recent game'
     poolUsage_other: '{{games}} of {{count}} recent games'
     historyWins: '{games} · {wins}'
@@ -25,7 +47,7 @@ ongoingGame:
     noBans: No eligible ban with enough history, or the client has not supplied ban availability.
     picks: My pick options
     lockedPick: My locked champion
-    pickBasis: Familiarity · Opponent pool coverage
+    pickBasis: Practice · Matchups · Team structure
     coverage: '{{rate}}% matchup data coverage'
     loading: Loading matchup statistics…
     updating: Loading remaining current statistics…
@@ -50,7 +72,7 @@ ongoingGame:
     myPool: My comfort picks
     poolPlaceholder: Up to 10 comfort picks for this draft
     autoPool: Restore automatic
-    method: 'Uses only loaded, valid {{mode}} games from the last 90 days, up to the latest 50 per player. Automatic picks require 2 recent games in this role; adjust manually when needed. Bans combine usage and sample size across opponents; card counts belong to the first listed player. Picks balance matchups, weak points and familiarity. Outlook describes smoothed known matchup statistics without familiarity bonuses; it does not measure lane or solo-kill advantage. Pairs below 50 games stay unranked; coverage must reach 60%. This heuristic has not been calibrated against {{mode}} outcomes and does not predict wins or guarantee counters. Hovers are not locks; correct positions after swaps.'
+    method: 'Dedicated mode histories ignore the match-page filter: SGP queries up to 50 mode games; LCU scans up to 200 recent games before filtering. Analysis uses the latest 50 valid {{mode}} games within 90 days; an empty scan does not prove no history exists. Recent practice receives greater weight, while card counts remain actual counts. Automatic picks require 2 games in this role; adjust manually if needed. Bans consider opponent practice, known alternative gaps and ally cost. The shortlist discounts repeated targeting across successive bans and updates after actual bans. Picks balance matchups, sample uncertainty, weak points, familiarity and class structure. Composition is a heuristic from client class tags and locks/hovers, with reduced hover weight and unknown parts excluded; it does not model all ability combinations. Outlook excludes familiarity and composition bonuses and is not lane or solo-kill strength. Pairs below 50 games are excluded; coverage must reach 60%. Ranking is not outcome-calibrated and does not predict wins or guarantee counters.'
     locked: 'Locked {{champion}}'
     tableCaption: Each cell shows the column champion’s ranked win rate against the row champion and sample count. Row percentages are analysis weights, not pick probabilities. Coverage measures sufficient data, not favorable matchups. Cards show the first three options; this table compares all candidates.
     matchup: Opponent pool

@@ -122,6 +122,10 @@ export class OngoingGameRenderer implements IAkariShardInitDispose {
     this._ipc.call(MAIN_SHARD_NAMESPACE, 'reload')
   }
 
+  retryDraftHistories() {
+    return this._ipc.call(MAIN_SHARD_NAMESPACE, 'retryDraftHistories')
+  }
+
   reloadPlayer(puuid: string, options?: OngoingGamePlayerReloadOptions) {
     this._ipc.call(MAIN_SHARD_NAMESPACE, 'reloadPlayer', puuid, options)
   }

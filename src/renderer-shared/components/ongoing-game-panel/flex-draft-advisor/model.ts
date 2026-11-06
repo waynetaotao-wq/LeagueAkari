@@ -15,6 +15,9 @@ export interface PoolChampion {
   championId: number
   games: number
   wins: number
+  /** Thirty-day half-life evidence; raw games/wins remain the displayed counts. */
+  recencyGames?: number
+  recencyWins?: number
 }
 
 export interface DraftPlayer {
@@ -71,6 +74,32 @@ export interface PickAdvice extends PoolChampion {
     winRate: number | null
   }>
   worst: { championId: number; winRate: number } | null
+  matchupScore: number | null
+  familiarityScore: number
+  composition: CompositionAdvice
+}
+
+export type CompositionSignal =
+  | 'adds-frontline'
+  | 'frontline-needed'
+  | 'adds-backline'
+  | 'backline-needed'
+  | 'adds-utility'
+  | 'utility-needed'
+  | 'enemy-frontline'
+  | 'enemy-backline'
+  | 'limited-data'
+
+export interface CompositionAdvice {
+  score: number
+  signals: CompositionSignal[]
+  knownAllies: number
+}
+
+export interface DraftRankingOptions {
+  context?: DraftContext
+  /** Client champion classes, not lane assignments or measured synergy statistics. */
+  championRoles?: Record<number, string[]>
 }
 
 export interface BanAdvice extends PoolChampion {
@@ -78,6 +107,9 @@ export interface BanAdvice extends PoolChampion {
   otherPlayers: DraftPlayer[]
   poolGames: number
   score: number
+  replacementGap: number
+  allyCost: number
+  compositionScore: number
 }
 
 export function draftRole(value?: string | null): DraftRole | null {
@@ -125,10 +157,13 @@ export function getDraftContext(
   )
     return null
 
+  const visible = [...session.myTeam, ...session.theirTeam].filter(visibleMember)
+  const uniqueMember = (member: ChampSelectTeam) =>
+    visibleMember(member) && visible.filter((other) => other.puuid === member.puuid).length === 1
   const self = session.myTeam.find(
     (member) => member.puuid === game.selfPuuid && member.cellId === session.localPlayerCellId
   )
-  if (!self || !visibleMember(self)) return null
+  if (!self || !uniqueMember(self)) return null
   const actions = session.actions.flat()
   const lockedCells = new Set(
     actions
@@ -146,8 +181,8 @@ export function getDraftContext(
     lockedChampionId: lockedCells.has(member.cellId) ? member.championId : 0,
     hoverChampionId: member.championPickIntent || member.championId || 0
   })
-  const allies = session.myTeam.filter(visibleMember).map(player)
-  const enemies = session.theirTeam.filter(visibleMember).map(player)
+  const allies = session.myTeam.filter(uniqueMember).map(player)
+  const enemies = session.theirTeam.filter(uniqueMember).map(player)
   if (!enemies.length) return null
   const roster = [...session.myTeam, ...session.theirTeam]
   const bans = actions.filter((action) => action.type === 'ban')
@@ -259,13 +294,21 @@ export function readPlayerHistory(
       const item = champions.get(row.championId) ?? {
         championId: row.championId,
         games: 0,
-        wins: 0
+        wins: 0,
+        recencyGames: 0,
+        recencyWins: 0
       }
       item.games += 1
       item.wins += Number(row.win)
+      const weight = 2 ** (-(now - row.created) / (30 * DAY))
+      item.recencyGames! += weight
+      item.recencyWins! += weight * Number(row.win)
       champions.set(row.championId, item)
     }
-    return [...champions.values()].sort((a, b) => b.games - a.games || a.championId - b.championId)
+    return [...champions.values()].sort(
+      (a, b) =>
+        effectiveGames(b) - effectiveGames(a) || b.games - a.games || a.championId - b.championId
+    )
   }
   return {
     games: recent.length,
@@ -354,11 +397,11 @@ export function buildTargetPool(
     const pool = rolePool(history, role).filter(
       (row) => !context.banned.has(row.championId) && !context.locked.has(row.championId)
     )
-    const total = pool.reduce((sum, row) => sum + row.games, 0)
+    const total = pool.reduce((sum, row) => sum + effectiveGames(row), 0)
     for (const row of pool)
       weighted.set(
         row.championId,
-        (weighted.get(row.championId) ?? 0) + (weight * row.games) / total
+        (weighted.get(row.championId) ?? 0) + (weight * effectiveGames(row)) / total
       )
   }
   // Preserve omitted mass in coverage rather than renormalizing the displayed subset.
@@ -400,12 +443,144 @@ export function pickCandidates(
     )
 }
 
+function effectiveGames(champion: PoolChampion) {
+  return champion.recencyGames ?? champion.games
+}
+
+function effectiveWins(champion: PoolChampion) {
+  return champion.recencyWins ?? champion.wins
+}
+
+function familiarity(champion: PoolChampion) {
+  const games = effectiveGames(champion)
+  // Recent practice matters more than lifetime volume; performance is strongly shrunk.
+  return (0.018 * games) / (games + 6) + 0.02 * ((effectiveWins(champion) + 5) / (games + 10) - 0.5)
+}
+
+function championStructure(roles: string[] | undefined) {
+  if (!roles) return null
+  const tags = new Set(roles.map((role) => role.toLowerCase()))
+  if (!['tank', 'fighter', 'mage', 'marksman', 'support', 'assassin'].some((tag) => tags.has(tag)))
+    return null
+  return {
+    frontline: tags.has('tank') ? 1 : tags.has('fighter') ? 0.6 : 0,
+    // Hybrid mage tags do not establish range (e.g. both Ahri and Sylas are mage/assassin).
+    backline: tags.has('marksman')
+      ? 1
+      : tags.has('mage')
+        ? ['tank', 'fighter', 'assassin'].some((tag) => tags.has(tag))
+          ? null
+          : 1
+        : 0,
+    utility: tags.has('support') ? 1 : 0
+  }
+}
+
+/** Broad class coverage only: no invented damage types, CC, or champion-combo win rates. */
+function compositionAdvice(
+  candidateId: number,
+  players: DraftPlayer[],
+  selfPuuid: string,
+  championRoles: Record<number, string[]> = {},
+  enemies: DraftPlayer[] = []
+): CompositionAdvice {
+  const result: CompositionAdvice = { score: 0, signals: [], knownAllies: 0 }
+  const candidate = championStructure(championRoles[candidateId])
+  const totals = { frontline: 0, backline: 0, utility: 0 }
+  let ambiguousBackline = false
+  let knownWeight = 0
+  for (const player of players) {
+    if (player.puuid === selfPuuid) continue
+    const structure = championStructure(
+      championRoles[player.lockedChampionId || player.hoverChampionId]
+    )
+    if (!structure) continue
+    const weight = player.lockedChampionId ? 1 : 0.5
+    result.knownAllies++
+    knownWeight += weight
+    ambiguousBackline ||= structure.backline === null
+    for (const key of ['frontline', 'backline', 'utility'] as const)
+      totals[key] += weight * (structure[key] ?? 0)
+  }
+  if (!candidate) {
+    result.signals.push('limited-data')
+    return result
+  }
+  const enoughAllies = result.knownAllies >= 2 && knownWeight >= 1
+  if (!enoughAllies) result.signals.push('limited-data')
+  const factors = [
+    {
+      key: 'frontline',
+      target: 0.8,
+      bonus: 0.018,
+      added: 'adds-frontline',
+      missing: 'frontline-needed'
+    },
+    {
+      key: 'backline',
+      target: 1,
+      bonus: 0.012,
+      added: 'adds-backline',
+      missing: 'backline-needed'
+    },
+    { key: 'utility', target: 0.5, bonus: 0.006, added: 'adds-utility', missing: 'utility-needed' }
+  ] as const
+  // Hovered picks contribute half as much and do not make a partial draft look complete.
+  const certainty = Math.min(1, knownWeight / 3)
+  for (const factor of enoughAllies ? factors : []) {
+    if (factor.key === 'utility' && result.knownAllies < 3) continue
+    if (factor.key === 'backline' && (ambiguousBackline || candidate.backline === null)) continue
+    const deficit = Math.max(0, factor.target - totals[factor.key])
+    if (!deficit) continue
+    const contribution = candidate[factor.key] ?? 0
+    if (contribution > 0) {
+      result.score += deficit * contribution * factor.bonus * certainty
+      result.signals.push(factor.added)
+    } else {
+      result.signals.push(factor.missing)
+    }
+  }
+  const enemyStructures = enemies
+    .filter((player) => player.lockedChampionId > 0)
+    .map((player) => championStructure(championRoles[player.lockedChampionId]))
+    .filter((row) => row !== null)
+  const candidateTags = new Set(
+    (championRoles[candidateId] ?? []).map((role) => role.toLowerCase())
+  )
+  if (enemyStructures.length >= 2) {
+    if (
+      enemyStructures.reduce((sum, row) => sum + row.frontline, 0) >= 1.5 &&
+      candidateTags.has('marksman')
+    ) {
+      result.score += 0.004
+      result.signals.push('enemy-frontline')
+    }
+    if (
+      enemyStructures.reduce((sum, row) => sum + (row.backline ?? 0), 0) >= 2 &&
+      (candidateTags.has('assassin') || candidateTags.has('fighter'))
+    ) {
+      result.score += 0.003
+      result.signals.push('enemy-backline')
+    }
+  }
+  result.score = Math.min(0.02, result.score)
+  const signalPriority = (signal: CompositionSignal) =>
+    signal.startsWith('adds-') || signal.startsWith('enemy-')
+      ? 0
+      : signal === 'limited-data'
+        ? 2
+        : 1
+  result.signals.sort((a, b) => signalPriority(a) - signalPriority(b))
+  return result
+}
+
 export function rankBans(
   context: DraftContext,
   histories: Record<string, PlayerHistory>,
   bannable: Set<number>,
   disabled: Set<number>,
-  comfortable: number[]
+  comfortable: number[],
+  options: DraftRankingOptions = {}
 ): BanAdvice[] {
   if (context.banFinished) return []
   const rows = new Map<number, Array<Omit<BanAdvice, 'otherPlayers'>>>()
@@ -413,7 +588,19 @@ export function rankBans(
     if (player.lockedChampionId) continue
     const history = histories[player.puuid]
     if (!history) continue
-    for (const champion of history.champions) {
+    const pool = (player.position ? rolePool(history, player.position) : history.champions).filter(
+      (champion) =>
+        !context.banned.has(champion.championId) &&
+        !context.locked.has(champion.championId) &&
+        !disabled.has(champion.championId)
+    )
+    const total = pool.reduce((sum, champion) => sum + effectiveGames(champion), 0)
+    if (!total) continue
+    const strength = (champion: PoolChampion) => {
+      const games = effectiveGames(champion)
+      return (Math.sqrt(games / (games + 4)) * (effectiveWins(champion) + 5)) / (games + 10)
+    }
+    for (const champion of pool) {
       const id = champion.championId
       if (
         champion.games < 2 ||
@@ -425,34 +612,99 @@ export function rankBans(
         comfortable.includes(id)
       )
         continue
-      const score =
-        (champion.games / history.games) *
-        (history.games / (history.games + 10)) *
-        ((champion.wins + 5) / (champion.games + 10))
-      const row = { ...champion, player, poolGames: history.games, score }
+      const alternatives = pool.filter((other) => other.championId !== id)
+      // No observed replacement does not mean the enemy cannot play another champion.
+      const replacement = Math.max(0.2, ...alternatives.map(strength))
+      const replacementGap = Math.max(0, strength(champion) - replacement)
+      const compositionScore = compositionAdvice(
+        id,
+        context.enemies,
+        player.puuid,
+        options.championRoles,
+        context.allies
+      ).score
+      const games = effectiveGames(champion)
+      const value =
+        (games / total) *
+        (total / (total + 10)) *
+        ((effectiveWins(champion) + 5) / (games + 10)) *
+        (1 + replacementGap + compositionScore * 4)
+      // Keep each contribution bounded before combining shared mains. This is utility,
+      // not pick probability; the monotone transform preserves each player's ordering.
+      const score = value / (1 + value)
+      const row = {
+        ...champion,
+        player,
+        poolGames: history.games,
+        score,
+        replacementGap,
+        allyCost: 0,
+        compositionScore
+      }
       const group = rows.get(id) ?? []
       group.push(row)
       rows.set(id, group)
     }
   }
-  return [...rows.values()]
-    .map((group): BanAdvice => {
-      group.sort((a, b) => b.score - a.score || b.games - a.games)
-      return {
-        ...group[0],
-        score: group.reduce((sum, row) => sum + row.score, 0),
-        otherPlayers: group.slice(1).map((row) => row.player)
-      }
-    })
-    .sort((a, b) => b.score - a.score || b.games - a.games || a.championId - b.championId)
-    .slice(0, 3)
+  const grouped = [...rows.values()].map((group) => {
+    group.sort((a, b) => b.score - a.score || b.games - a.games)
+    const championId = group[0].championId
+    let allyCost = 0
+    for (const ally of context.allies) {
+      if (ally.lockedChampionId) continue
+      const history = histories[ally.puuid]
+      const pool = ally.position ? rolePool(history, ally.position) : (history?.champions ?? [])
+      const champion = pool.find((row) => row.championId === championId && row.games >= 2)
+      if (!champion) continue
+      const total = pool.reduce((sum, row) => sum + effectiveGames(row), 0)
+      allyCost = Math.max(allyCost, effectiveGames(champion) / (total + 10))
+    }
+    const advice: BanAdvice = {
+      ...group[0],
+      // One unique champion can only be picked once: shared mains add bounded coverage.
+      score: 1 - group.reduce((remaining, row) => remaining * (1 - row.score), 1),
+      allyCost,
+      otherPlayers: group.slice(1).map((row) => row.player)
+    }
+    advice.score *= 1 - 0.6 * allyCost
+    return { advice, group }
+  })
+  const chosen: BanAdvice[] = []
+  const covered = new Map<string, number>()
+  while (chosen.length < 3 && grouped.length) {
+    // Diversify the shortlist instead of spending every suggested ban on the same player.
+    const marginal = (row: (typeof grouped)[number]) => {
+      const total = row.group.reduce((sum, player) => sum + player.score, 0)
+      const remaining = row.group.reduce(
+        (sum, player) => sum + player.score / (1 + 2 * (covered.get(player.player.puuid) ?? 0)),
+        0
+      )
+      return (row.advice.score * remaining) / total
+    }
+    grouped.sort(
+      (a, b) =>
+        marginal(b) - marginal(a) ||
+        b.advice.games - a.advice.games ||
+        a.advice.championId - b.advice.championId
+    )
+    const next = grouped.shift()!
+    chosen.push({ ...next.advice, score: marginal(next) })
+    const total = next.group.reduce((sum, player) => sum + player.score, 0)
+    for (const player of next.group)
+      covered.set(
+        player.player.puuid,
+        (covered.get(player.player.puuid) ?? 0) + player.score / total
+      )
+  }
+  return chosen
 }
 
 /** Heuristic ordering, not a predicted game win rate. Missing/small pairs remain unknown. */
 export function rankPicks(
   candidates: PoolChampion[],
   target: TargetPool,
-  samples: Record<number, MatchupSample[]>
+  samples: Record<number, MatchupSample[]>,
+  options: DraftRankingOptions = {}
 ): PickAdvice[] {
   return candidates
     .map((candidate): PickAdvice => {
@@ -460,22 +712,58 @@ export function rankPicks(
       let coverage = 0
       let weightedEdge = 0
       let favorableCoverage = 0
-      let worstEdge = 0
+      let uncertainty = 0
+      const downside: Array<{ edge: number; weight: number }> = []
       let worst: PickAdvice['worst'] = null
       const rows = target.champions.map((enemy) => {
-        const pair = pairs.find((p) => p.championId === enemy.championId)
-        if (!pair || pair.games < 50) return { ...enemy, games: pair?.games ?? null, winRate: null }
+        const matches = pairs.filter((p) => p.championId === enemy.championId)
+        const pair = matches.length === 1 ? matches[0] : undefined
+        if (
+          !pair ||
+          !Number.isSafeInteger(pair.games) ||
+          !Number.isSafeInteger(pair.wins) ||
+          pair.games < 50 ||
+          pair.wins < 0 ||
+          pair.wins > pair.games ||
+          !Number.isFinite(enemy.weight) ||
+          enemy.weight <= 0
+        )
+          return { ...enemy, games: pair?.games ?? null, winRate: null }
         const rate = pair.wins / pair.games
         // Shrink noisy pairs toward neutral; penalize a bad matchup as well as the mean.
         const edge = ((rate - 0.5) * pair.games) / (pair.games + 200)
         coverage += enemy.weight
         weightedEdge += enemy.weight * edge
         if (edge > 0.01) favorableCoverage += enemy.weight
-        worstEdge = Math.min(worstEdge, edge)
+        const posteriorRate = 0.5 + edge
+        uncertainty +=
+          enemy.weight * Math.sqrt((posteriorRate * (1 - posteriorRate)) / (pair.games + 201))
+        downside.push({ edge: Math.min(0, edge), weight: enemy.weight })
         if (edge < -0.01 && (!worst || rate < worst.winRate))
           worst = { championId: enemy.championId, winRate: rate }
         return { ...enemy, games: pair.games, winRate: rate }
       })
+      // Weighted lower tail: a rare bad pair matters, but does not dominate a common threat.
+      let remaining = 0.2
+      let tailEdge = 0
+      for (const pair of downside.sort((a, b) => a.edge - b.edge)) {
+        const weight = Math.min(remaining, pair.weight)
+        tailEdge += (pair.edge * weight) / 0.2
+        remaining -= weight
+        if (remaining <= 0) break
+      }
+      const matchupScore =
+        coverage >= 0.6
+          ? weightedEdge + tailEdge * 0.3 - (1 - coverage) * 0.08 - uncertainty * 0.35
+          : null
+      const familiarityScore = familiarity(candidate)
+      const composition = compositionAdvice(
+        candidate.championId,
+        options.context?.allies ?? [],
+        options.context?.self.puuid ?? '',
+        options.championRoles,
+        options.context?.enemies
+      )
       return {
         ...candidate,
         rows,
@@ -491,13 +779,10 @@ export function rankPicks(
                 : 'even',
         favorableCoverage,
         worst,
-        score:
-          coverage >= 0.6
-            ? weightedEdge +
-              worstEdge * 0.25 -
-              (1 - coverage) * 0.08 +
-              Math.min(candidate.games, 20) * 0.0005
-            : null
+        matchupScore,
+        familiarityScore,
+        composition,
+        score: matchupScore === null ? null : matchupScore + familiarityScore + composition.score
       }
     })
     .sort(

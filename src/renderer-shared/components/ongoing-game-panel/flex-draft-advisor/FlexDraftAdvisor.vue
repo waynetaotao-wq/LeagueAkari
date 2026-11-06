@@ -15,10 +15,13 @@
     :player-names="playerNames"
     :loading="loading"
     :history-loading="historyLoading"
+    :history-statuses="historyStatuses"
+    :history-scans="historyScans"
     :failed="failed"
     :patch="result.patch"
     :loaded-players="loadedPlayers"
     @retry="retry"
+    @retry-histories="retryHistories"
   />
 </template>
 
@@ -44,6 +47,9 @@ const {
   result,
   loadedPlayers,
   historyLoading,
+  historyStatuses,
+  historyScans,
+  retryHistories,
   retry
 } = useDraftAdvisor()
 </script>

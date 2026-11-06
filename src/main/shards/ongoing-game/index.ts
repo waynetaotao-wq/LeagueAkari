@@ -21,6 +21,7 @@ import {
   ONGOING_GAME_MAIN_NAMESPACE,
   type OngoingGameMainContext
 } from './context'
+import { OngoingGameDraftHistoryLoader } from './draft-history-loader'
 import { OngoingGameIpcHandlers } from './ipc-handlers'
 import { OngoingGameMatchHistoryLoader } from './match-history-loader'
 import { OngoingGamePlayerDataLoader } from './player-data-loader'
@@ -46,6 +47,7 @@ export class OngoingGameMain implements IAkariShardInitDispose {
   private readonly _context: OngoingGameMainContext
 
   private readonly _matchHistory: OngoingGameMatchHistoryLoader
+  private readonly _draftHistory: OngoingGameDraftHistoryLoader
   private readonly _playerData: OngoingGamePlayerDataLoader
   private readonly _analysis: OngoingGameAnalysisController
   private readonly _additionalInfo: OngoingGameAdditionalInfoController
@@ -163,6 +165,7 @@ export class OngoingGameMain implements IAkariShardInitDispose {
     }
 
     this._matchHistory = new OngoingGameMatchHistoryLoader(this._context)
+    this._draftHistory = new OngoingGameDraftHistoryLoader(this._context)
     this._playerData = new OngoingGamePlayerDataLoader(this._context, this._matchHistory)
     this._analysis = new OngoingGameAnalysisController(this._context)
     this._additionalInfo = new OngoingGameAdditionalInfoController(this._context)
@@ -172,7 +175,8 @@ export class OngoingGameMain implements IAkariShardInitDispose {
       this._context,
       this._matchHistory,
       this._playerData,
-      this._additionalInfo
+      this._additionalInfo,
+      this._draftHistory
     )
   }
 
@@ -203,6 +207,7 @@ export class OngoingGameMain implements IAkariShardInitDispose {
       'teams',
       'isInEog',
       'matchHistoryLoadingState',
+      'draftMatchHistoryLoadingState',
       'summonerLoadingState',
       'savedInfoLoadingState',
       'rankedStatsLoadingState',
@@ -230,6 +235,7 @@ export class OngoingGameMain implements IAkariShardInitDispose {
     this._sideEffects.watch()
     this._playerData.watch()
     this._matchHistory.watch()
+    this._draftHistory.watch()
     this._watchUnavailableState()
     this._additionalInfo.watch()
   }

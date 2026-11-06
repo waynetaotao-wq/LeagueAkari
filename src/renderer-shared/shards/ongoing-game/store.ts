@@ -5,6 +5,8 @@ import type { MatchHistoryQueryParams } from '@shared/http-api-axios-helper/sgp/
 import type {
   AdditionalResult,
   DraftOptions,
+  OngoingGameDraftHistory,
+  OngoingGameDraftHistoryStatus,
   OngoingGamePositionAssignment,
   OngoingGameSettingsData,
   OngoingGameSimplifiedChampMastery,
@@ -70,6 +72,10 @@ export const useOngoingGameStore = defineStore('shard:ongoing-game-renderer', ()
   const gameDetails = ref<Record<number, LcuOrSgpGameDetails>>({})
 
   const matchHistoryLoadingState = ref<Record<string, string>>({})
+  const draftMatchHistory = shallowRef<Record<string, OngoingGameDraftHistory>>({})
+  const draftMatchHistoryLoadingState = shallowRef<Record<string, OngoingGameDraftHistoryStatus>>(
+    {}
+  )
 
   const summonerLoadingState = ref<Record<string, string>>({}) // 未实装
   const savedInfoLoadingState = ref<Record<string, string>>({}) // 未实装
@@ -110,6 +116,8 @@ export const useOngoingGameStore = defineStore('shard:ongoing-game-renderer', ()
     gameDetails,
 
     matchHistoryLoadingState,
+    draftMatchHistory,
+    draftMatchHistoryLoadingState,
     summonerLoadingState,
     savedInfoLoadingState,
     rankedStatsLoadingState,

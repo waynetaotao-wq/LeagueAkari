@@ -25,9 +25,11 @@
       :player-names="playerNames"
       :loading="false"
       :history-loading="false"
+      :history-statuses="historyStatuses"
+      :history-scans="historyScans"
       :failed="scenario === 'partial'"
       patch="16.18"
-      :loaded-players="scenario === 'empty' || scenario === 'clashEmpty' ? 0 : 5"
+      :loaded-players="context.enemies.filter((p) => histories[p.puuid]?.games > 0).length"
     />
     <div v-else style="padding: 16px">该模式不显示选人助手</div>
   </div>
@@ -61,6 +63,8 @@ const scenarios = [
   { label: 'Clash · 正常分析', value: 'clash' },
   { label: 'Clash · 缺少历史', value: 'clashEmpty' },
   { label: '五排 · 正常分析', value: 'normal' },
+  { label: '五排 · 阵容缺口', value: 'composition' },
+  { label: '五排 · 战绩读取状态', value: 'historyStates' },
   { label: '五排 · 对手已锁定', value: 'locked' },
   { label: '五排 · 推测对位', value: 'inferred' },
   { label: '五排 · 部分统计缺失', value: 'partial' },
@@ -80,6 +84,27 @@ const fixture = computed(() => {
     session.queueId = 720
   }
   if (scenario.value === 'inferred') session.theirTeam.forEach((p) => (p.assignedPosition = ''))
+  if (scenario.value === 'composition') {
+    for (const [cellId, championId] of [
+      [0, 103],
+      [1, 202]
+    ]) {
+      session.myTeam[cellId].championId = championId
+      session.actions.push([
+        {
+          actorCellId: cellId,
+          championId,
+          completed: true,
+          id: 30 + cellId,
+          isAllyAction: true,
+          isInProgress: false,
+          type: 'pick',
+          duration: 30_000,
+          pickTurn: cellId
+        }
+      ])
+    }
+  }
   if (scenario.value === 'locked' || scenario.value === 'selfLocked') {
     const selfLocked = scenario.value === 'selfLocked'
     const member = selfLocked ? session.myTeam[2] : session.theirTeam[2]
@@ -101,6 +126,30 @@ const fixture = computed(() => {
   return { game, session }
 })
 const context = computed(() => getDraftContext(fixture.value.game, fixture.value.session))
+const historyStatuses = computed<
+  Record<string, 'ready' | 'empty' | 'loading' | 'error' | 'waiting' | 'pending'>
+>(() =>
+  Object.fromEntries(
+    (context.value?.enemies ?? []).map((player, i) => [
+      player.puuid,
+      scenario.value === 'historyStates'
+        ? (['ready', 'empty', 'loading', 'error', 'waiting'] as const)[i]
+        : scenario.value === 'empty' || scenario.value === 'clashEmpty'
+          ? 'empty'
+          : 'ready'
+    ])
+  )
+)
+const historyScans = computed(() =>
+  Object.fromEntries(
+    (context.value?.enemies ?? [])
+      .filter((player) => historyStatuses.value[player.puuid] !== 'waiting')
+      .map((player) => [
+        player.puuid,
+        { source: 'sgp' as const, scannedCount: histories.value[player.puuid]?.games ?? 0 }
+      ])
+  )
+)
 const championNames = {
   13: '瑞兹',
   103: '阿狸',
@@ -119,7 +168,9 @@ const histories = computed(() =>
     [...fixture.value.session.myTeam, ...fixture.value.session.theirTeam].map((p) => {
       const ids =
         p.cellId === 2
-          ? [13, 13, 13, 13, 103, 103, 103, 238, 238]
+          ? scenario.value === 'composition'
+            ? [13, 13, 111, 111, 238, 238]
+            : [13, 13, 13, 13, 103, 103, 103, 238, 238]
           : p.cellId === 7
             ? [105, 105, 105, 105, 105, 7, 7, 517]
             : Array(8).fill([24, 64, 105, 202, 111][p.cellId % 5])
@@ -127,7 +178,9 @@ const histories = computed(() =>
         p.puuid,
         readPlayerHistory(
           p.puuid,
-          scenario.value === 'empty' || scenario.value === 'clashEmpty'
+          scenario.value === 'empty' ||
+            scenario.value === 'clashEmpty' ||
+            (scenario.value === 'historyStates' && [6, 9].includes(p.cellId))
             ? []
             : historyFixture(
                 p.puuid,
@@ -150,6 +203,16 @@ const target = computed(() =>
     : null
 )
 const available = new Set(Object.keys(championNames).map(Number))
+const rankingOptions = computed(() => ({
+  context: context.value ?? undefined,
+  championRoles: {
+    13: ['mage'],
+    103: ['mage', 'assassin'],
+    238: ['assassin'],
+    111: ['tank', 'support'],
+    202: ['marksman']
+  }
+}))
 const candidates = computed(() =>
   context.value
     ? pickCandidates(
@@ -163,6 +226,11 @@ const candidates = computed(() =>
     : []
 )
 const samples: Record<number, MatchupSample[]> = {
+  111: [
+    { championId: 105, games: 1200, wins: 648 },
+    { championId: 7, games: 900, wins: 450 },
+    { championId: 517, games: 1500, wins: 825 }
+  ],
   13: [
     { championId: 105, games: 1200, wins: 648 },
     { championId: 7, games: 900, wins: 450 },
@@ -188,7 +256,8 @@ const picks = computed(() =>
           ? { 13: samples[13] }
           : scenario.value === 'unfavorable'
             ? Object.fromEntries(Object.keys(samples).map((id) => [id, samples[238]]))
-            : samples
+            : samples,
+        rankingOptions.value
       )
     : []
 )
@@ -199,7 +268,8 @@ const bans = computed(() =>
         histories.value,
         available,
         new Set(),
-        candidates.value.map((p) => p.championId)
+        candidates.value.map((p) => p.championId),
+        rankingOptions.value
       )
     : []
 )
