@@ -2,8 +2,8 @@
   <NPopover v-if="score" :delay="300" placement="top">
     <template #trigger>
       <div
-        class="flex items-center select-none"
-        :class="size === 'md' ? 'flex-col justify-center gap-0.5' : 'gap-1'"
+        class="flex min-w-0 items-center select-none"
+        :class="size === 'md' ? 'flex-col justify-center gap-0.5' : 'flex-wrap gap-x-1 gap-y-0'"
       >
         <div
           class="font-bold tabular-nums"
@@ -27,7 +27,9 @@
     </template>
     <div class="w-44 text-xs">
       <div class="mb-1 flex items-baseline justify-between">
-        <span class="font-bold">对局评分 {{ formatAkariRating(score.rating) }} / {{ AKARI_RATING_DISPLAY_MAX }}</span>
+        <span class="font-bold"
+          >对局评分 {{ formatAkariRating(score.rating) }} / {{ AKARI_RATING_DISPLAY_MAX }}</span
+        >
         <span class="text-[10px] text-black/60 dark:text-white/60">
           {{ positionText }}{{ chips.length ? ` · ${chips.map((c) => c.text).join(' · ')}` : '' }}
         </span>
@@ -41,7 +43,7 @@
             :style="{ width: `${Math.min(100, (row.ratio / 2) * 100).toFixed(0)}%` }"
           />
         </div>
-        <span class="w-9 shrink-0 text-right tabular-nums text-black/70 dark:text-white/70">
+        <span class="w-9 shrink-0 text-right text-black/70 tabular-nums dark:text-white/70">
           {{ row.ratio.toFixed(2) }}×
         </span>
       </div>
@@ -118,8 +120,10 @@ const chips = computed(() => {
           : 'bg-black/10 text-black/60 dark:bg-white/10 dark:text-white/60'
     })
   }
-  if (s.badge === 'MVP') out.push({ text: 'MVP', class: 'bg-amber-500/20 text-amber-700 dark:text-amber-300' })
-  if (s.badge === 'SVP') out.push({ text: 'SVP', class: 'bg-sky-500/20 text-sky-700 dark:text-sky-300' })
+  if (s.badge === 'MVP')
+    out.push({ text: 'MVP', class: 'bg-amber-500/20 text-amber-700 dark:text-amber-300' })
+  if (s.badge === 'SVP')
+    out.push({ text: 'SVP', class: 'bg-sky-500/20 text-sky-700 dark:text-sky-300' })
   if (s.tag) out.push({ text: AKARI_GAME_TAG_LABELS[s.tag], class: TAG_CLASS[s.tag] })
   return out
 })
