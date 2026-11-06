@@ -76,6 +76,38 @@ afterEach(() => {
 })
 
 describe('live draft advice lifecycle', () => {
+  it('stops protecting old comfort picks and hover after locking while retaining the manual pool', () => {
+    const fixture = createDraftFixture(700)
+    Object.assign(game, fixture.game)
+    game.draftMatchHistory['player-8'] = {
+      source: 'sgp',
+      queueId: 700,
+      scannedCount: 10,
+      scanLimit: 50,
+      data: historyFixture('player-8', Array(10).fill(103), 'bottom', Date.now(), 700)
+    }
+    const store = useLeagueClientStore()
+    store.champSelect.session = fixture.session
+    store.champSelect.currentPickableChampionIds = new Set([13, 103])
+    store.champSelect.currentBannableChampionIds = new Set([103])
+    const advisor = scope.run(() => useDraftAdvisor())!
+    advisor.comfortable.value = [13, 103]
+    expect(advisor.bans.value).toEqual([])
+
+    const session = store.champSelect.session!
+    session.myTeam[2].championId = 13
+    session.myTeam[2].championPickIntent = 103
+    for (const action of session.actions.slice(0, 12).flat()) {
+      action.completed = true
+      action.isInProgress = false
+    }
+    session.actions[12][0].isInProgress = true
+    store.champSelect.session = { ...session }
+    expect(advisor.picks.value.map((pick) => pick.championId)).toEqual([13])
+    expect(advisor.comfortable.value).toEqual([13, 103])
+    expect(advisor.bans.value.map((ban) => ban.championId)).toContain(103)
+  })
+
   it('updates the unpicked opponent pool when disabled champions change but retains actual locks', () => {
     const store = useLeagueClientStore()
     game.draftMatchHistory['player-7'].data = historyFixture('player-7', [105, 105, 105, 7, 7, 7])

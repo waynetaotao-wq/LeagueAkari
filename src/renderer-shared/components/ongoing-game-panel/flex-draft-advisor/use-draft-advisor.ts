@@ -118,10 +118,12 @@ export function useDraftAdvisor() {
           histories.value,
           leagueClient.champSelect.currentBannableChampionIds,
           leagueClient.champSelect.disabledChampionIds,
-          [
-            context.value.self.hoverChampionId,
-            ...(comfortable.value ?? candidates.value.map((p) => p.championId))
-          ],
+          context.value.self.lockedChampionId
+            ? [context.value.self.lockedChampionId]
+            : [
+                context.value.self.hoverChampionId,
+                ...(comfortable.value ?? candidates.value.map((p) => p.championId))
+              ],
           rankingOptions.value
         )
       : []

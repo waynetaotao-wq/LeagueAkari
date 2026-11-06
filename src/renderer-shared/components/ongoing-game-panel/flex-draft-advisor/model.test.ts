@@ -143,7 +143,7 @@ describe('Premade five and Clash draft eligibility and live choices', () => {
     }
   )
 
-  it('keeps Clash bans open between rounds, excludes locked players, and finishes after ten ban actions', () => {
+  it('waits between Clash rounds without treating missing future actions as finished', () => {
     const { game, session } = createDraftFixture(700)
     const allActions = session.actions
     session.actions = allActions.slice(0, 6)
@@ -159,8 +159,8 @@ describe('Premade five and Clash draft eligibility and live choices', () => {
       )
     }
     let context = getDraftContext(game, session)!
-    expect(context.banFinished).toBe(false)
-    expect(rankBans(context, histories, new Set([105]), new Set(), [])).toHaveLength(1)
+    expect(context).toMatchObject({ banFinished: false, banState: 'waiting', banBudget: 0 })
+    expect(rankBans(context, histories, new Set([105]), new Set(), [])).toEqual([])
     session.actions = allActions
     const pick = session.actions
       .flat()
@@ -177,6 +177,117 @@ describe('Premade five and Clash draft eligibility and live choices', () => {
         action.completed = true
       })
     expect(getDraftContext(game, session)?.banFinished).toBe(true)
+  })
+
+  it('limits simultaneous bans to our remaining slots and stops when our team is done', () => {
+    const { game, session } = createDraftFixture()
+    const actions = session.actions.flat()
+    actions
+      .filter((action) => action.isAllyAction)
+      .slice(0, 4)
+      .forEach((action) => {
+        action.completed = true // Empty bans consume a slot too.
+      })
+    session.actions.push([{ ...actions[0] }]) // Duplicate action IDs do not consume another slot.
+    session.myTeam[0].nameVisibilityType = 'HIDDEN'
+    const histories = {
+      'player-7': evenlyPlayedHistory('player-7', [
+        [13, 2],
+        [105, 2],
+        [238, 2]
+      ])
+    }
+    const allowed = new Set([13, 105, 238])
+    let context = getDraftContext(game, session)!
+    expect(context).toMatchObject({ banFinished: false, banState: 'active', banBudget: 1 })
+    expect(rankBans(context, histories, allowed, new Set(), [])).toHaveLength(1)
+    actions[4].completed = true
+    context = getDraftContext(game, session)!
+    expect(context).toMatchObject({ banFinished: true, banState: 'finished', banBudget: 0 })
+    expect(rankBans(context, histories, allowed, new Set(), [])).toEqual([])
+  })
+
+  it('keeps a Clash plan inside its ban round and counts separate captain actions', () => {
+    const { game, session } = createDraftFixture(700)
+    const actions = session.actions.flat()
+    const histories = {
+      'player-9': evenlyPlayedHistory(
+        'player-9',
+        [
+          [13, 2],
+          [105, 2],
+          [238, 2]
+        ],
+        'utility'
+      )
+    }
+    const allowed = new Set([13, 105, 238])
+    const advance = (completed: number, active?: number) => {
+      actions.forEach((action, index) => {
+        action.completed = index < completed
+        action.isInProgress = index === 0 || index === active // Completed stale flag is ignored.
+      })
+      return getDraftContext(game, session)!
+    }
+    let context = advance(4)
+    expect(context).toMatchObject({ banState: 'active', banBudget: 1 })
+    expect(rankBans(context, histories, allowed, new Set(), [])).toHaveLength(1)
+    context = advance(6, 6)
+    expect(context).toMatchObject({ banState: 'waiting', banBudget: 0, banFinished: false })
+    expect(rankBans(context, histories, allowed, new Set(), [])).toEqual([])
+    context = advance(12, 12)
+    expect(context).toMatchObject({ banState: 'active', banBudget: 2 })
+    expect(rankBans(context, histories, allowed, new Set(), [])).toHaveLength(2)
+    context = advance(14, 14)
+    expect(context).toMatchObject({ banState: 'active', banBudget: 1 })
+    context = advance(16, 16)
+    expect(context).toMatchObject({ banState: 'finished', banBudget: 0, banFinished: true })
+  })
+
+  it('recognizes completed red-side captain bans before the opponent finishes the round', () => {
+    const { game, session } = createDraftFixture(700)
+    ;[session.myTeam, session.theirTeam] = [session.theirTeam, session.myTeam]
+    session.localPlayerCellId = 7
+    session.myTeam[0].nameVisibilityType = 'HIDDEN'
+    session.actions.flat().forEach((action, index) => {
+      action.isAllyAction = action.actorCellId >= 5
+      action.completed = index < 15
+      action.isInProgress = index === 15
+    })
+    expect(getDraftContext({ ...game, selfPuuid: 'player-7' }, session)).toMatchObject({
+      banState: 'finished',
+      banBudget: 0,
+      banFinished: true
+    })
+  })
+
+  it.each(['FINALIZATION', 'GAME_STARTING'])(
+    'finishes planning in %s even when actions are missing',
+    (phase) => {
+      const { game, session } = createDraftFixture()
+      session.actions = []
+      expect(getDraftContext(game, session)).toMatchObject({
+        banState: 'waiting',
+        banBudget: 0,
+        banFinished: false
+      })
+      session.timer.phase = phase
+      expect(getDraftContext(game, session)).toMatchObject({
+        banState: 'finished',
+        banBudget: 0,
+        banFinished: true
+      })
+    }
+  )
+
+  it('does not invent an allied budget from a ban action with contradictory team ownership', () => {
+    const { game, session } = createDraftFixture()
+    session.actions[0][0].isAllyAction = false
+    expect(getDraftContext(game, session)).toMatchObject({
+      banState: 'waiting',
+      banBudget: 0,
+      banFinished: false
+    })
   })
 
   it('distinguishes hover from lock and reads the current traded champion', () => {
@@ -523,6 +634,79 @@ describe('history and ranking evidence', () => {
     )
     expect(picks[0].championId).toBe(13)
     expect(picks[0].worst?.championId).toBe(7)
+  })
+
+  it('keeps missing opponent mass in downside risk without fabricating matchup rows or outlook', () => {
+    const target: TargetPool = {
+      source: 'manual',
+      players: [],
+      unknownRole: false,
+      champions: [
+        { championId: 105, weight: 0.6 },
+        { championId: 7, weight: 0.4 }
+      ]
+    }
+    const candidates = [13, 103].map((championId) => ({ championId, games: 10, wins: 5 }))
+    const samples = {
+      13: [
+        { championId: 105, games: 1000, wins: 550 },
+        { championId: 7, games: 1000, wins: 400 }
+      ],
+      103: [{ championId: 105, games: 1000, wins: 540 }]
+    }
+    const picks = rankPicks(candidates, target, samples)
+    expect(picks[0].championId).toBe(13)
+    const missing = picks.find((pick) => pick.championId === 103)!
+    expect(missing).toMatchObject({ coverage: 0.6, outlook: 'favorable', worst: null })
+    expect(missing.rows[1]).toMatchObject({ games: null, winRate: null, weight: 0.4 })
+    let previousScore = missing.score!
+    for (const pair of [
+      { championId: 7, games: 50, wins: 25 },
+      { championId: 7, games: 1000, wins: 500 },
+      { championId: 7, games: 1000, wins: 530 }
+    ]) {
+      const [known] = rankPicks([candidates[1]], target, { 103: [...samples[103], pair] })
+      expect(known.coverage).toBe(1)
+      expect(known.score).toBeGreaterThan(previousScore)
+      previousScore = known.score!
+    }
+  })
+
+  it('highlights the weighted adverse contribution rather than an extremely rare raw-rate outlier', () => {
+    const candidate = [{ championId: 13, games: 10, wins: 5 }]
+    const target: TargetPool = {
+      source: 'manual',
+      players: [],
+      unknownRole: false,
+      champions: [
+        { championId: 7, weight: 0.01 },
+        { championId: 105, weight: 0.49 },
+        { championId: 238, weight: 0.5 }
+      ]
+    }
+    const samples = {
+      13: [
+        { championId: 7, games: 50, wins: 0 },
+        { championId: 105, games: 10000, wins: 4000 },
+        { championId: 238, games: 10000, wins: 5500 }
+      ]
+    }
+    const [pick] = rankPicks(candidate, target, samples)
+    expect(pick.worst).toEqual({ championId: 105, winRate: 0.4 })
+    expect(pick.rows.find((row) => row.championId === 7)).toMatchObject({ games: 50, winRate: 0 })
+    const tied = {
+      ...target,
+      champions: [
+        { championId: 238, weight: 0.5 },
+        { championId: 105, weight: 0.5 }
+      ]
+    }
+    samples[13][2].wins = 4000
+    expect(rankPicks(candidate, tied, samples)[0].worst?.championId).toBe(105)
+    expect(
+      rankPicks(candidate, { ...tied, champions: [...tied.champions].reverse() }, samples)[0].worst
+        ?.championId
+    ).toBe(105)
   })
 
   it('rejects invalid/ambiguous pair evidence and keeps missing coverage unranked', () => {

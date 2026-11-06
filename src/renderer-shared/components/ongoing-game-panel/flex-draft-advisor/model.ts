@@ -1,11 +1,16 @@
 import type { OngoingGameProviderValue } from '@renderer-shared/providers/ongoing-game/types'
 import type { LcuOrSgpGameSummary } from '@shared/data-adapter/wrapper'
-import type { ChampSelectSession, ChampSelectTeam } from '@shared/types/league-client/champ-select'
+import type {
+  Action,
+  ChampSelectSession,
+  ChampSelectTeam
+} from '@shared/types/league-client/champ-select'
 
 export const DRAFT_ROLES = ['top', 'jungle', 'middle', 'bottom', 'utility'] as const
 export type DraftRole = (typeof DRAFT_ROLES)[number]
 export const MAX_CANDIDATES = 10
 const DAY = 86_400_000
+const MISSING_MATCHUP_RISK_EDGE = -0.08
 // LCU identifies 积分对战 五排 as RANKED_PREMADE_5x5 (710), separate from Ranked Flex (440).
 const PREMADE_FIVE_QUEUE_ID = 710
 const CLASH_QUEUE_ID = 700
@@ -38,6 +43,8 @@ export interface DraftContext {
   banned: Set<number>
   locked: Set<number>
   allyIntents: Set<number>
+  banState: 'active' | 'waiting' | 'finished'
+  banBudget: number
   banFinished: boolean
 }
 
@@ -130,6 +137,59 @@ function visibleMember(member: ChampSelectTeam) {
   )
 }
 
+function draftBanPlan(
+  session: ChampSelectSession
+): Pick<DraftContext, 'banState' | 'banBudget' | 'banFinished'> {
+  const waiting = { banState: 'waiting' as const, banBudget: 0, banFinished: false }
+  const finished = { banState: 'finished' as const, banBudget: 0, banFinished: true }
+  if (['FINALIZATION', 'GAME_STARTING'].includes(session.timer.phase)) return finished
+
+  const unique = new Map<number, Action>()
+  for (const action of session.actions.flat()) {
+    const previous = unique.get(action.id)
+    if (previous) {
+      if (
+        previous.type !== action.type ||
+        previous.actorCellId !== action.actorCellId ||
+        previous.isAllyAction !== action.isAllyAction ||
+        previous.completed !== action.completed
+      )
+        return waiting
+      previous.isInProgress ||= action.isInProgress
+    } else unique.set(action.id, { ...action })
+  }
+  const actions = [...unique.values()]
+  const alliedCells = new Set(session.myTeam.map((player) => player.cellId))
+  const enemyCells = new Set(session.theirTeam.map((player) => player.cellId))
+  const ownAction = (action: Action) => {
+    const allied = alliedCells.has(action.actorCellId)
+    if (allied === enemyCells.has(action.actorCellId) || allied !== action.isAllyAction) return null
+    return allied
+  }
+  const bans = actions.filter((action) => action.type === 'ban')
+  const completedOwn = bans.filter(
+    (action) => action.completed && ownAction(action) === true
+  ).length
+  // Both supported queues give each side five slots. A completed empty ban consumes its slot.
+  if (completedOwn >= 5) return finished
+  if (bans.some((action) => ownAction(action) === null)) return waiting
+
+  let current = actions.findIndex((action) => !action.completed && action.isInProgress)
+  if (current < 0) current = actions.findIndex((action) => !action.completed)
+  if (current < 0 || actions[current].type !== 'ban') return waiting
+  let start = current
+  let end = current + 1
+  while (start > 0 && actions[start - 1].type === 'ban') start--
+  while (end < actions.length && actions[end].type === 'ban') end++
+  const banBudget = Math.min(
+    5 - completedOwn,
+    actions.slice(start, end).filter((action) => !action.completed && ownAction(action) === true)
+      .length
+  )
+  // Do not plan across intervening picks, or assume missing Clash rounds have already ended.
+  return banBudget > 0 ? { banState: 'active', banBudget, banFinished: false } : waiting
+}
+
 export function getDraftContext(
   game: Pick<
     OngoingGameProviderValue,
@@ -214,11 +274,7 @@ export function getDraftContext(
         .map((m) => m.championPickIntent || m.championId)
         .filter((id) => id > 0)
     ),
-    // Clash has two ban rounds. Six completed first-round bans do not finish all banning,
-    // including when the client has not yet supplied the second round's actions.
-    banFinished:
-      bans.length >= (queueId === CLASH_QUEUE_ID ? 10 : 1) &&
-      bans.every((action) => action.completed)
+    ...draftBanPlan(session)
   }
 }
 
@@ -632,10 +688,10 @@ export function rankBans(
   comfortable: number[],
   options: DraftRankingOptions = {}
 ): BanAdvice[] {
-  if (context.banFinished) return []
+  if (context.banState !== 'active' || context.banFinished) return []
   const banned = new Set(context.banned)
   const chosen: BanAdvice[] = []
-  while (chosen.length < 3) {
+  while (chosen.length < Math.min(3, context.banBudget)) {
     const next = rankAvailableBans(
       { ...context, banned },
       histories,
@@ -820,6 +876,8 @@ export function rankPicks(
       let uncertainty = 0
       const downside: Array<{ edge: number; weight: number }> = []
       let worst: PickAdvice['worst'] = null
+      let worstImpact = 0
+      let worstEdge = 0
       const rows = target.champions.map((enemy) => {
         const matches = pairs.filter((p) => p.championId === enemy.championId)
         const pair = matches.length === 1 ? matches[0] : undefined
@@ -844,10 +902,23 @@ export function rankPicks(
         uncertainty +=
           enemy.weight * Math.sqrt((posteriorRate * (1 - posteriorRate)) / (pair.games + 201))
         downside.push({ edge: Math.min(0, edge), weight: enemy.weight })
-        if (edge < -0.01 && (!worst || rate < worst.winRate))
+        const impact = enemy.weight * -edge
+        if (
+          edge < -0.01 &&
+          (!worst ||
+            impact > worstImpact ||
+            (impact === worstImpact &&
+              (edge < worstEdge || (edge === worstEdge && enemy.championId < worst.championId))))
+        ) {
           worst = { championId: enemy.championId, winRate: rate }
+          worstImpact = impact
+          worstEdge = edge
+        }
         return { ...enemy, games: pair.games, winRate: rate }
       })
+      const missingMass = Math.max(0, 1 - coverage)
+      // A conservative risk assumption, never a measured win rate or an evidence row.
+      if (missingMass > 0) downside.push({ edge: MISSING_MATCHUP_RISK_EDGE, weight: missingMass })
       // Weighted lower tail: a rare bad pair matters, but does not dominate a common threat.
       let remaining = 0.2
       let tailEdge = 0
@@ -859,7 +930,10 @@ export function rankPicks(
       }
       const matchupScore =
         coverage >= 0.6
-          ? weightedEdge + tailEdge * 0.3 - (1 - coverage) * 0.08 - uncertainty * 0.35
+          ? weightedEdge +
+            tailEdge * 0.3 +
+            missingMass * MISSING_MATCHUP_RISK_EDGE -
+            uncertainty * 0.35
           : null
       const familiarityScore = familiarity(candidate)
       const composition = compositionAdvice(

@@ -37,7 +37,7 @@
 
 <script setup lang="ts">
 import { NSelect } from 'naive-ui'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import DraftAdviceView from './DraftAdviceView.vue'
 import { createDraftFixture, historyFixture } from './fixtures'
@@ -59,9 +59,21 @@ const scenario = ref(props.initialScenario)
 const selectedRole = ref<DraftRole | null>(null)
 const selectedOpponent = ref<string | null>(null)
 const comfortable = ref<number[] | null>(null)
+watch(
+  scenario,
+  (value) => {
+    if (value === 'clashLockedPool') comfortable.value = [13, 103]
+  },
+  { immediate: true }
+)
 const scenarios = [
   { label: 'Clash · 正常分析', value: 'clash' },
   { label: 'Clash · 缺少历史', value: 'clashEmpty' },
+  { label: 'Clash · 本轮剩一次禁用', value: 'clashOneBan' },
+  { label: 'Clash · 等待第二轮禁用', value: 'clashWaiting' },
+  { label: 'Clash · 第二轮两次禁用', value: 'clashSecondBan' },
+  { label: 'Clash · 我方禁用完成', value: 'clashOwnFinished' },
+  { label: 'Clash · 锁定后保留旧手动池', value: 'clashLockedPool' },
   { label: '五排 · 正常分析', value: 'normal' },
   { label: '五排 · 阵容缺口', value: 'composition' },
   { label: '五排 · 战绩读取状态', value: 'historyStates' },
@@ -77,6 +89,37 @@ const scenarios = [
 ]
 const fixture = computed(() => {
   const { game, session } = createDraftFixture(scenario.value.startsWith('clash') ? 700 : 710)
+  const completed = {
+    clashOneBan: 4,
+    clashWaiting: 6,
+    clashSecondBan: 12,
+    clashOwnFinished: 15,
+    clashLockedPool: 12
+  }[scenario.value]
+  if (completed !== undefined) {
+    const lockedChampions: Record<number, number> = { 0: 61, 1: 238, 2: 13, 5: 24, 6: 64, 7: 105 }
+    const bannedChampions = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
+    let banIndex = 0
+    session.actions.flat().forEach((action, index) => {
+      if (scenario.value === 'clashOwnFinished') {
+        // Red-side draft order: our final ban precedes the opposing team's final ban.
+        action.actorCellId = (action.actorCellId + 5) % 10
+        action.isAllyAction = !action.isAllyAction
+      }
+      action.completed = index < completed
+      action.isInProgress = index === completed
+      if (!action.completed) return
+      if (action.type === 'ban') action.championId = bannedChampions[banIndex++]
+      else {
+        action.championId = lockedChampions[action.actorCellId]
+        const member = [...session.myTeam, ...session.theirTeam].find(
+          (p) => p.cellId === action.actorCellId
+        )!
+        member.championId = action.championId
+      }
+    })
+    if (scenario.value === 'clashLockedPool') session.myTeam[2].championPickIntent = 103
+  }
   if (scenario.value === 'solo' && game.queryStage.phase === 'champ-select')
     game.queryStage.gameInfo.queueId = 420
   if (scenario.value === 'aramClash' && game.queryStage.phase === 'champ-select') {
@@ -170,13 +213,15 @@ const histories = computed(() =>
   Object.fromEntries(
     [...fixture.value.session.myTeam, ...fixture.value.session.theirTeam].map((p) => {
       const ids =
-        p.cellId === 2
-          ? scenario.value === 'composition'
-            ? [13, 13, 111, 111, 238, 238]
-            : [13, 13, 13, 13, 103, 103, 103, 238, 238]
-          : p.cellId === 7
-            ? [105, 105, 105, 105, 105, 7, 7, 517]
-            : Array(8).fill([24, 64, 105, 202, 111][p.cellId % 5])
+        scenario.value === 'clashLockedPool' && p.cellId === 8
+          ? Array(8).fill(103)
+          : p.cellId === 2
+            ? scenario.value === 'composition'
+              ? [13, 13, 111, 111, 238, 238]
+              : [13, 13, 13, 13, 103, 103, 103, 238, 238]
+            : p.cellId === 7
+              ? [105, 105, 105, 105, 105, 7, 7, 517]
+              : Array(8).fill([24, 64, 105, 202, 111][p.cellId % 5])
       return [
         p.puuid,
         readPlayerHistory(
@@ -273,7 +318,12 @@ const bans = computed(() =>
         histories.value,
         available,
         new Set(),
-        comfortable.value ?? candidates.value.map((p) => p.championId),
+        context.value.self.lockedChampionId
+          ? [context.value.self.lockedChampionId]
+          : [
+              context.value.self.hoverChampionId,
+              ...(comfortable.value ?? candidates.value.map((p) => p.championId))
+            ],
         rankingOptions.value
       )
     : []

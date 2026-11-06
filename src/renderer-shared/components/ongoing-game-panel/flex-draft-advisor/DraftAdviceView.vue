@@ -56,7 +56,10 @@
       <div class="draft-section">
         <div class="draft-section-title">
           <span class="draft-dot draft-dot-ban" />{{ t('ongoingGame.flexDraft.bans')
-          }}<span class="draft-muted">{{ t('ongoingGame.flexDraft.banBasis') }}</span>
+          }}<span v-if="context.banState === 'active'" class="draft-muted">
+            {{ t('ongoingGame.flexDraft.banRemaining', { count: context.banBudget }) }} ·
+            {{ t('ongoingGame.flexDraft.banBasis') }}
+          </span>
         </div>
         <div v-if="bans.length" class="draft-cards">
           <div v-for="(ban, index) in bans" :key="ban.championId" class="draft-card">
@@ -99,11 +102,13 @@
         <div v-else class="draft-empty">
           {{
             t(
-              context.banFinished
+              context.banState === 'finished'
                 ? 'ongoingGame.flexDraft.banFinished'
-                : historyLoading
-                  ? 'ongoingGame.flexDraft.historyLoading'
-                  : 'ongoingGame.flexDraft.noBans',
+                : context.banState === 'waiting'
+                  ? 'ongoingGame.flexDraft.banWaiting'
+                  : historyLoading
+                    ? 'ongoingGame.flexDraft.historyLoading'
+                    : 'ongoingGame.flexDraft.noBans',
               { mode: modeName }
             )
           }}
