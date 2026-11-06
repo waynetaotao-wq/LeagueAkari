@@ -31,6 +31,9 @@ export function useDraftAdvisor() {
   const result = shallowRef<DraftMatchups>({ patch: null, samples: {}, failed: [] })
   const resultScope = ref<string | null>(null)
   const context = computed(() => getDraftContext(game, leagueClient.champSelect.session))
+  const historyPlayers = computed(() =>
+    context.value ? [...context.value.allies, ...context.value.enemies] : []
+  )
   watch(
     () => context.value?.key,
     () => {
@@ -108,7 +111,10 @@ export function useDraftAdvisor() {
           histories.value,
           leagueClient.champSelect.currentBannableChampionIds,
           leagueClient.champSelect.disabledChampionIds,
-          [context.value.self.hoverChampionId, ...candidates.value.map((p) => p.championId)],
+          [
+            context.value.self.hoverChampionId,
+            ...(comfortable.value ?? candidates.value.map((p) => p.championId))
+          ],
           rankingOptions.value
         )
       : []
@@ -137,23 +143,20 @@ export function useDraftAdvisor() {
   )
   const playerNames = computed(() =>
     Object.fromEntries(
-      (context.value?.enemies ?? []).map((p, i) => [
-        p.puuid,
-        game.streamerMode ? `#${i + 1}` : p.name
-      ])
+      [context.value?.allies ?? [], context.value?.enemies ?? []].flatMap((team) =>
+        team.map((p, i) => [p.puuid, game.streamerMode ? `#${i + 1}` : p.name])
+      )
     )
   )
   const loadedPlayers = computed(
     () => context.value?.enemies.filter((p) => histories.value[p.puuid]?.games > 0).length ?? 0
   )
   const historyLoading = computed(() =>
-    [context.value?.self, ...(context.value?.enemies ?? [])].some(
-      (p) => p && game.draftMatchHistoryLoadingState[p.puuid] === 'loading'
-    )
+    historyPlayers.value.some((p) => game.draftMatchHistoryLoadingState[p.puuid] === 'loading')
   )
   const historyStatuses = computed<Record<string, DraftHistoryStatus>>(() =>
     Object.fromEntries(
-      (context.value?.enemies ?? []).map((player) => {
+      historyPlayers.value.map((player) => {
         const loadingState = game.draftMatchHistoryLoadingState[player.puuid]
         const status: DraftHistoryStatus =
           loadingState === 'loading' || loadingState === 'error' || loadingState === 'waiting'
@@ -169,7 +172,7 @@ export function useDraftAdvisor() {
   )
   const historyScans = computed(() =>
     Object.fromEntries(
-      (context.value?.enemies ?? []).flatMap((player) => {
+      historyPlayers.value.flatMap((player) => {
         const entry = game.draftMatchHistory[player.puuid]
         return entry?.queueId === context.value?.queueId ? [[player.puuid, entry]] : []
       })

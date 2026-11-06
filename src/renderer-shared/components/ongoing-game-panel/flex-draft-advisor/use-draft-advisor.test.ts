@@ -76,6 +76,37 @@ afterEach(() => {
 })
 
 describe('live draft advice lifecycle', () => {
+  it('keeps an explicitly chosen comfort champion out of bans when temporarily unpickable', () => {
+    const advisor = scope.run(() => useDraftAdvisor())!
+    advisor.comfortable.value = [105]
+    expect(advisor.picks.value).toEqual([])
+    expect(advisor.bans.value.map((ban) => ban.championId)).not.toContain(105)
+    advisor.comfortable.value = null
+    expect(advisor.bans.value.map((ban) => ban.championId)).toContain(105)
+  })
+
+  it('exposes self and ally history failures, scan progress and retry alongside enemy status', async () => {
+    const retry = vi.fn()
+    Object.assign(game, { retryDraftHistories: retry })
+    game.draftMatchHistoryLoadingState['player-2'] = 'error'
+    game.draftMatchHistoryLoadingState['player-0'] = 'waiting'
+    game.draftMatchHistoryLoadingState['player-1'] = 'loading'
+    const advisor = scope.run(() => useDraftAdvisor())!
+    expect(advisor.historyStatuses.value['player-2']).toBe('error')
+    expect(advisor.historyStatuses.value['player-0']).toBe('waiting')
+    expect(advisor.historyScans.value['player-2']).toMatchObject({
+      source: 'sgp',
+      scannedCount: 2
+    })
+    expect(advisor.historyLoading.value).toBe(true)
+    expect(advisor.playerNames.value['player-0']).toBe('玩家1#TEST')
+    advisor.retryHistories()
+    expect(retry).toHaveBeenCalledOnce()
+    game.draftMatchHistoryLoadingState['player-2'] = 'loaded'
+    await nextTick()
+    expect(advisor.historyStatuses.value['player-2']).toBe('ready')
+  })
+
   it('reranks equal matchups as known ally classes change without refetching statistics', async () => {
     const store = useLeagueClientStore()
     store.champSelect.currentPickableChampionIds = new Set([13, 111])
@@ -163,7 +194,7 @@ describe('live draft advice lifecycle', () => {
     const advisor = scope.run(() => useDraftAdvisor())!
     expect(advisor.histories.value['player-0'].games).toBe(2)
     expect(advisor.histories.value['player-5'].games).toBe(0)
-    expect(advisor.historyStatuses.value).toEqual({
+    expect(advisor.historyStatuses.value).toMatchObject({
       'player-5': 'pending',
       'player-6': 'empty',
       'player-7': 'ready',
@@ -231,7 +262,14 @@ describe('live draft advice lifecycle', () => {
     expect(advisor.playerNames.value['player-7']).toBe('SameName#TAG2')
     Object.assign(game, { streamerMode: true })
     await nextTick()
-    expect(Object.values(advisor.playerNames.value)).toEqual(['#1', '#2', '#3', '#4', '#5'])
+    expect(advisor.context.value?.enemies.map((p) => advisor.playerNames.value[p.puuid])).toEqual([
+      '#1',
+      '#2',
+      '#3',
+      '#4',
+      '#5'
+    ])
+    expect(Object.values(advisor.playerNames.value).every((name) => /^#\d+$/.test(name))).toBe(true)
     expect(advisor.selectedOpponent.value).toBe('player-7')
     expect(advisor.target.value?.players[0].player.puuid).toBe('player-7')
   })
@@ -321,6 +359,92 @@ describe('live draft advice lifecycle', () => {
     expect(advisor.result.value.samples[13]).toBeUndefined()
     expect(advisor.result.value.samples[103]).toHaveLength(1)
     expect(advisor.loading.value).toBe(false)
+  })
+
+  it('discards late lane statistics after a role change', async () => {
+    let finish!: (data: ChampionDataLoadResult<ChampionDataDetails>) => void
+    source.loadDetails.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)))
+    game.draftMatchHistory['player-5'] = {
+      source: 'sgp',
+      queueId: 710,
+      scannedCount: 2,
+      scanLimit: 50,
+      data: historyFixture('player-5', [105, 105], 'top')
+    }
+    const advisor = scope.run(() => useDraftAdvisor())!
+    advisor.comfortable.value = [13]
+    await vi.advanceTimersByTimeAsync(300)
+    source.loadDetails.mockImplementation(async (_query, id) => {
+      const loaded = response(id)
+      if (loaded.status === 'success') {
+        loaded.data.summary.position = 'top'
+        loaded.data.sections.positions = [
+          { position: 'top' }
+        ] as ChampionDataDetails['sections']['positions']
+        loaded.data.sections.matchups![0].performance.wins = 460
+      }
+      return loaded
+    })
+    advisor.selectedRole.value = 'top'
+    expect(advisor.picks.value[0].score).toBeNull()
+    await vi.advanceTimersByTimeAsync(300)
+    finish(response(13))
+    await vi.advanceTimersByTimeAsync(1)
+    expect(advisor.result.value.samples[13][0].wins).toBe(460)
+    expect(advisor.picks.value[0].outlook).toBe('unfavorable')
+    expect(source.loadDetails.mock.calls[1][0].position).toBe('top')
+  })
+
+  it('applies an in-flight full matchup response to the newly selected opponent', async () => {
+    let finish!: (data: ChampionDataLoadResult<ChampionDataDetails>) => void
+    source.loadDetails.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)))
+    game.draftMatchHistory['player-5'] = {
+      source: 'sgp',
+      queueId: 710,
+      scannedCount: 2,
+      scanLimit: 50,
+      data: historyFixture('player-5', [7, 7])
+    }
+    const advisor = scope.run(() => useDraftAdvisor())!
+    await vi.advanceTimersByTimeAsync(300)
+    advisor.selectedOpponent.value = 'player-5'
+    const loaded = response(13)
+    if (loaded.status === 'success') {
+      loaded.data.sections.matchups!.push({
+        championId: 7,
+        relationship: 'unfavorable',
+        performance: { games: 1000, wins: 400 } as never
+      })
+    }
+    finish(loaded)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(advisor.picks.value[0]).toMatchObject({ coverage: 1, outlook: 'unfavorable' })
+    expect(advisor.picks.value[0].rows.map((row) => row.championId)).toEqual([7])
+    expect(source.loadDetails).toHaveBeenCalledOnce()
+  })
+
+  it('clears advice on disconnect and does not reuse a late disconnected response', async () => {
+    let finish!: (data: ChampionDataLoadResult<ChampionDataDetails>) => void
+    source.loadDetails.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)))
+    const advisor = scope.run(() => useDraftAdvisor())!
+    await vi.advanceTimersByTimeAsync(300)
+    Object.assign(game, { isConnected: false })
+    await nextTick()
+    expect(advisor.context.value).toBeNull()
+    expect(advisor.result.value.samples).toEqual({})
+    expect(advisor.historyStatuses.value).toEqual({})
+    finish(response(13))
+    await vi.advanceTimersByTimeAsync(1)
+    source.loadDetails.mockImplementation(async (_query, id) => {
+      const loaded = response(id)
+      if (loaded.status === 'success') loaded.data.sections.matchups![0].performance.wins = 460
+      return loaded
+    })
+    Object.assign(game, { isConnected: true })
+    await vi.advanceTimersByTimeAsync(300)
+    expect(advisor.result.value.samples[13][0].wins).toBe(460)
+    expect(advisor.loading.value).toBe(false)
+    expect(source.loadDetails).toHaveBeenCalledTimes(2)
   })
 
   it('retains ban advice on source failure and recovers through retry', async () => {

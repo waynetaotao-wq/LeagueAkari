@@ -175,6 +175,34 @@ describe('visible premade draft history flow', () => {
     expect(h.sgpApi.mock.calls.filter((c) => c[0] === 'player-0')).toHaveLength(1)
   })
 
+  it('cancels in-flight reads when authorization becomes unavailable and ignores their late results after recovery', async () => {
+    const h = harness()
+    const stale = deferred<any>()
+    h.sgpApi.mockImplementation(() => stale.promise)
+    h.loader.watch()
+    await flush()
+    const oldSignal = h.sgpApi.mock.calls[0][1].signal
+    runInAction(() => {
+      h.token.isTokenReady = false
+    })
+    await flush()
+    expect(oldSignal.aborted).toBe(true)
+    expect(h.state.draftMatchHistoryLoadingState['player-0']).toBe('waiting')
+
+    h.sgpApi.mockResolvedValue({ data: { games: [] } })
+    runInAction(() => {
+      h.token.isTokenReady = true
+    })
+    await flush()
+    stale.resolve({ data: { games: [{ json: { gameId: 99, queueId: 710 } }] } })
+    await flush()
+    expect(Object.keys(h.state.draftMatchHistory)).toHaveLength(10)
+    expect(
+      Object.values(h.state.draftMatchHistory).every((history) => history.data.length === 0)
+    ).toBe(true)
+    expect(h.state.draftMatchHistoryLoadingState['player-0']).toBe('loaded')
+  })
+
   it.each([440, 720])('does not scout unsupported queue %s', async (queue) => {
     const h = harness()
     runInAction(() => {
@@ -355,5 +383,82 @@ describe('visible premade draft history flow', () => {
     await flush()
     expect(h.lcuApi.mock.calls.filter((c) => c[0] === 'player-5')).toHaveLength(10)
     expect(h.state.draftMatchHistory['player-5']).toMatchObject({ scannedCount: 200, data: [] })
+  })
+
+  it('continues within the LCU scan budget when early mode records are unusable for the hero pool', async () => {
+    const h = harness('lcu')
+    h.lcuApi.mockImplementation((id, start) =>
+      Promise.resolve({
+        data: {
+          games: {
+            games:
+              id !== 'player-5' || start >= 80
+                ? []
+                : Array.from({ length: 20 }, (_, index) => ({
+                    gameId: start + index + 1,
+                    queueId: 710,
+                    mapId: 11,
+                    gameMode: 'CLASSIC',
+                    gameCreation: Date.now() - 86_400_000,
+                    gameDuration: start < 60 ? 180 : 1800,
+                    endOfGameResult: start < 60 ? 'Remake' : 'GameComplete',
+                    participantIdentities: [{ participantId: 1, player: { puuid: id } }],
+                    participants: [{ participantId: 1, championId: 103, stats: { win: true } }]
+                  }))
+          }
+        }
+      })
+    )
+    h.loader.watch()
+    await flush()
+    expect(h.state.draftMatchHistory['player-5'].data.some((row) => row.gameId === 61)).toBe(true)
+    expect(h.state.draftMatchHistory['player-5'].scannedCount).toBe(80)
+    expect(h.state.draftMatchHistoryLoadingState['player-5']).toBe('loaded')
+  })
+
+  it('resumes failed LCU pages without replacing the previously read pool with an earlier page', async () => {
+    const h = harness('lcu')
+    const page = (start: number) => ({
+      data: {
+        games: {
+          games: Array.from({ length: 20 }, (_, index) => ({
+            gameId: start + index + 1,
+            queueId: 710
+          }))
+        }
+      }
+    })
+    h.lcuApi.mockImplementation((id, start) => {
+      if (id !== 'player-5') return Promise.resolve({ data: { games: { games: [] } } })
+      return start === 40 ? Promise.reject(new Error('network')) : Promise.resolve(page(start))
+    })
+    h.loader.watch()
+    await flush()
+    expect(h.state.draftMatchHistory['player-5'].data).toHaveLength(40)
+
+    h.lcuApi.mockClear()
+    h.lcuApi.mockImplementation((_id, start) =>
+      start === 0 ? Promise.resolve(page(0)) : Promise.reject(new Error('still unavailable'))
+    )
+    h.loader.update(true)
+    await flush()
+    expect(h.state.draftMatchHistory['player-5'].data).toHaveLength(40)
+    expect(h.state.draftMatchHistory['player-5'].scannedCount).toBe(40)
+    expect(h.lcuApi.mock.calls.map((call) => call.slice(1, 3))).toEqual([[40, 59]])
+    expect(h.state.draftMatchHistoryLoadingState['player-5']).toBe('error')
+
+    h.lcuApi.mockClear()
+    h.lcuApi.mockImplementation((_id, start) =>
+      Promise.resolve(start === 40 ? page(40) : { data: { games: { games: [] } } })
+    )
+    h.loader.update(true)
+    await flush()
+    expect(h.state.draftMatchHistory['player-5'].data).toHaveLength(60)
+    expect(h.state.draftMatchHistory['player-5'].scannedCount).toBe(60)
+    expect(h.lcuApi.mock.calls.map((call) => call.slice(1, 3))).toEqual([
+      [40, 59],
+      [60, 79]
+    ])
+    expect(h.state.draftMatchHistoryLoadingState['player-5']).toBe('loaded')
   })
 })

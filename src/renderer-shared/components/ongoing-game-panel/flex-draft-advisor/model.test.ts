@@ -575,8 +575,112 @@ describe('history and ranking evidence', () => {
     }
     const target = buildTargetPool(context, histories, 'middle', null)
     expect(target.source).toBe('history')
-    expect(target.champions[0].weight).toBeLessThan(0.6)
+    expect(target.champions[0].weight).toBeLessThan(1)
     expect(target.players).toHaveLength(5)
+    expect(target.players.every(({ weight }) => weight > 0)).toBe(true)
+    expect(target.players.reduce((sum, { weight }) => sum + weight, 0)).toBeCloseTo(1)
+  })
+
+  it('resolves the remaining position from four distinct client assignments without inventing history', () => {
+    const { game, session } = createDraftFixture()
+    session.theirTeam[2].assignedPosition = ''
+    const context = getDraftContext(game, session)!
+    context.enemies[2].lockedChampionId = 105
+    expect(buildTargetPool(context, {}, 'middle', null)).toMatchObject({
+      source: 'assignment',
+      players: [{ player: { puuid: 'player-7' }, weight: 1 }],
+      champions: [{ championId: 105, weight: 1 }]
+    })
+  })
+
+  it('infers unknown roles jointly so a flexible player can fill the lane a teammate rarely plays', () => {
+    const { game, session } = createDraftFixture()
+    session.theirTeam[1].assignedPosition = ''
+    session.theirTeam[2].assignedPosition = ''
+    const context = getDraftContext(game, session)!
+    const histories = {
+      'player-6': readPlayerHistory(
+        'player-6',
+        historyFixture('player-6', Array(10).fill(13)).map((entry, index) => {
+          if (entry.source === 'sgp' && index >= 6)
+            entry.data.json.participants[0].teamPosition = 'JUNGLE'
+          return entry
+        })
+      ),
+      'player-7': readPlayerHistory('player-7', historyFixture('player-7', Array(10).fill(105)))
+    }
+    const middle = buildTargetPool(context, histories, 'middle', null)
+    const jungle = buildTargetPool(context, histories, 'jungle', null)
+    const midWeight = middle.players.find(({ player }) => player.puuid === 'player-7')!.weight
+    const jungleWeight = jungle.players.find(({ player }) => player.puuid === 'player-6')!.weight
+    expect(midWeight).toBeGreaterThan(0.8)
+    expect(jungleWeight).toBeCloseTo(midWeight)
+    for (const player of context.enemies.slice(1, 3)) {
+      expect(
+        [middle, jungle].reduce(
+          (sum, target) =>
+            sum + target.players.find((row) => row.player.puuid === player.puuid)!.weight,
+          0
+        )
+      ).toBeCloseTo(1)
+    }
+  })
+
+  it('retains unseen opponent mass and rejects contradictory client assignments unless overridden', () => {
+    const { game, session } = createDraftFixture()
+    session.theirTeam[1].nameVisibilityType = 'HIDDEN'
+    session.theirTeam[2].assignedPosition = ''
+    const context = getDraftContext(game, session)!
+    context.enemies.find((player) => player.puuid === 'player-7')!.lockedChampionId = 105
+    const histories = {
+      'player-7': readPlayerHistory('player-7', historyFixture('player-7', Array(5).fill(105)))
+    }
+    const target = buildTargetPool(context, histories, 'middle', null)
+    expect(target.champions[0].weight).toBeGreaterThan(0)
+    expect(target.champions[0].weight).toBeLessThan(1)
+    expect(target.players.reduce((sum, { weight }) => sum + weight, 0)).toBeLessThan(1)
+
+    context.enemies[0].position = 'bottom'
+    expect(buildTargetPool(context, histories, 'middle', null)).toMatchObject({
+      source: 'unresolved',
+      players: [],
+      champions: []
+    })
+    expect(buildTargetPool(context, histories, 'middle', 'player-7')).toMatchObject({
+      source: 'manual',
+      champions: [{ championId: 105, weight: 1 }]
+    })
+  })
+
+  it('does not infer missing classes when an already selected ally has unknown champion metadata', () => {
+    const { game, session } = createDraftFixture()
+    const context = getDraftContext(game, session)!
+    context.allies[0].lockedChampionId = 22
+    context.allies[1].lockedChampionId = 99
+    context.allies[3].lockedChampionId = 999
+    const options = {
+      context,
+      championRoles: { 22: ['marksman'], 99: ['mage'], 54: ['tank'], 238: ['assassin'] }
+    }
+    const target: TargetPool = {
+      source: 'manual',
+      players: [],
+      unknownRole: false,
+      champions: [{ championId: 105, weight: 1 }]
+    }
+    const picks = rankPicks(
+      [54, 238].map((championId) => ({ championId, games: 10, wins: 5 })),
+      target,
+      {},
+      options
+    )
+    expect(picks.every(({ composition }) => composition.score === 0)).toBe(true)
+    expect(picks.every(({ composition }) => composition.signals.includes('limited-data'))).toBe(
+      true
+    )
+    expect(picks.some(({ composition }) => composition.signals.includes('frontline-needed'))).toBe(
+      false
+    )
   })
 
   it('excludes bans, unavailable champions, ally intents and one-game automatic picks', () => {

@@ -6,6 +6,11 @@ ongoingGame:
       clash: Clash
     samples: 'Visible opponents: {{visible}}/5 · Valid recent {{mode}} samples: {{players}}'
     retryHistories: Retry unavailable histories
+    selfHistory: My champion pool
+    historyIncomplete: Some histories are incomplete. Comfort picks, opponent threats and ally ban costs use loaded samples only; expand to inspect and retry.
+    historyTeams:
+      allies: Ally champion pool status
+      enemies: Opponent champion pool status
     historyScan_one: '{{source}} · {{count}} game scanned'
     historyScan_other: '{{source}} · {{count}} games scanned'
     historyStatus:
@@ -83,6 +88,7 @@ ongoingGame:
     targetSources:
       manual: 'Manual · {{player}}'
       client: 'Client position · {{player}}'
+      assignment: 'Position inference · {{player}}'
       history: Inferred from history; correct if needed
       unresolved: Select lane opponent
     roles:

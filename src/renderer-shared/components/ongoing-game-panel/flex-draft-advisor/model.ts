@@ -50,7 +50,7 @@ export interface PlayerHistory {
 }
 
 export interface TargetPool {
-  source: 'manual' | 'client' | 'history' | 'unresolved'
+  source: 'manual' | 'client' | 'assignment' | 'history' | 'unresolved'
   players: Array<{ player: DraftPlayer; weight: number }>
   champions: Array<{ championId: number; weight: number }>
   unknownRole: boolean
@@ -342,6 +342,66 @@ function rolePool(history: PlayerHistory | undefined, role: DraftRole) {
     : (history.byRole[role] ?? [])
 }
 
+function inferredOpponents(
+  context: DraftContext,
+  histories: Record<string, PlayerHistory>,
+  role: DraftRole
+): Pick<TargetPool, 'source' | 'players'> | null {
+  const assignedRoles = context.enemies.flatMap((player) =>
+    player.position ? [player.position] : []
+  )
+  // Conflicting client assignments are not evidence for a unique lane opponent.
+  if (new Set(assignedRoles).size !== assignedRoles.length) return null
+  const assigned = context.enemies.find((player) => player.position === role)
+  if (assigned) return { source: 'client', players: [{ player: assigned, weight: 1 }] }
+
+  const roles = DRAFT_ROLES.filter((position) => !assignedRoles.includes(position))
+  const players: Array<DraftPlayer | null> = context.enemies.filter((player) => !player.position)
+  // Keep invisible slots in every assignment; do not recover their identities or history.
+  while (players.length < roles.length) players.push(null)
+  if (roles.length === 1 && players[0])
+    return { source: 'assignment', players: [{ player: players[0], weight: 1 }] }
+  if (
+    !players.some(
+      (player) =>
+        player && roles.some((position) => (histories[player.puuid]?.roles[position] ?? 0) >= 3)
+    )
+  )
+    return null
+
+  let total = 0
+  const weights = new Map<DraftPlayer, number>()
+  const visit = (
+    index: number,
+    remaining: DraftRole[],
+    weight: number,
+    opponent: DraftPlayer | null
+  ) => {
+    if (index === players.length) {
+      total += weight
+      if (opponent) weights.set(opponent, (weights.get(opponent) ?? 0) + weight)
+      return
+    }
+    const player = players[index]
+    const history = player ? histories[player.puuid] : undefined
+    for (const position of remaining) {
+      const affinity = ((history?.roles[position] ?? 0) + 1) / ((history?.games ?? 0) + 5)
+      visit(
+        index + 1,
+        remaining.filter((other) => other !== position),
+        weight * affinity,
+        position === role ? player : opponent
+      )
+    }
+  }
+  // At most 5! assignments. Lane affinities remain heuristics, not calibrated probabilities.
+  visit(0, roles, 1, null)
+  return {
+    source: 'history',
+    players: [...weights].map(([player, weight]) => ({ player, weight: weight / total }))
+  }
+}
+
 export function buildTargetPool(
   context: DraftContext,
   histories: Record<string, PlayerHistory>,
@@ -356,35 +416,14 @@ export function buildTargetPool(
   }
   if (!role) return result
   const manual = context.enemies.find((p) => p.puuid === manualPuuid)
-  const assigned = context.enemies.filter((p) => p.position === role)
-  if (manual || assigned.length === 1) {
-    result.source = manual ? 'manual' : 'client'
-    result.players = [{ player: manual ?? assigned[0], weight: 1 }]
+  if (manual) {
+    result.source = 'manual'
+    result.players = [{ player: manual, weight: 1 }]
   } else {
-    result.source = 'history'
-    const weights = context.enemies.map((player) => {
-      const history = histories[player.puuid]
-      const roleGames = history?.roles[role] ?? 0
-      return {
-        player,
-        weight:
-          player.position && player.position !== role
-            ? 0
-            : (roleGames + 1) / ((history?.games ?? 0) + 5)
-      }
-    })
-    if (
-      !weights.some(
-        ({ player, weight }) => weight > 0 && (histories[player.puuid]?.roles[role] ?? 0) >= 3
-      )
-    )
-      return { ...result, source: 'unresolved' }
-    // Unseen identities retain uncertainty instead of making one known player look certain.
-    const total =
-      weights.reduce((sum, row) => sum + row.weight, 0) + (5 - context.enemies.length) * 0.2
-    result.players = weights
-      .filter((row) => row.weight > 0)
-      .map((row) => ({ ...row, weight: row.weight / total }))
+    const inferred = inferredOpponents(context, histories, role)
+    if (!inferred) return result
+    result.source = inferred.source
+    result.players = inferred.players
   }
   const weighted = new Map<number, number>()
   for (const { player, weight } of result.players) {
@@ -488,13 +527,16 @@ function compositionAdvice(
   const candidate = championStructure(championRoles[candidateId])
   const totals = { frontline: 0, backline: 0, utility: 0 }
   let ambiguousBackline = false
+  let unknownSelectedAlly = false
   let knownWeight = 0
   for (const player of players) {
     if (player.puuid === selfPuuid) continue
-    const structure = championStructure(
-      championRoles[player.lockedChampionId || player.hoverChampionId]
-    )
-    if (!structure) continue
+    const championId = player.lockedChampionId || player.hoverChampionId
+    const structure = championStructure(championRoles[championId])
+    if (!structure) {
+      unknownSelectedAlly ||= championId > 0
+      continue
+    }
     const weight = player.lockedChampionId ? 1 : 0.5
     result.knownAllies++
     knownWeight += weight
@@ -506,7 +548,7 @@ function compositionAdvice(
     result.signals.push('limited-data')
     return result
   }
-  const enoughAllies = result.knownAllies >= 2 && knownWeight >= 1
+  const enoughAllies = result.knownAllies >= 2 && knownWeight >= 1 && !unknownSelectedAlly
   if (!enoughAllies) result.signals.push('limited-data')
   const factors = [
     {

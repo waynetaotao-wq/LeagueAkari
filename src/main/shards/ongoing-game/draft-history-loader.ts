@@ -150,10 +150,13 @@ export class OngoingGameDraftHistoryLoader {
       )
     }
     const { state, leagueClient, sgp, queueKeeper, logger, ipc } = this._context
-    const data: LcuOrSgpGameSummary[] = []
-    const seen = new Set<number>()
+    // Completed pages are stable within this draft. Retry from the failed LCU page so a second
+    // failure cannot replace a larger, already visible sample with only the first page.
+    const previous = context.source === 'lcu' ? state.draftMatchHistory[puuid] : undefined
+    const data: LcuOrSgpGameSummary[] = [...(previous?.data ?? [])]
+    const seen = new Set(data.map((row) => row.gameId))
     const scanLimit = context.source === 'sgp' ? 50 : 200
-    let scannedCount = 0
+    let scannedCount = previous?.scannedCount ?? 0
     const deadline = AbortSignal.timeout(30_000)
     this._setStatus(puuid, 'loading')
     const timeout = setTimeout(() => {
@@ -163,7 +166,7 @@ export class OngoingGameDraftHistoryLoader {
       this._setStatus(puuid, 'error')
     }, 30_000)
     try {
-      for (let start = 0; start < scanLimit; start += 20) {
+      for (let start = scannedCount; start < scanLimit; start += 20) {
         if (!isCurrent()) return
         const pageSize = context.source === 'sgp' ? 50 : 20
         const rows = await queueKeeper.add(
@@ -223,14 +226,10 @@ export class OngoingGameDraftHistoryLoader {
           state.draftMatchHistory[puuid] = result
         })
         ipc.sendEvent(ONGOING_GAME_MAIN_NAMESPACE, 'draft-match-history-loaded', puuid, result)
-        // No per-game details/timelines: the queried player's identity and result are in summaries.
-        if (
-          context.source === 'sgp' ||
-          rows.length < pageSize ||
-          !fresh.length ||
-          data.length >= 50
-        )
-          break
+        // Queue matches may still be remakes/invalid samples. The renderer selects its latest
+        // 50 valid games; keep scanning LCU within the 200-record budget instead of stopping at
+        // 50 raw queue matches. No per-game details/timelines are needed.
+        if (context.source === 'sgp' || rows.length < pageSize || !fresh.length) break
       }
       if (isCurrent()) this._setStatus(puuid, 'loaded')
     } catch (error) {

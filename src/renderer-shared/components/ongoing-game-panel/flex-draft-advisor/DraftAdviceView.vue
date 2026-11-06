@@ -179,13 +179,17 @@
           </div>
         </div>
         <div v-else class="draft-empty">
-          {{
+          <span v-if="selfHistoryUnavailable">
+            {{ t('ongoingGame.flexDraft.selfHistory') }} ·
+            {{ t(`ongoingGame.flexDraft.historyStatus.${selfHistoryStatus}`) }}
+          </span>
+          <span v-else>{{
             t(
               !role
                 ? 'ongoingGame.flexDraft.chooseRoleHint'
                 : 'ongoingGame.flexDraft.choosePoolHint'
             )
-          }}
+          }}</span>
           <NButton v-if="role" text type="primary" size="small" @click="expanded = true">{{
             t('ongoingGame.flexDraft.editPool')
           }}</NButton>
@@ -194,6 +198,10 @@
           {{ t('ongoingGame.flexDraft.noFavorablePick') }}
         </div>
       </div>
+    </div>
+
+    <div v-if="hasHistoryErrors" class="draft-pick-note" role="status">
+      {{ t('ongoingGame.flexDraft.historyIncomplete') }}
     </div>
 
     <div class="draft-footer">
@@ -245,37 +253,45 @@
         >
       </div>
       <div class="draft-muted">{{ t('ongoingGame.flexDraft.method', { mode: modeName }) }}</div>
-      <div class="draft-opponents">
-        <span v-for="player in context.enemies" :key="player.puuid" class="draft-opponent">
-          {{ playerNames[player.puuid] }} ·
-          {{
-            t(`ongoingGame.flexDraft.historyStatus.${historyStatuses[player.puuid] ?? 'pending'}`)
-          }}
-          ·
-          {{
-            t('ongoingGame.flexDraft.familiarGames', {
-              count: histories[player.puuid]?.games ?? 0,
-              mode: modeName
-            })
-          }}
-          <span v-if="historyScans[player.puuid]" class="draft-muted">
+      <div v-for="group in historyGroups" :key="group.side" class="draft-history-group">
+        <strong>{{ t(`ongoingGame.flexDraft.historyTeams.${group.side}`) }}</strong>
+        <div class="draft-history-players">
+          <span v-for="player in group.players" :key="player.puuid" class="draft-history-player">
+            {{
+              player.puuid === context.self.puuid
+                ? t('ongoingGame.playerCard.self')
+                : playerNames[player.puuid]
+            }}
             ·
             {{
-              t('ongoingGame.flexDraft.historyScan', {
-                source: historyScans[player.puuid].source.toUpperCase(),
-                count: historyScans[player.puuid].scannedCount
-              })
-            }}</span
-          >
-          <span v-if="player.lockedChampionId">
+              t(`ongoingGame.flexDraft.historyStatus.${historyStatuses[player.puuid] ?? 'pending'}`)
+            }}
             ·
             {{
-              t('ongoingGame.flexDraft.locked', {
-                champion: championName(player.lockedChampionId)
+              t('ongoingGame.flexDraft.familiarGames', {
+                count: histories[player.puuid]?.games ?? 0,
+                mode: modeName
               })
-            }}</span
-          >
-        </span>
+            }}
+            <span v-if="historyScans[player.puuid]" class="draft-muted">
+              ·
+              {{
+                t('ongoingGame.flexDraft.historyScan', {
+                  source: historyScans[player.puuid].source.toUpperCase(),
+                  count: historyScans[player.puuid].scannedCount
+                })
+              }}</span
+            >
+            <span v-if="player.lockedChampionId">
+              ·
+              {{
+                t('ongoingGame.flexDraft.locked', {
+                  champion: championName(player.lockedChampionId)
+                })
+              }}</span
+            >
+          </span>
+        </div>
       </div>
       <div v-if="target.champions.length && picks.length" class="draft-table-scroll">
         <table class="draft-table">
@@ -364,6 +380,16 @@ const expanded = ref(false)
 const percent = (value: number) => Math.round(value * 100)
 const championName = (id: number) => props.championNames[id] ?? `#${id}`
 const hasHistoryErrors = computed(() => Object.values(props.historyStatuses).includes('error'))
+const selfHistoryStatus = computed(
+  () => props.historyStatuses[props.context.self.puuid] ?? 'pending'
+)
+const selfHistoryUnavailable = computed(() =>
+  ['loading', 'waiting', 'pending', 'error'].includes(selfHistoryStatus.value)
+)
+const historyGroups = computed(() => [
+  { side: 'allies', players: props.context.allies },
+  { side: 'enemies', players: props.context.enemies }
+])
 const noFavorablePick = computed(
   () =>
     !props.loading &&
@@ -573,16 +599,20 @@ function pairLabel(pick: PickAdvice, id: number) {
 .draft-pool-editor > span {
   flex-shrink: 0;
 }
-.draft-opponents {
+.draft-history-group {
+  margin-top: 10px;
+}
+.draft-history-players {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
 }
-.draft-opponent {
+.draft-history-player {
   padding: 3px 8px;
   border: 1px solid rgb(var(--la-card-border-rgb) / 0.14);
   border-radius: 6px;
+  overflow-wrap: anywhere;
 }
 .draft-table-scroll {
   overflow-x: auto;

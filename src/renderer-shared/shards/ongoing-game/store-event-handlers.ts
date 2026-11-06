@@ -10,6 +10,11 @@ import {
 import { useOngoingGameStore } from './store'
 
 export class OngoingGameStoreEventHandlers {
+  // Events can arrive after getAll takes its snapshot but before its IPC reply is applied.
+  // Preserve the latest mutation per player; a clear also invalidates the whole snapshot.
+  private _initialDraftUpdates: Map<string, OngoingGameDraftHistory | null> | null = new Map()
+  private _initialDraftCleared = false
+
   constructor(private readonly context: OngoingGameRendererContext) {}
 
   register() {
@@ -17,9 +22,14 @@ export class OngoingGameStoreEventHandlers {
     const { ipc } = this.context
 
     ipc.onEvent(MAIN_SHARD_NAMESPACE, 'draft-match-history-clear', () => {
+      if (this._initialDraftUpdates) {
+        this._initialDraftCleared = true
+        this._initialDraftUpdates.clear()
+      }
       store.draftMatchHistory = {}
     })
     ipc.onEvent(MAIN_SHARD_NAMESPACE, 'draft-match-history-removed', (puuid: string) => {
+      this._initialDraftUpdates?.set(puuid, null)
       const next = { ...store.draftMatchHistory }
       delete next[puuid]
       store.draftMatchHistory = next
@@ -28,6 +38,7 @@ export class OngoingGameStoreEventHandlers {
       MAIN_SHARD_NAMESPACE,
       'draft-match-history-loaded',
       (puuid: string, data: OngoingGameDraftHistory) => {
+        this._initialDraftUpdates?.set(puuid, data)
         store.draftMatchHistory = { ...store.draftMatchHistory, [puuid]: markRaw(data) }
       }
     )
@@ -119,7 +130,16 @@ export class OngoingGameStoreEventHandlers {
     } = data
 
     store.championMastery = this._toShallowedMarkRaw(championMastery)
-    store.draftMatchHistory = this._toShallowedMarkRaw(data.draftMatchHistory)
+    const draftHistory: Record<string, OngoingGameDraftHistory> = this._initialDraftCleared
+      ? {}
+      : this._toShallowedMarkRaw(data.draftMatchHistory)
+    for (const [puuid, history] of this._initialDraftUpdates ?? []) {
+      if (history === null) delete draftHistory[puuid]
+      else draftHistory[puuid] = markRaw(history)
+    }
+    store.draftMatchHistory = draftHistory
+    this._initialDraftUpdates = null
+    this._initialDraftCleared = false
     store.matchHistory = this._toShallowedMarkRaw(matchHistory)
     store.rankedStats = this._toShallowedMarkRaw(rankedStats)
     store.savedInfo = this._toShallowedMarkRaw(savedInfo)

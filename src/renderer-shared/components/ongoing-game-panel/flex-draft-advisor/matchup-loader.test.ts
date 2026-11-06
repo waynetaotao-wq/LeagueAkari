@@ -83,7 +83,13 @@ describe('Flex draft matchup source contract', () => {
     expect(source.loadDetails).toHaveBeenCalledTimes(4)
     expect(
       source.loadDetails.mock.calls.every(
-        ([q]) => q.patch === '16.18' && q.source === 'opgg' && q.region === 'kr'
+        ([q]) =>
+          q.patch === '16.18' &&
+          q.source === 'opgg' &&
+          q.region === 'kr' &&
+          q.tier === 'emerald_plus' &&
+          q.mode === 'ranked' &&
+          q.position === 'middle'
       )
     ).toBe(true)
     loader.clear()

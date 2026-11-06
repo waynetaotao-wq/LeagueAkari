@@ -65,6 +65,7 @@ const scenarios = [
   { label: '五排 · 正常分析', value: 'normal' },
   { label: '五排 · 阵容缺口', value: 'composition' },
   { label: '五排 · 战绩读取状态', value: 'historyStates' },
+  { label: '五排 · 仅我方读取失败', value: 'allyHistoryError' },
   { label: '五排 · 对手已锁定', value: 'locked' },
   { label: '五排 · 推测对位', value: 'inferred' },
   { label: '五排 · 部分统计缺失', value: 'partial' },
@@ -130,19 +131,21 @@ const historyStatuses = computed<
   Record<string, 'ready' | 'empty' | 'loading' | 'error' | 'waiting' | 'pending'>
 >(() =>
   Object.fromEntries(
-    (context.value?.enemies ?? []).map((player, i) => [
+    [...(context.value?.allies ?? []), ...(context.value?.enemies ?? [])].map((player, i) => [
       player.puuid,
-      scenario.value === 'historyStates'
-        ? (['ready', 'empty', 'loading', 'error', 'waiting'] as const)[i]
-        : scenario.value === 'empty' || scenario.value === 'clashEmpty'
-          ? 'empty'
-          : 'ready'
+      scenario.value === 'allyHistoryError' && player.cellId < 3
+        ? 'error'
+        : scenario.value === 'historyStates'
+          ? (['ready', 'empty', 'loading', 'error', 'waiting'] as const)[i % 5]
+          : scenario.value === 'empty' || scenario.value === 'clashEmpty'
+            ? 'empty'
+            : 'ready'
     ])
   )
 )
 const historyScans = computed(() =>
   Object.fromEntries(
-    (context.value?.enemies ?? [])
+    [...(context.value?.allies ?? []), ...(context.value?.enemies ?? [])]
       .filter((player) => historyStatuses.value[player.puuid] !== 'waiting')
       .map((player) => [
         player.puuid,
@@ -180,6 +183,7 @@ const histories = computed(() =>
           p.puuid,
           scenario.value === 'empty' ||
             scenario.value === 'clashEmpty' ||
+            (scenario.value === 'allyHistoryError' && p.cellId < 3) ||
             (scenario.value === 'historyStates' && [6, 9].includes(p.cellId))
             ? []
             : historyFixture(
@@ -268,12 +272,17 @@ const bans = computed(() =>
         histories.value,
         available,
         new Set(),
-        candidates.value.map((p) => p.championId),
+        comfortable.value ?? candidates.value.map((p) => p.championId),
         rankingOptions.value
       )
     : []
 )
 const playerNames = computed(() =>
-  Object.fromEntries((context.value?.enemies ?? []).map((p) => [p.puuid, p.name]))
+  Object.fromEntries(
+    [...(context.value?.allies ?? []), ...(context.value?.enemies ?? [])].map((p) => [
+      p.puuid,
+      p.name
+    ])
+  )
 )
 </script>

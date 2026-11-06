@@ -6,6 +6,11 @@ ongoingGame:
       clash: Clash
     samples: '可见对手 {{visible}}/5 · {{players}} 人有近期 {{mode}} 有效样本'
     retryHistories: 重试未读到的战绩
+    selfHistory: 本人英雄池
+    historyIncomplete: 部分战绩读取未完成；本人候选、敌方威胁和我方禁用代价仅依据已读样本，可展开查看并重试。
+    historyTeams:
+      allies: 我方英雄池读取状态
+      enemies: 敌方英雄池读取状态
     historyScan: '{{source}} · 已扫描 {{count}} 场'
     historyStatus:
       loading: 读取中
@@ -75,6 +80,7 @@ ongoingGame:
     targetSources:
       manual: '手动 · {{player}}'
       client: '客户端位置 · {{player}}'
+      assignment: '位置约束推测 · {{player}}'
       history: 历史位置推测，可手动纠正
       unresolved: 指定对位玩家
     roles:

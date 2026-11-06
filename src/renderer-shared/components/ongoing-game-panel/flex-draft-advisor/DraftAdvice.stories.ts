@@ -13,6 +13,7 @@ type Story = StoryObj<typeof meta>
 export const Normal: Story = {}
 export const Composition: Story = { args: { initialScenario: 'composition' } }
 export const HistoryStates: Story = { args: { initialScenario: 'historyStates' } }
+export const AllyHistoryError: Story = { args: { initialScenario: 'allyHistoryError' } }
 export const Clash: Story = { args: { initialScenario: 'clash' } }
 export const ClashEmpty: Story = { args: { initialScenario: 'clashEmpty' } }
 export const AramClash: Story = { args: { initialScenario: 'aramClash' } }
