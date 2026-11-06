@@ -76,6 +76,78 @@ afterEach(() => {
 })
 
 describe('live draft advice lifecycle', () => {
+  it('updates the unpicked opponent pool when disabled champions change but retains actual locks', () => {
+    const store = useLeagueClientStore()
+    game.draftMatchHistory['player-7'].data = historyFixture('player-7', [105, 105, 105, 7, 7, 7])
+    const advisor = scope.run(() => useDraftAdvisor())!
+    expect(advisor.target.value?.champions.map((champion) => champion.championId)).toEqual([105, 7])
+    store.champSelect.disabledChampionIds = new Set([105])
+    expect(advisor.target.value?.champions).toEqual([{ championId: 7, weight: 1 }])
+    store.champSelect.disabledChampionIds = new Set()
+    expect(advisor.target.value?.champions.map((champion) => champion.championId)).toEqual([105, 7])
+
+    store.champSelect.disabledChampionIds = new Set([105])
+    const session = store.champSelect.session!
+    session.theirTeam[2].championId = 105
+    session.actions.push([
+      {
+        actorCellId: 7,
+        championId: 105,
+        completed: true,
+        id: 30,
+        isAllyAction: false,
+        isInProgress: false,
+        type: 'pick',
+        duration: 30_000,
+        pickTurn: 7
+      }
+    ])
+    store.champSelect.session = { ...session }
+    expect(advisor.target.value?.champions).toEqual([{ championId: 105, weight: 1 }])
+  })
+
+  it('uses the selected self role for ally ban cost without changing teammate assignments', () => {
+    const store = useLeagueClientStore()
+    store.champSelect.currentPickableChampionIds = new Set([13, 24])
+    store.champSelect.currentBannableChampionIds = new Set([13, 105])
+    const ownHistory = historyFixture('player-2', [...Array(10).fill(13), ...Array(10).fill(24)])
+    for (const entry of ownHistory) {
+      if (entry.source === 'sgp' && entry.data.json.participants[0].championId === 24)
+        entry.data.json.participants[0].teamPosition = 'TOP'
+    }
+    game.draftMatchHistory['player-2'].data = ownHistory
+    for (const [puuid, championId, role] of [
+      ['player-0', 105, 'top'],
+      ['player-5', 105, 'top'],
+      ['player-7', 13, 'middle']
+    ] as const) {
+      game.draftMatchHistory[puuid] = {
+        source: 'sgp',
+        queueId: 710,
+        scannedCount: 12,
+        scanLimit: 50,
+        data: historyFixture(puuid, Array(12).fill(championId), role)
+      }
+    }
+    const advisor = scope.run(() => useDraftAdvisor())!
+    advisor.comfortable.value = [24]
+    const ownMiddleCost = advisor.bans.value.find((ban) => ban.championId === 13)!.allyCost
+    const teammateTopCost = advisor.bans.value.find((ban) => ban.championId === 105)!.allyCost
+    expect(ownMiddleCost).toBeGreaterThan(0)
+    expect(teammateTopCost).toBeGreaterThan(0)
+
+    advisor.selectedRole.value = 'top'
+    expect(advisor.bans.value.find((ban) => ban.championId === 13)!.allyCost).toBe(0)
+    expect(advisor.bans.value.find((ban) => ban.championId === 105)!.allyCost).toBe(teammateTopCost)
+    expect(advisor.context.value?.self.position).toBe('middle')
+    expect(
+      advisor.context.value?.allies.find((player) => player.puuid === 'player-0')?.position
+    ).toBe('top')
+
+    advisor.selectedRole.value = null
+    expect(advisor.bans.value.find((ban) => ban.championId === 13)!.allyCost).toBe(ownMiddleCost)
+  })
+
   it('keeps an explicitly chosen comfort champion out of bans when temporarily unpickable', () => {
     const advisor = scope.run(() => useDraftAdvisor())!
     advisor.comfortable.value = [105]

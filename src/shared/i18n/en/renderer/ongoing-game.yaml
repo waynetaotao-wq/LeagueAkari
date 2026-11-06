@@ -20,7 +20,7 @@ ongoingGame:
       empty: No valid mode samples in scanned history
       pending: Not loaded yet
       waiting: Waiting for data source
-    replacementGap: Known alternatives have less practice
+    replacementGap: Limits known enemy team alternatives
     allyCost: Ally practice included in ban cost
     composition:
       adds-frontline: 'Class reference: adds tank/fighter coverage'
@@ -37,7 +37,7 @@ ongoingGame:
     details: Pool & evidence
     collapse: Hide details
     bans: Ban priorities
-    banBasis: Mains · Alternatives · Ally cost
+    banBasis: Sequential · Team alternatives · Ally cost
     poolUsage_one: '{{games}} of {{count}} recent game'
     poolUsage_other: '{{games}} of {{count}} recent games'
     historyWins: '{games} · {wins}'
@@ -77,7 +77,7 @@ ongoingGame:
     myPool: My comfort picks
     poolPlaceholder: Up to 10 comfort picks for this draft
     autoPool: Restore automatic
-    method: 'Dedicated mode histories ignore the match-page filter: SGP queries up to 50 mode games; LCU scans up to 200 recent games before filtering. Analysis uses the latest 50 valid {{mode}} games within 90 days; an empty scan does not prove no history exists. Recent practice receives greater weight, while card counts remain actual counts. Automatic picks require 2 games in this role; adjust manually if needed. Bans consider opponent practice, known alternative gaps and ally cost. The shortlist discounts repeated targeting across successive bans and updates after actual bans. Picks balance matchups, sample uncertainty, weak points, familiarity and class structure. Composition is a heuristic from client class tags and locks/hovers, with reduced hover weight and unknown parts excluded; it does not model all ability combinations. Outlook excludes familiarity and composition bonuses and is not lane or solo-kill strength. Pairs below 50 games are excluded; coverage must reach 60%. Ranking is not outcome-calibrated and does not predict wins or guarantee counters.'
+    method: 'Dedicated mode histories ignore the match-page filter: SGP queries up to 50 mode games; LCU scans up to 200 recent games before filtering. Analysis uses the latest 50 valid {{mode}} games within 90 days; an empty scan does not prove no history exists. Recent practice receives greater weight, while card counts remain actual counts. Automatic picks require 2 games in this role; adjust manually if needed. A champion seen only once is excluded from an unlocked opponent’s inferred pool, with its weight kept unknown; actual locked picks take precedence. Bans consider opponent practice, constraints on known enemy team alternatives and ally cost. Each champion can fill only one enemy slot; players may have unobserved alternatives. Each shortlist entry is recomputed assuming earlier entries were banned. This is sequential guidance, not an optimal ban combination; actual bans trigger another update. Picks balance matchups, sample uncertainty, weak points, familiarity and class structure. Composition is a heuristic from client class tags and locks/hovers, with reduced hover weight and unknown parts excluded; it does not model all ability combinations. Outlook excludes familiarity and composition bonuses and is not lane or solo-kill strength. Pairs below 50 games are excluded; coverage must reach 60%. Ranking is not outcome-calibrated and does not predict wins or guarantee counters.'
     locked: 'Locked {{champion}}'
     tableCaption: Each cell shows the column champion’s ranked win rate against the row champion and sample count. Row percentages are analysis weights, not pick probabilities. Coverage measures sufficient data, not favorable matchups. Cards show the first three options; this table compares all candidates.
     matchup: Opponent pool

@@ -77,7 +77,13 @@ export function useDraftAdvisor() {
   )
   const target = computed(() =>
     context.value
-      ? buildTargetPool(context.value, histories.value, role.value, selectedOpponent.value)
+      ? buildTargetPool(
+          context.value,
+          histories.value,
+          role.value,
+          selectedOpponent.value,
+          leagueClient.champSelect.disabledChampionIds
+        )
       : null
   )
   const currentScope = computed(() =>
@@ -97,6 +103,7 @@ export function useDraftAdvisor() {
   )
   const rankingOptions = computed(() => ({
     context: context.value ?? undefined,
+    selfRole: role.value,
     championRoles: Object.fromEntries(
       Object.values(leagueClient.gameData.champions).map((champion) => [
         champion.id,

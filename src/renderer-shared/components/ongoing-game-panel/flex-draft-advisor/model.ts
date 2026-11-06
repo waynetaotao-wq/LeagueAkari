@@ -98,6 +98,7 @@ export interface CompositionAdvice {
 
 export interface DraftRankingOptions {
   context?: DraftContext
+  selfRole?: DraftRole | null
   /** Client champion classes, not lane assignments or measured synergy statistics. */
   championRoles?: Record<number, string[]>
 }
@@ -209,7 +210,7 @@ export function getDraftContext(
     ),
     allyIntents: new Set(
       session.myTeam
-        .filter((m) => m.puuid !== self.puuid)
+        .filter((m) => m.puuid !== self.puuid && !lockedCells.has(m.cellId))
         .map((m) => m.championPickIntent || m.championId)
         .filter((id) => id > 0)
     ),
@@ -406,7 +407,8 @@ export function buildTargetPool(
   context: DraftContext,
   histories: Record<string, PlayerHistory>,
   role: DraftRole | null,
-  manualPuuid: string | null
+  manualPuuid: string | null,
+  disabled: Set<number> = new Set()
 ): TargetPool {
   const result: TargetPool = {
     source: 'unresolved',
@@ -434,14 +436,20 @@ export function buildTargetPool(
     const history = histories[player.puuid]
     if (history?.games && history.unknownRoleGames === history.games) result.unknownRole = true
     const pool = rolePool(history, role).filter(
-      (row) => !context.banned.has(row.championId) && !context.locked.has(row.championId)
+      (row) =>
+        !context.banned.has(row.championId) &&
+        !context.locked.has(row.championId) &&
+        !disabled.has(row.championId)
     )
     const total = pool.reduce((sum, row) => sum + effectiveGames(row), 0)
-    for (const row of pool)
+    for (const row of pool) {
+      // A singleton remains unknown mass; removing other mains must not turn it into certainty.
+      if (row.games < 2) continue
       weighted.set(
         row.championId,
         (weighted.get(row.championId) ?? 0) + (weight * effectiveGames(row)) / total
       )
+    }
   }
   // Preserve omitted mass in coverage rather than renormalizing the displayed subset.
   result.champions = [...weighted]
@@ -625,23 +633,102 @@ export function rankBans(
   options: DraftRankingOptions = {}
 ): BanAdvice[] {
   if (context.banFinished) return []
-  const rows = new Map<number, Array<Omit<BanAdvice, 'otherPlayers'>>>()
-  for (const player of context.enemies) {
-    if (player.lockedChampionId) continue
-    const history = histories[player.puuid]
-    if (!history) continue
-    const pool = (player.position ? rolePool(history, player.position) : history.champions).filter(
-      (champion) =>
-        !context.banned.has(champion.championId) &&
-        !context.locked.has(champion.championId) &&
-        !disabled.has(champion.championId)
+  const banned = new Set(context.banned)
+  const chosen: BanAdvice[] = []
+  while (chosen.length < 3) {
+    const next = rankAvailableBans(
+      { ...context, banned },
+      histories,
+      bannable,
+      disabled,
+      comfortable,
+      options
+    )[0]
+    if (!next) break
+    chosen.push(next)
+    // Each later suggestion is conditional on earlier suggestions being banned.
+    banned.add(next.championId)
+  }
+  return chosen
+}
+
+function championStrength(champion: PoolChampion) {
+  const games = effectiveGames(champion)
+  return (Math.sqrt(games / (games + 4)) * (effectiveWins(champion) + 5)) / (games + 10)
+}
+
+function teamFamiliarity(pools: PoolChampion[][], excludedChampion?: number) {
+  const choices = new Map<number, Array<{ player: number; strength: number }>>()
+  pools.forEach((pool, player) => {
+    for (const champion of pool) {
+      if (champion.championId === excludedChampion) continue
+      const users = choices.get(champion.championId) ?? []
+      users.push({ player, strength: championStrength(champion) })
+      choices.set(champion.championId, users)
+    }
+  })
+  // Each player has a private unknown replacement. Known champions may be assigned only once.
+  let values = Array<number>(1 << pools.length).fill(-Infinity)
+  values[0] = pools.length * 0.2
+  for (const [, users] of [...choices].sort(([a], [b]) => a - b)) {
+    const next = [...values]
+    for (let mask = 0; mask < values.length; mask++) {
+      if (!Number.isFinite(values[mask])) continue
+      for (const { player, strength } of users) {
+        const bit = 1 << player
+        if (mask & bit) continue
+        next[mask | bit] = Math.max(next[mask | bit], values[mask] + strength - 0.2)
+      }
+    }
+    values = next
+  }
+  return Math.max(...values)
+}
+
+function rankAvailableBans(
+  context: DraftContext,
+  histories: Record<string, PlayerHistory>,
+  bannable: Set<number>,
+  disabled: Set<number>,
+  comfortable: number[],
+  options: DraftRankingOptions
+): BanAdvice[] {
+  const available = (champion: PoolChampion) =>
+    !context.banned.has(champion.championId) &&
+    !context.locked.has(champion.championId) &&
+    !disabled.has(champion.championId)
+  const pools = context.enemies
+    .filter((player) => !player.lockedChampionId)
+    .sort((a, b) => a.puuid.localeCompare(b.puuid))
+    .map((player) => {
+      const history = histories[player.puuid]
+      const pool = (
+        player.position ? rolePool(history, player.position) : (history?.champions ?? [])
+      ).filter(available)
+      return { player, history, pool }
+    })
+  const teamPools = pools.map(({ pool }) => pool)
+  const before = teamFamiliarity(teamPools)
+  const replacementGaps = new Map<number, number>()
+  const replacementGapFor = (championId: number) => {
+    if (!replacementGaps.has(championId)) {
+      const gap = Math.max(0, before - teamFamiliarity(teamPools, championId))
+      // Equivalent assignments can differ only in floating-point addition order.
+      replacementGaps.set(championId, gap <= Number.EPSILON * Math.max(1, before) * 2 ? 0 : gap)
+    }
+    return replacementGaps.get(championId)!
+  }
+  const withoutBannedHover = (players: DraftPlayer[]) =>
+    players.map((player) =>
+      context.banned.has(player.hoverChampionId) ? { ...player, hoverChampionId: 0 } : player
     )
+  const enemies = withoutBannedHover(context.enemies)
+  const allies = withoutBannedHover(context.allies)
+  const rows = new Map<number, Array<Omit<BanAdvice, 'otherPlayers'>>>()
+  for (const { player, history, pool } of pools) {
+    if (!history) continue
     const total = pool.reduce((sum, champion) => sum + effectiveGames(champion), 0)
     if (!total) continue
-    const strength = (champion: PoolChampion) => {
-      const games = effectiveGames(champion)
-      return (Math.sqrt(games / (games + 4)) * (effectiveWins(champion) + 5)) / (games + 10)
-    }
     for (const champion of pool) {
       const id = champion.championId
       if (
@@ -654,16 +741,13 @@ export function rankBans(
         comfortable.includes(id)
       )
         continue
-      const alternatives = pool.filter((other) => other.championId !== id)
-      // No observed replacement does not mean the enemy cannot play another champion.
-      const replacement = Math.max(0.2, ...alternatives.map(strength))
-      const replacementGap = Math.max(0, strength(champion) - replacement)
+      const replacementGap = replacementGapFor(id)
       const compositionScore = compositionAdvice(
         id,
-        context.enemies,
+        enemies,
         player.puuid,
         options.championRoles,
-        context.allies
+        allies
       ).score
       const games = effectiveGames(champion)
       const value =
@@ -688,57 +772,36 @@ export function rankBans(
       rows.set(id, group)
     }
   }
-  const grouped = [...rows.values()].map((group) => {
-    group.sort((a, b) => b.score - a.score || b.games - a.games)
-    const championId = group[0].championId
-    let allyCost = 0
-    for (const ally of context.allies) {
-      if (ally.lockedChampionId) continue
-      const history = histories[ally.puuid]
-      const pool = ally.position ? rolePool(history, ally.position) : (history?.champions ?? [])
-      const champion = pool.find((row) => row.championId === championId && row.games >= 2)
-      if (!champion) continue
-      const total = pool.reduce((sum, row) => sum + effectiveGames(row), 0)
-      allyCost = Math.max(allyCost, effectiveGames(champion) / (total + 10))
-    }
-    const advice: BanAdvice = {
-      ...group[0],
-      // One unique champion can only be picked once: shared mains add bounded coverage.
-      score: 1 - group.reduce((remaining, row) => remaining * (1 - row.score), 1),
-      allyCost,
-      otherPlayers: group.slice(1).map((row) => row.player)
-    }
-    advice.score *= 1 - 0.6 * allyCost
-    return { advice, group }
-  })
-  const chosen: BanAdvice[] = []
-  const covered = new Map<string, number>()
-  while (chosen.length < 3 && grouped.length) {
-    // Diversify the shortlist instead of spending every suggested ban on the same player.
-    const marginal = (row: (typeof grouped)[number]) => {
-      const total = row.group.reduce((sum, player) => sum + player.score, 0)
-      const remaining = row.group.reduce(
-        (sum, player) => sum + player.score / (1 + 2 * (covered.get(player.player.puuid) ?? 0)),
-        0
+  return [...rows.values()]
+    .map((group) => {
+      group.sort(
+        (a, b) =>
+          b.score - a.score || b.games - a.games || a.player.puuid.localeCompare(b.player.puuid)
       )
-      return (row.advice.score * remaining) / total
-    }
-    grouped.sort(
-      (a, b) =>
-        marginal(b) - marginal(a) ||
-        b.advice.games - a.advice.games ||
-        a.advice.championId - b.advice.championId
-    )
-    const next = grouped.shift()!
-    chosen.push({ ...next.advice, score: marginal(next) })
-    const total = next.group.reduce((sum, player) => sum + player.score, 0)
-    for (const player of next.group)
-      covered.set(
-        player.player.puuid,
-        (covered.get(player.player.puuid) ?? 0) + player.score / total
-      )
-  }
-  return chosen
+      const championId = group[0].championId
+      let allyCost = 0
+      for (const ally of context.allies) {
+        if (ally.lockedChampionId) continue
+        const history = histories[ally.puuid]
+        const role =
+          ally.puuid === context.self.puuid ? (options.selfRole ?? ally.position) : ally.position
+        const pool = (role ? rolePool(history, role) : (history?.champions ?? [])).filter(available)
+        const champion = pool.find((row) => row.championId === championId && row.games >= 2)
+        if (!champion) continue
+        const total = pool.reduce((sum, row) => sum + effectiveGames(row), 0)
+        allyCost = Math.max(allyCost, effectiveGames(champion) / (total + 10))
+      }
+      const advice: BanAdvice = {
+        ...group[0],
+        // One unique champion can only be picked once: shared mains add bounded coverage.
+        score: 1 - group.reduce((remaining, row) => remaining * (1 - row.score), 1),
+        allyCost,
+        otherPlayers: group.slice(1).map((row) => row.player)
+      }
+      advice.score *= 1 - 0.6 * allyCost
+      return advice
+    })
+    .sort((a, b) => b.score - a.score || b.games - a.games || a.championId - b.championId)
 }
 
 /** Heuristic ordering, not a predicted game win rate. Missing/small pairs remain unknown. */

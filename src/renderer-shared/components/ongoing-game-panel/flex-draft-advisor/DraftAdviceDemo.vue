@@ -209,6 +209,7 @@ const target = computed(() =>
 const available = new Set(Object.keys(championNames).map(Number))
 const rankingOptions = computed(() => ({
   context: context.value ?? undefined,
+  selfRole: role.value,
   championRoles: {
     13: ['mage'],
     103: ['mage', 'assassin'],
