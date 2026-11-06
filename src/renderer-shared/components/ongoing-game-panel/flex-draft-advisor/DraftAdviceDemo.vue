@@ -7,6 +7,13 @@
         style="width: 240px"
         aria-label="预览场景"
       />
+      <NButton
+        v-if="scenario === 'banCombination'"
+        size="small"
+        @click="scenario = 'banCombinationAfterFirst'"
+      >
+        模拟禁用瑞兹
+      </NButton>
       <span>模拟数据，仅用于布局和交互验证</span>
     </div>
     <DraftAdviceView
@@ -21,7 +28,7 @@
       :bans="bans"
       :picks="picks"
       :champion-names="championNames"
-      :pickable-ids="[13, 103, 238]"
+      :pickable-ids="pickableIds"
       :player-names="playerNames"
       :loading="false"
       :history-loading="false"
@@ -36,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { NSelect } from 'naive-ui'
+import { NButton, NSelect } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 
 import DraftAdviceView from './DraftAdviceView.vue'
@@ -63,6 +70,11 @@ watch(
   scenario,
   (value) => {
     if (value === 'clashLockedPool') comfortable.value = [13, 103]
+    if (value === 'unavailablePool') comfortable.value = [13, 103]
+    if (value === 'fullUnavailablePool')
+      comfortable.value = [13, 103, 238, 105, 7, 517, 24, 64, 202, 111]
+    if (value === 'fullAutomaticPool') comfortable.value = null
+    if (value.startsWith('banCombination')) comfortable.value = [103]
   },
   { immediate: true }
 )
@@ -76,6 +88,14 @@ const scenarios = [
   { label: 'Clash · 锁定后保留旧手动池', value: 'clashLockedPool' },
   { label: '五排 · 正常分析', value: 'normal' },
   { label: '五排 · 阵容缺口', value: 'composition' },
+  { label: '五排 · 混合位置记录', value: 'mixedPosition' },
+  { label: '五排 · 已禁英雄残留预选', value: 'staleHover' },
+  { label: '五排 · 手动池英雄已禁', value: 'unavailablePool' },
+  { label: '五排 · 十项手动池英雄已禁', value: 'fullUnavailablePool' },
+  { label: '五排 · 十项自动英雄池', value: 'fullAutomaticPool' },
+  { label: '五排 · 组合前瞻剩两次', value: 'banCombination' },
+  { label: '五排 · 单禁优先剩一次', value: 'banCombinationSingle' },
+  { label: '五排 · 已禁组合首项', value: 'banCombinationAfterFirst' },
   { label: '五排 · 战绩读取状态', value: 'historyStates' },
   { label: '五排 · 仅我方读取失败', value: 'allyHistoryError' },
   { label: '五排 · 对手已锁定', value: 'locked' },
@@ -128,6 +148,36 @@ const fixture = computed(() => {
     session.queueId = 720
   }
   if (scenario.value === 'inferred') session.theirTeam.forEach((p) => (p.assignedPosition = ''))
+  if (['staleHover', 'unavailablePool', 'fullUnavailablePool'].includes(scenario.value)) {
+    const bannedId = scenario.value === 'staleHover' ? 111 : 13
+    Object.assign(session.actions[0][scenario.value === 'staleHover' ? 5 : 0], {
+      championId: bannedId,
+      completed: true,
+      isInProgress: false
+    })
+    if (scenario.value === 'staleHover') {
+      session.bans.theirTeamBans = [bannedId]
+      session.myTeam[0].championPickIntent = 111
+      session.myTeam[1].championPickIntent = 103
+      session.myTeam[3].championPickIntent = 202
+    } else session.bans.myTeamBans = [bannedId]
+  }
+  if (scenario.value.startsWith('banCombination')) {
+    const completedBans =
+      scenario.value === 'banCombination'
+        ? [1, 2, 3]
+        : scenario.value === 'banCombinationAfterFirst'
+          ? [1, 2, 3, 13]
+          : [1, 2, 3, 4]
+    completedBans.forEach((championId, index) =>
+      Object.assign(session.actions[0][index], {
+        championId,
+        completed: true,
+        isInProgress: false
+      })
+    )
+    session.bans.myTeamBans = completedBans
+  }
   if (scenario.value === 'composition') {
     for (const [cellId, championId] of [
       [0, 103],
@@ -182,7 +232,9 @@ const historyStatuses = computed<
           ? (['ready', 'empty', 'loading', 'error', 'waiting'] as const)[i % 5]
           : scenario.value === 'empty' || scenario.value === 'clashEmpty'
             ? 'empty'
-            : 'ready'
+            : histories.value[player.puuid]?.games
+              ? 'ready'
+              : 'empty'
     ])
   )
 )
@@ -212,13 +264,43 @@ const championNames = {
 const histories = computed(() =>
   Object.fromEntries(
     [...fixture.value.session.myTeam, ...fixture.value.session.theirTeam].map((p) => {
+      if (scenario.value.startsWith('banCombination')) {
+        const now = Date.now()
+        const ids =
+          p.cellId === 5
+            ? [...Array(20).fill(13), ...Array(20).fill(105)]
+            : p.cellId === 7
+              ? Array(10).fill(238)
+              : p.cellId === 2
+                ? [103, 103]
+                : []
+        const games = historyFixture(p.puuid, ids, p.cellId === 5 ? 'top' : 'middle', now)
+        games.forEach((game, index) => {
+          if (game.source === 'sgp') {
+            game.data.json.gameCreation = now
+            game.data.json.participants[0].win = index % 2 === 0
+          }
+        })
+        return [p.puuid, readPlayerHistory(p.puuid, games, now)]
+      }
+      if (scenario.value === 'mixedPosition' && p.cellId === 7) {
+        const games = historyFixture(p.puuid, [105, 105, ...Array(48).fill(7)])
+        for (const game of games.slice(2)) {
+          if (game.source === 'sgp') game.data.json.participants[0].teamPosition = ''
+        }
+        return [p.puuid, readPlayerHistory(p.puuid, games)]
+      }
       const ids =
         scenario.value === 'clashLockedPool' && p.cellId === 8
           ? Array(8).fill(103)
           : p.cellId === 2
-            ? scenario.value === 'composition'
-              ? [13, 13, 111, 111, 238, 238]
-              : [13, 13, 13, 13, 103, 103, 103, 238, 238]
+            ? scenario.value === 'fullAutomaticPool'
+              ? [13, 103, 238, 105, 7, 517, 24, 64, 202, 111].flatMap((id) => [id, id])
+              : scenario.value === 'composition'
+                ? [13, 13, 111, 111, 238, 238]
+                : scenario.value === 'staleHover'
+                  ? [13, 13, 24, 24, 238, 238]
+                  : [13, 13, 13, 13, 103, 103, 103, 238, 238]
             : p.cellId === 7
               ? [105, 105, 105, 105, 105, 7, 7, 517]
               : Array(8).fill([24, 64, 105, 202, 111][p.cellId % 5])
@@ -252,6 +334,14 @@ const target = computed(() =>
     : null
 )
 const available = new Set(Object.keys(championNames).map(Number))
+const pickableIds = computed(() =>
+  [...available].filter(
+    (id) =>
+      !context.value?.banned.has(id) &&
+      !context.value?.locked.has(id) &&
+      !context.value?.allyIntents.has(id)
+  )
+)
 const rankingOptions = computed(() => ({
   context: context.value ?? undefined,
   selfRole: role.value,
@@ -260,6 +350,7 @@ const rankingOptions = computed(() => ({
     103: ['mage', 'assassin'],
     238: ['assassin'],
     111: ['tank', 'support'],
+    24: ['fighter'],
     202: ['marksman']
   }
 }))
@@ -276,6 +367,11 @@ const candidates = computed(() =>
     : []
 )
 const samples: Record<number, MatchupSample[]> = {
+  24: [
+    { championId: 105, games: 1200, wins: 648 },
+    { championId: 7, games: 900, wins: 450 },
+    { championId: 517, games: 1500, wins: 825 }
+  ],
   111: [
     { championId: 105, games: 1200, wins: 648 },
     { championId: 7, games: 900, wins: 450 },
@@ -316,7 +412,7 @@ const bans = computed(() =>
     ? rankBans(
         context.value,
         histories.value,
-        available,
+        scenario.value.startsWith('banCombination') ? new Set([13, 105, 238]) : available,
         new Set(),
         context.value.self.lockedChampionId
           ? [context.value.self.lockedChampionId]

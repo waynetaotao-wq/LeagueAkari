@@ -12,6 +12,12 @@ export default meta
 type Story = StoryObj<typeof meta>
 export const Normal: Story = {}
 export const Composition: Story = { args: { initialScenario: 'composition' } }
+export const MixedPosition: Story = { args: { initialScenario: 'mixedPosition' } }
+export const StaleHover: Story = { args: { initialScenario: 'staleHover' } }
+export const UnavailablePool: Story = { args: { initialScenario: 'unavailablePool' } }
+export const FullUnavailablePool: Story = { args: { initialScenario: 'fullUnavailablePool' } }
+export const FullAutomaticPool: Story = { args: { initialScenario: 'fullAutomaticPool' } }
+export const BanCombination: Story = { args: { initialScenario: 'banCombination' } }
 export const HistoryStates: Story = { args: { initialScenario: 'historyStates' } }
 export const AllyHistoryError: Story = { args: { initialScenario: 'allyHistoryError' } }
 export const Clash: Story = { args: { initialScenario: 'clash' } }

@@ -494,6 +494,37 @@ describe('history and ranking evidence', () => {
     expect({ context, histories }).toEqual(before)
   })
 
+  it('looks ahead to a stronger two-ban plan even when another champion has the highest single-ban score', () => {
+    const { game, session } = createDraftFixture()
+    const context = getDraftContext(game, session)!
+    const histories = {
+      'player-5': evenlyPlayedHistory(
+        'player-5',
+        [
+          [13, 20],
+          [105, 20]
+        ],
+        'top'
+      ),
+      'player-7': evenlyPlayedHistory('player-7', [[238, 10]])
+    }
+    const allowed = new Set([13, 105, 238])
+    expect(
+      rankBans({ ...context, banBudget: 1 }, histories, allowed, new Set(), [])[0].championId
+    ).toBe(238)
+    const plan = rankBans({ ...context, banBudget: 2 }, histories, allowed, new Set(), [])
+    expect(plan.map((row) => row.championId)).toEqual([13, 105])
+    expect(
+      rankBans(
+        { ...context, banBudget: 1, banned: new Set([13]) },
+        histories,
+        allowed,
+        new Set(),
+        []
+      )[0].championId
+    ).toBe(105)
+  })
+
   it('recognizes that two enemies cannot both use the same replacement champion', () => {
     const { game, session } = createDraftFixture()
     const context = getDraftContext(game, session)!
@@ -571,6 +602,105 @@ describe('history and ranking evidence', () => {
     const [after] = rankBans(context, { 'player-7': history }, new Set([13]), new Set(), [])
     expect(after.replacementGap).toBeCloseTo(strength(20) - 0.2)
     expect(after.replacementGap).toBeLessThan(strength(20))
+  })
+
+  it.each([
+    [
+      [
+        [13, 20, 10],
+        [105, 4, 2],
+        [238, 4, 0]
+      ]
+    ],
+    [
+      [
+        [1, 10, 5],
+        [2, 8, 4],
+        [3, 6, 3],
+        [4, 4, 2],
+        [5, 2, 1],
+        [6, 2, 1]
+      ],
+      [
+        [1, 10, 5],
+        [2, 10, 5],
+        [7, 4, 2]
+      ],
+      [
+        [2, 10, 5],
+        [3, 10, 5],
+        [8, 4, 2]
+      ],
+      [
+        [4, 10, 5],
+        [5, 10, 5],
+        [9, 4, 2]
+      ],
+      [
+        [1, 20, 0],
+        [10, 20, 0]
+      ]
+    ]
+  ])(
+    'matches exhaustive unique-hero assignment after excluding each available candidate (%#)',
+    (...groups) => {
+      const { game, session } = createDraftFixture()
+      const context = getDraftContext(game, session)!
+      const pools = groups.map((group) =>
+        group.map(([championId, games, wins]) => ({ championId, games, wins }))
+      )
+      context.enemies = context.enemies.slice(0, pools.length)
+      const histories = Object.fromEntries(
+        context.enemies.map((player, index) => {
+          const champions = pools[index]
+          const games = champions.reduce((sum, row) => sum + row.games, 0)
+          return [
+            player.puuid,
+            {
+              games,
+              champions,
+              roles: { [player.position!]: games },
+              byRole: { [player.position!]: champions },
+              unknownRoleGames: 0
+            }
+          ]
+        })
+      )
+      const bruteForce = (excluded?: number) => {
+        const visit = (index: number, used: Set<number>): number => {
+          if (index === pools.length) return 0
+          let best = 0.2 + visit(index + 1, used)
+          for (const row of pools[index]) {
+            if (row.championId === excluded || used.has(row.championId)) continue
+            const strength =
+              (Math.sqrt(row.games / (row.games + 4)) * (row.wins + 5)) / (row.games + 10)
+            best = Math.max(best, strength + visit(index + 1, new Set([...used, row.championId])))
+          }
+          return best
+        }
+        return visit(0, new Set())
+      }
+      const before = bruteForce()
+      for (const championId of new Set(pools.flat().map((row) => row.championId))) {
+        const [ban] = rankBans(context, histories, new Set([championId]), new Set(), [])
+        expect(ban.replacementGap).toBeCloseTo(Math.max(0, before - bruteForce(championId)), 12)
+      }
+    }
+  )
+
+  it('does not count the evaluated champion again through a teammate hover', () => {
+    const { game, session } = createDraftFixture()
+    const context = getDraftContext(game, session)!
+    context.enemies[0].lockedChampionId = 22
+    context.enemies[1].lockedChampionId = 99
+    context.enemies[3].hoverChampionId = 54
+    const histories = { 'player-7': evenlyPlayedHistory('player-7', [[54, 10]]) }
+    const options = { championRoles: { 22: ['marksman'], 99: ['mage'], 54: ['tank'] } }
+    const [withHover] = rankBans(context, histories, new Set([54]), new Set(), [], options)
+    context.enemies[3].hoverChampionId = 0
+    const [withoutHover] = rankBans(context, histories, new Set([54]), new Set(), [], options)
+    expect(withHover.compositionScore).toBe(withoutHover.compositionScore)
+    expect(withHover.score).toBe(withoutHover.score)
   })
 
   it('removes a hypothetically banned enemy hover from later composition adjustments', () => {
@@ -1259,5 +1389,132 @@ describe('history and ranking evidence', () => {
     expect(shared.score).toBeGreaterThan(single.score)
     expect(shared.score).toBeLessThan(1)
     expect(shared.games).toBe(50)
+  })
+
+  it('keeps available unknown-position recency as missing coverage without mixing other known lanes', () => {
+    const { game, session } = createDraftFixture()
+    const context = getDraftContext(game, session)!
+    const now = Date.now()
+    const data = historyFixture('player-7', [105, 105, 7, 7, 7, 7, 13, 13], 'middle', now)
+    data.forEach((entry, index) => {
+      if (entry.source !== 'sgp') return
+      entry.data.json.participants[0].teamPosition = index < 2 ? 'MIDDLE' : index < 6 ? '' : 'TOP'
+      entry.data.json.gameCreation = index >= 2 && index < 6 ? now - 30 * 86_400_000 : now
+    })
+    const histories = { 'player-7': readPlayerHistory('player-7', data, now) }
+    const target = buildTargetPool(context, histories, 'middle', null)
+    // Two recent middle games, four unknown games at half weight; the two top games are excluded.
+    expect(target.champions).toEqual([{ championId: 105, weight: 0.5 }])
+    expect(target.unknownRole).toBe(false)
+    expect(
+      rankPicks([{ championId: 103, games: 10, wins: 5 }], target, {
+        103: [{ championId: 105, games: 1000, wins: 600 }]
+      })[0]
+    ).toMatchObject({ score: null, coverage: 0.5, outlook: 'unknown' })
+
+    for (const unavailable of ['banned', 'locked', 'disabled'] as const) {
+      const updated = { ...context, banned: new Set<number>(), locked: new Set<number>() }
+      const disabled = new Set<number>()
+      if (unavailable === 'disabled') disabled.add(7)
+      else updated[unavailable].add(7)
+      expect(buildTargetPool(updated, histories, 'middle', null, disabled).champions).toEqual([
+        { championId: 105, weight: 1 }
+      ])
+    }
+
+    context.enemies[2].lockedChampionId = 7
+    expect(buildTargetPool(context, histories, 'middle', null).champions).toEqual([
+      { championId: 7, weight: 1 }
+    ])
+    context.enemies[2].lockedChampionId = 0
+    data.forEach((entry) => {
+      if (entry.source === 'sgp') entry.data.json.participants[0].teamPosition = ''
+    })
+    const fallback = buildTargetPool(
+      context,
+      { 'player-7': readPlayerHistory('player-7', data, now) },
+      'middle',
+      null
+    )
+    expect(fallback.unknownRole).toBe(true)
+    expect(fallback.champions.map((row) => row.championId).sort((a, b) => a - b)).toEqual([
+      7, 13, 105
+    ])
+    expect(fallback.champions.reduce((sum, row) => sum + row.weight, 0)).toBeCloseTo(1)
+  })
+
+  it.each(['banned', 'locked'] as const)(
+    'does not change pick composition because of a teammate hover that is already %s',
+    (unavailable) => {
+      const { game, session } = createDraftFixture()
+      const context = getDraftContext(game, session)!
+      context.allies[0].lockedChampionId = 22
+      context.allies[1].lockedChampionId = 99
+      context.allies[3].hoverChampionId = 54
+      context[unavailable].add(54)
+      const championRoles = {
+        22: ['marksman'],
+        99: ['mage'],
+        54: ['tank'],
+        111: ['tank'],
+        103: ['mage', 'assassin']
+      }
+      const target: TargetPool = {
+        source: 'manual',
+        players: [],
+        unknownRole: false,
+        champions: [{ championId: 105, weight: 1 }]
+      }
+      const candidates = [111, 103].map((championId) => ({ championId, games: 10, wins: 5 }))
+      const samples = {
+        111: [{ championId: 105, games: 1000, wins: 500 }],
+        103: [{ championId: 105, games: 1000, wins: 507 }]
+      }
+      const stale = rankPicks(candidates, target, samples, { context, championRoles })
+      context.allies[3].hoverChampionId = 0
+      const cleared = rankPicks(candidates, target, samples, { context, championRoles })
+      expect(stale).toEqual(cleared)
+      expect(stale[0].championId).toBe(111)
+
+      context.allies[3].lockedChampionId = 54
+      expect(rankPicks(candidates, target, samples, { context, championRoles })[0].championId).toBe(
+        103
+      )
+    }
+  )
+
+  it('counts two teammates hovering the same champion as one possible composition slot', () => {
+    const { game, session } = createDraftFixture()
+    const context = getDraftContext(game, session)!
+    context.allies[0].lockedChampionId = 22
+    context.allies[1].lockedChampionId = 99
+    context.allies[3].hoverChampionId = 54
+    context.allies[4].hoverChampionId = 54
+    const championRoles = {
+      22: ['marksman'],
+      99: ['mage'],
+      54: ['tank'],
+      111: ['tank'],
+      103: ['mage', 'assassin']
+    }
+    const target: TargetPool = {
+      source: 'manual',
+      players: [],
+      unknownRole: false,
+      champions: [{ championId: 105, weight: 1 }]
+    }
+    const candidates = [111, 103].map((championId) => ({ championId, games: 10, wins: 5 }))
+    const samples = {
+      111: [{ championId: 105, games: 1000, wins: 500 }],
+      103: [{ championId: 105, games: 1000, wins: 504 }]
+    }
+    const duplicate = rankPicks(candidates, target, samples, { context, championRoles })
+    context.allies[4].hoverChampionId = 0
+    expect(duplicate).toEqual(rankPicks(candidates, target, samples, { context, championRoles }))
+    expect(duplicate[0].championId).toBe(111)
+    context.allies[4].lockedChampionId = 54
+    expect(rankPicks(candidates, target, samples, { context, championRoles })[0].championId).toBe(
+      103
+    )
   })
 })

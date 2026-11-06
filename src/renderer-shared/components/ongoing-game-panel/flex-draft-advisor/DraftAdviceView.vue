@@ -155,7 +155,7 @@
                   )
                 }}</span
               >
-              <span v-if="pick.score !== null" class="draft-muted">{{
+              <span v-if="pick.coverage > 0" class="draft-muted">{{
                 t('ongoingGame.flexDraft.coverage', { rate: percent(pick.coverage) })
               }}</span>
               <span class="draft-muted">{{
@@ -233,17 +233,12 @@
       <div class="draft-pool-editor">
         <span>{{ t('ongoingGame.flexDraft.myPool') }}</span>
         <NSelect
-          :value="
-            context.self.lockedChampionId
-              ? [context.self.lockedChampionId]
-              : (comfortable ?? picks.map((p) => p.championId))
-          "
+          :value="selectedPool"
           multiple
           filterable
           clearable
           :max-tag-count="5"
           :options="championOptions"
-          :max="MAX_CANDIDATES"
           :disabled="Boolean(context.self.lockedChampionId)"
           :placeholder="t('ongoingGame.flexDraft.poolPlaceholder')"
           :aria-label="t('ongoingGame.flexDraft.myPool')"
@@ -412,18 +407,19 @@ const roleOptions = computed(() =>
 const opponentOptions = computed(() =>
   props.context.enemies.map((p) => ({ label: props.playerNames[p.puuid], value: p.puuid }))
 )
+const selectedPool = computed(() =>
+  props.context.self.lockedChampionId
+    ? [props.context.self.lockedChampionId]
+    : (props.comfortable ?? props.picks.map((p) => p.championId))
+)
 const championOptions = computed(() =>
-  [
-    ...new Set([
-      ...props.pickableIds,
-      ...(props.comfortable ?? []),
-      ...props.picks.map((p) => p.championId)
-    ])
-  ]
+  [...new Set([...props.pickableIds, ...selectedPool.value])]
     .map((id) => ({
       label: championName(id),
       value: id,
-      disabled: !props.pickableIds.includes(id)
+      disabled:
+        !selectedPool.value.includes(id) &&
+        (!props.pickableIds.includes(id) || selectedPool.value.length >= MAX_CANDIDATES)
     }))
     .sort((a, b) => a.label.localeCompare(b.label))
 )

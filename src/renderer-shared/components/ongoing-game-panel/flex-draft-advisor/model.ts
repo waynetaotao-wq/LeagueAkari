@@ -6,6 +6,8 @@ import type {
   ChampSelectTeam
 } from '@shared/types/league-client/champ-select'
 
+import { planBanSequence } from './ban-planner'
+
 export const DRAFT_ROLES = ['top', 'jungle', 'middle', 'bottom', 'utility'] as const
 export type DraftRole = (typeof DRAFT_ROLES)[number]
 export const MAX_CANDIDATES = 10
@@ -483,6 +485,10 @@ export function buildTargetPool(
     result.source = inferred.source
     result.players = inferred.players
   }
+  const available = (row: PoolChampion) =>
+    !context.banned.has(row.championId) &&
+    !context.locked.has(row.championId) &&
+    !disabled.has(row.championId)
   const weighted = new Map<number, number>()
   for (const { player, weight } of result.players) {
     if (player.lockedChampionId > 0) {
@@ -491,13 +497,21 @@ export function buildTargetPool(
     }
     const history = histories[player.puuid]
     if (history?.games && history.unknownRoleGames === history.games) result.unknownRole = true
-    const pool = rolePool(history, role).filter(
-      (row) =>
-        !context.banned.has(row.championId) &&
-        !context.locked.has(row.championId) &&
-        !disabled.has(row.championId)
-    )
-    const total = pool.reduce((sum, row) => sum + effectiveGames(row), 0)
+    const pool = rolePool(history, role).filter(available)
+    let total = pool.reduce((sum, row) => sum + effectiveGames(row), 0)
+    if (history && history.unknownRoleGames > 0 && history.unknownRoleGames < history.games) {
+      const knownPositionGames = new Map<number, number>()
+      for (const position of DRAFT_ROLES)
+        for (const row of history.byRole[position] ?? [])
+          knownPositionGames.set(
+            row.championId,
+            (knownPositionGames.get(row.championId) ?? 0) + effectiveGames(row)
+          )
+      // Unknown-position games remain uncovered evidence, not invented lane champions.
+      // Use the same recency weights and availability rules as the known-position pool.
+      for (const row of history.champions.filter(available))
+        total += Math.max(0, effectiveGames(row) - (knownPositionGames.get(row.championId) ?? 0))
+    }
     for (const row of pool) {
       // A singleton remains unknown mass; removing other mains must not turn it into certainty.
       if (row.games < 2) continue
@@ -585,7 +599,8 @@ function compositionAdvice(
   players: DraftPlayer[],
   selfPuuid: string,
   championRoles: Record<number, string[]> = {},
-  enemies: DraftPlayer[] = []
+  enemies: DraftPlayer[] = [],
+  unavailable: ReadonlySet<number> = new Set()
 ): CompositionAdvice {
   const result: CompositionAdvice = { score: 0, signals: [], knownAllies: 0 }
   const candidate = championStructure(championRoles[candidateId])
@@ -593,9 +608,17 @@ function compositionAdvice(
   let ambiguousBackline = false
   let unknownSelectedAlly = false
   let knownWeight = 0
+  const reserved = new Set([
+    candidateId,
+    ...unavailable,
+    ...[...players, ...enemies].map((player) => player.lockedChampionId).filter((id) => id > 0)
+  ])
+  const counted = new Set<number>()
   for (const player of players) {
     if (player.puuid === selfPuuid) continue
     const championId = player.lockedChampionId || player.hoverChampionId
+    if ((!player.lockedChampionId && reserved.has(championId)) || counted.has(championId)) continue
+    counted.add(championId)
     const structure = championStructure(championRoles[championId])
     if (!structure) {
       unknownSelectedAlly ||= championId > 0
@@ -689,23 +712,17 @@ export function rankBans(
   options: DraftRankingOptions = {}
 ): BanAdvice[] {
   if (context.banState !== 'active' || context.banFinished) return []
-  const banned = new Set(context.banned)
-  const chosen: BanAdvice[] = []
-  while (chosen.length < Math.min(3, context.banBudget)) {
-    const next = rankAvailableBans(
+  return planBanSequence(context.banBudget, (removed) => {
+    const banned = new Set([...context.banned, ...removed])
+    return rankAvailableBans(
       { ...context, banned },
       histories,
       bannable,
       disabled,
       comfortable,
       options
-    )[0]
-    if (!next) break
-    chosen.push(next)
-    // Each later suggestion is conditional on earlier suggestions being banned.
-    banned.add(next.championId)
-  }
-  return chosen
+    )
+  })
 }
 
 function championStrength(champion: PoolChampion) {
@@ -716,10 +733,16 @@ function championStrength(champion: PoolChampion) {
 function teamFamiliarity(pools: PoolChampion[][], excludedChampion?: number) {
   const choices = new Map<number, Array<{ player: number; strength: number }>>()
   pools.forEach((pool, player) => {
-    for (const champion of pool) {
-      if (champion.championId === excludedChampion) continue
+    // Only P-1 other players can occupy heroes: one of this player's top P is always free.
+    // Filter the excluded hero first, and prune only this matching problem, never ban candidates.
+    const candidates = pool
+      .filter((champion) => champion.championId !== excludedChampion)
+      .map((champion) => ({ champion, strength: championStrength(champion) }))
+      .sort((a, b) => b.strength - a.strength || a.champion.championId - b.champion.championId)
+      .slice(0, pools.length)
+    for (const { champion, strength } of candidates) {
       const users = choices.get(champion.championId) ?? []
-      users.push({ player, strength: championStrength(champion) })
+      users.push({ player, strength })
       choices.set(champion.championId, users)
     }
   })
@@ -780,6 +803,7 @@ function rankAvailableBans(
     )
   const enemies = withoutBannedHover(context.enemies)
   const allies = withoutBannedHover(context.allies)
+  const unavailable = new Set([...context.banned, ...context.locked])
   const rows = new Map<number, Array<Omit<BanAdvice, 'otherPlayers'>>>()
   for (const { player, history, pool } of pools) {
     if (!history) continue
@@ -803,7 +827,8 @@ function rankAvailableBans(
         enemies,
         player.puuid,
         options.championRoles,
-        allies
+        allies,
+        unavailable
       ).score
       const games = effectiveGames(champion)
       const value =
@@ -941,7 +966,8 @@ export function rankPicks(
         options.context?.allies ?? [],
         options.context?.self.puuid ?? '',
         options.championRoles,
-        options.context?.enemies
+        options.context?.enemies,
+        new Set([...(options.context?.banned ?? []), ...(options.context?.locked ?? [])])
       )
       return {
         ...candidate,
