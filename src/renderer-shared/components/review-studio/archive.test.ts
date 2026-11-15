@@ -149,6 +149,62 @@ describe('review history archive', () => {
     expect(original.quality.warnings).toEqual([])
   })
 
+  it('keeps own death points and early measurements, and still reads records saved without them', async () => {
+    const { adapter, values } = storage()
+    const original = match()
+    original.deaths = [
+      {
+        timestamp: 100000,
+        point: { x: 5000.4, y: 5000.6 },
+        killer: { championId: 103, role: 'MIDDLE' },
+        assists: [{ championId: 64, role: 'JUNGLE' }],
+        shutdownBounty: 150
+      },
+      { timestamp: 90000, point: null, killer: null, assists: [], shutdownBounty: null }
+    ]
+    original.early = {
+      cs10: 80,
+      deathsBefore10: 2,
+      soloDeathsBefore14: 0,
+      jungleDeathsBefore14: null,
+      takedownsBefore14: 3,
+      wardsBefore10: 4,
+      controlWardsBefore15: 0,
+      firstShopAt: 240000,
+      firstCoreItemAt: 600000,
+      firstCoreItemId: 6699,
+      platesTaken: 2,
+      platesLost: 1,
+      roamsBefore14: null
+    }
+    await writeReviewArchive(adapter, scope, [original])
+    const [stored] = await readReviewArchive(adapter, scope)
+    expect(stored.match.deaths).toEqual([
+      original.deaths[1],
+      { ...original.deaths[0], point: { x: 5000, y: 5001 } }
+    ])
+    expect(stored.match.early).toEqual(original.early)
+    expect(stored.match.frames).toEqual([])
+
+    const legacy = toReviewArchiveRecord(match(2))
+    delete legacy.match.deaths
+    delete legacy.match.early
+    const malformed = toReviewArchiveRecord(match(3))
+    malformed.match.deaths = [{ ...original.deaths[0], timestamp: -1 }]
+    malformed.match.early = { ...original.early, firstCoreItemId: null }
+    values.set(`archive:${reviewScopeKey(scope)}`, { version: 1, records: [legacy, malformed] })
+    expect(
+      (await readReviewArchive(adapter, scope)).map((record) => [
+        record.match.meta.gameId,
+        record.match.deaths,
+        record.match.early
+      ])
+    ).toEqual([
+      [3, null, null],
+      [2, null, null]
+    ])
+  })
+
   it('rejects unsupported versions, malformed records and another target/server', async () => {
     const { adapter, values } = storage()
     const key = `archive:${reviewScopeKey(scope)}`

@@ -26,6 +26,7 @@ import {
   isReviewAbort,
   matchesReviewCandidate
 } from './data-loader'
+import { isReviewCoreItem } from './match-facts'
 import type { ReviewFilter, ReviewMatch } from './types'
 
 function initialProgress(): ReviewLoadProgress {
@@ -121,7 +122,9 @@ export function useReviewData(options: {
           signal,
           __sgpServerId: target.sgpServerId
         })
-      ).data
+      ).data,
+    // 物品库来自已连接的客户端；尚未加载时返回 null，首件成装保持未知。
+    coreItem: (itemId) => isReviewCoreItem(lcs.gameData.items[itemId])
   })
 
   const candidates = shallowRef<ReviewCandidate[]>([])

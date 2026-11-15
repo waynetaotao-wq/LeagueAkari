@@ -5,7 +5,15 @@ import {
   type ReviewStorageAdapter,
   reviewScopeKey
 } from './notes'
-import type { ReviewEvent, ReviewMatch, ReviewPosition, ReviewSnapshot } from './types'
+import type {
+  ReviewDeath,
+  ReviewDeathSource,
+  ReviewEarlyFacts,
+  ReviewEvent,
+  ReviewMatch,
+  ReviewPosition,
+  ReviewSnapshot
+} from './types'
 
 export type { ReviewArchiveScope } from './notes'
 
@@ -121,6 +129,89 @@ function parseEvent(value: unknown): ReviewEvent | null {
   }
 }
 
+function parseDeathSource(value: unknown): ReviewDeathSource | null {
+  const source = object(value)
+  return source &&
+    positiveInteger(source.championId) &&
+    positions.includes(source.role as ReviewPosition)
+    ? { championId: source.championId, role: source.role as ReviewPosition }
+    : null
+}
+
+/**
+ * Own deaths are the only coordinates an archive keeps: a handful of points per game, enough for
+ * the death map without storing anyone's movement track. Older records have none and return null.
+ */
+function parseDeaths(value: unknown): ReviewDeath[] | null {
+  if (!Array.isArray(value) || value.length > 200) return null
+  const deaths: ReviewDeath[] = []
+  for (const item of value) {
+    const death = object(item)
+    const point = death?.point === null ? null : object(death?.point)
+    if (
+      !death ||
+      !nonnegative(death.timestamp) ||
+      (death.point !== null &&
+        !(
+          point &&
+          nonnegative(point.x) &&
+          nonnegative(point.y) &&
+          point.x <= 15_000 &&
+          point.y <= 15_000
+        )) ||
+      !(death.killer === null || parseDeathSource(death.killer)) ||
+      !Array.isArray(death.assists) ||
+      death.assists.length > 5 ||
+      !(death.shutdownBounty === null || nonnegative(death.shutdownBounty))
+    )
+      return null
+    const assists = death.assists.map(parseDeathSource)
+    if (assists.some((assist) => assist === null)) return null
+    deaths.push({
+      timestamp: death.timestamp,
+      point: point ? { x: Math.round(point.x as number), y: Math.round(point.y as number) } : null,
+      killer: death.killer === null ? null : parseDeathSource(death.killer),
+      assists: assists as ReviewDeathSource[],
+      shutdownBounty: death.shutdownBounty
+    })
+  }
+  return deaths.sort((a, b) => a.timestamp - b.timestamp)
+}
+
+const EARLY_COUNT_KEYS = [
+  'deathsBefore10',
+  'soloDeathsBefore14',
+  'jungleDeathsBefore14',
+  'takedownsBefore14',
+  'wardsBefore10',
+  'controlWardsBefore15',
+  'platesTaken',
+  'platesLost',
+  'roamsBefore14'
+] as const
+const EARLY_AMOUNT_KEYS = ['cs10', 'firstShopAt', 'firstCoreItemAt'] as const
+
+/** Unknown measurements stay null; one malformed field discards the whole block, never a zero. */
+function parseEarly(value: unknown): ReviewEarlyFacts | null {
+  const early = object(value)
+  if (!early) return null
+  const facts = {} as ReviewEarlyFacts
+  for (const key of EARLY_COUNT_KEYS) {
+    const count = early[key]
+    if (!(count === null || (integer(count) && count <= 1000))) return null
+    facts[key] = count
+  }
+  for (const key of EARLY_AMOUNT_KEYS) {
+    const amount = early[key]
+    if (!(amount === null || nonnegative(amount))) return null
+    facts[key] = amount
+  }
+  const itemId = early.firstCoreItemId
+  if (!nullableId(itemId) || (itemId === null) !== (facts.firstCoreItemAt === null)) return null
+  facts.firstCoreItemId = itemId
+  return facts
+}
+
 /** Validates persisted data and rebuilds it, so accidentally stored frame tracks never survive. */
 function compactMatch(value: unknown): ReviewMatch | null {
   const match = object(value)
@@ -206,7 +297,9 @@ function compactMatch(value: unknown): ReviewMatch | null {
       validTeamSnapshots: quality.validTeamSnapshots,
       eventCoverage: quality.eventCoverage as 'complete' | 'partial',
       warnings: [...new Set([...quality.warnings, REVIEW_ARCHIVE_WARNING])]
-    }
+    },
+    deaths: parseDeaths(match.deaths),
+    early: parseEarly(match.early)
   }
 }
 

@@ -167,7 +167,7 @@ import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
 import { useTranslation } from 'i18next-vue'
 import { NAlert, NButton, NCard, NRadioButton, NRadioGroup, NTag, NText } from 'naive-ui'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import ReviewGoldChart from './ReviewGoldChart.vue'
 import ReviewMoments from './ReviewMoments.vue'
@@ -179,9 +179,15 @@ import { reviewViewText as text } from './review-view-text'
 import { findReviewFrameIndex, reviewSigned, reviewTime } from './review-view-utils'
 import type { ReviewEvent, ReviewMatch, ReviewMoment } from './types'
 
-const props = withDefaults(defineProps<{ model: ReviewMatch; active?: boolean }>(), {
-  active: true
-})
+const props = withDefaults(
+  defineProps<{
+    model: ReviewMatch
+    active?: boolean
+    /** Opens the timeline at one of the player's own deaths; a new token repeats the jump. */
+    focus?: { gameId: number; timestamp: number; token: number } | null
+  }>(),
+  { active: true, focus: null }
+)
 const resources = useAkariResourceProvider()
 const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
 const replayRoot = ref<HTMLElement | null>(null)
@@ -240,6 +246,22 @@ function selectEvent(event: ReviewEvent) {
   frameIndex.value = Math.max(0, findReviewFrameIndex(props.model.frames, event.timestamp))
   selectedEventId.value = event.id
 }
+async function applyFocus() {
+  const focus = props.focus
+  if (!focus || focus.gameId !== props.model.meta.gameId) return
+  const death = props.model.events.find(
+    (event) =>
+      event.type === 'kill' &&
+      event.victimId === props.model.meta.participantId &&
+      event.timestamp === focus.timestamp
+  )
+  selectedMoment.value = null
+  view.value = 'timeline'
+  if (death) selectEvent(death)
+  else seek(focus.timestamp)
+  await nextTick()
+  replayRoot.value?.scrollIntoView({ block: 'start' })
+}
 watch(
   () => props.model,
   () => {
@@ -247,8 +269,14 @@ watch(
     selectedMoment.value = null
     selectedEventId.value = null
     view.value = 'overview'
+    void applyFocus()
   }
 )
+watch(
+  () => props.focus?.token,
+  () => void applyFocus()
+)
+onMounted(() => void applyFocus())
 </script>
 
 <style scoped>

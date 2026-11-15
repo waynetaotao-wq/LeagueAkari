@@ -83,3 +83,172 @@ reviewStudio:
   range: 'Range {{min}} to {{max}}'
   deviation: 'Sample standard deviation {{value}}'
   deviationHint: Standard deviation describes variation between games, not accuracy or a confidence interval.
+  tabs:
+    deaths: Death map
+    gap: Wins vs losses
+  deathMap:
+    title: Death map
+    hint: Every death in the selected games, drawn on the map to show where and when trouble repeats. Coordinates come from the kill records themselves.
+    empty: Read and analyze match history above to see the death map
+    legacyOnly: These games are older archives without death coordinates. Re-analyze them above to build the death map.
+    partialOnly: The kill records of these games could not be reconciled with the match summaries, so a reliable death map cannot be built.
+    legacy: 'Older archives without death coordinates: {{count}}. Re-analyze to include them.'
+    partial: 'Games left out because their kill records could not be reconciled: {{count}}.'
+    games: Games counted
+    deaths: Deaths
+    perGame: Per game
+    soloShare: Killed 1v1
+    jungleShare: Enemy jungler involved
+    hotspot: 'In {{range}}, {{share}} of deaths happened in {{zone}}.'
+    noHotspot: 'In {{range}}, deaths are spread out with no clear concentration.'
+    tooFew: 'In {{range}}, there are too few deaths to show a pattern.'
+    rangeAll: the whole game
+    rangeUntil: 'the first {{to}} minutes'
+    rangeBetween: 'minutes {{from}}–{{to}}'
+    rangeAfter: 'the time after minute {{from}}'
+    presetAll: Whole game
+    presetUntil: '0–{{to}} min'
+    presetBetween: '{{from}}–{{to}} min'
+    presetAfter: '{{from}}+ min'
+    sliderMinute: '{{minute}} min'
+    sliderEnd: Until the end
+    time: Time window
+    outcome: Result
+    kind: How you died
+    side: Map side
+    all: All
+    wins: Wins
+    losses: Losses
+    solo: Killed 1v1
+    group: Killed by several enemies
+    jungle: Enemy jungler involved
+    execute: Not killed by a champion
+    blue: Blue side
+    red: Red side
+    showHeat: Show heat
+    mapAlt: Summoner's Rift map
+    zonesTitle: Where you die most
+    zonesHint: Select a zone to see only its deaths. Zones are expressed as own or enemy side for the team you were on.
+    clearZone: Show all zones
+    zoneRow: 'Deaths: {{deaths}} · {{share}} · Games: {{games}}'
+    timelineTitle: Deaths over time
+    timelineHint: Each bar covers 2 minutes. Highlighted bars are inside the selected time window.
+    bucket: 'Deaths at {{from}}–{{to}} min: {{count}}'
+    bucketLast: 'Deaths after {{from}} min: {{count}}'
+    listTitle: Death records
+    listCount: 'Total: {{count}}'
+    listEmpty: No deaths match the current filters
+    bySolo: 'Killed 1v1 by {{killer}}'
+    byGroup: 'Killed by {{killer}}; other enemies involved: {{count}}'
+    byExecute: Killed by a turret, minion or monster
+    jungleTag: Jungler involved
+    noPoint: No coordinates
+    versus: 'vs {{opponent}}'
+    unknownOpponent: Opponent unknown
+    win: Victory
+    loss: Defeat
+    review: Review
+    note: Only games whose kill records match the match summary are counted. Zones are approximate areas drawn for review, so points near a border may fall in the neighbouring zone. A dense area means many deaths, not a cause.
+    zones:
+      mid-own: Mid lane (own side)
+      mid-enemy: Mid lane (enemy side)
+      top-own: Top lane (own side)
+      top-enemy: Top lane (enemy side)
+      bot-own: Bottom lane (own side)
+      bot-enemy: Bottom lane (enemy side)
+      river-top: Top river (Baron side)
+      river-bot: Bottom river (Dragon side)
+      jungle-own-top: Own top-side jungle
+      jungle-own-bot: Own bottom-side jungle
+      jungle-enemy-top: Enemy top-side jungle
+      jungle-enemy-bot: Enemy bottom-side jungle
+      own-base: Own base
+      enemy-base: Enemy base
+  outcomeGap:
+    title: What separates your wins from your losses
+    hint: Compares early-game numbers between won and lost games. The clearest differences come first.
+    empty: Read and analyze match history above to compare wins and losses
+    sample: 'Games: {{games}} · Wins: {{wins}} · Losses: {{losses}}'
+    fewGames: Small sample; treat results as leads only
+    notEnough: 'At least {{count}} wins and {{count}} losses are needed to compare. Widen the analysis scope.'
+    legacy: 'Older archives with only gold and CS differences: {{count}}. Re-analyze to fill in the other metrics.'
+    habit: Habits and decisions
+    habitHint: Things you can change directly. Start here.
+    result: Lane outcome
+    resultHint: Shows how the early game went. A large gap here is usually a result, not necessarily a cause.
+    winSide: Wins
+    lossSide: Losses
+    samples_one: '{{count}} game'
+    samples_other: '{{count}} games'
+    strength:
+      clear: Clear difference
+      possible: Possible difference
+      none: No visible difference
+      insufficient: Not enough games
+    unknown: Too few usable games to compare yet
+    same: Wins and losses look about the same
+    duration: '{{minutes}} min {{seconds}} s'
+    durationSeconds: '{{seconds}} s'
+    diff:
+      time:
+        more: 'Losses are typically {{value}} later'
+        less: 'Losses are typically {{value}} earlier'
+      count:
+        more: 'Losses average {{value}} more'
+        less: 'Losses average {{value}} fewer'
+      plates:
+        more: 'Losses average {{value}} more'
+        less: 'Losses average {{value}} fewer'
+      gold:
+        more: 'Losses typically have {{value}} more gold'
+        less: 'Losses typically have {{value}} less gold'
+      cs:
+        more: 'Losses typically have {{value}} more CS'
+        less: 'Losses typically have {{value}} less CS'
+    trackHint: The band covers the middle half of that group's games and the line marks the typical value. The more the two bands overlap, the less reliable the difference.
+    noValues: No usable values
+    valuesHint: Select a value to open that game.
+    note: This only describes how won and lost games differ. It is not proof of why you lost — falling behind also delays items and adds deaths. "Clear difference" means the two groups separate well, not certainty; with a dozen metrics compared at once, a single gap can also be chance.
+    metrics:
+      deathsBefore10:
+        name: Deaths before 10 min
+        hint: Deaths from the start of the game until 10:00.
+      soloDeathsBefore14:
+        name: 1v1 deaths before 14 min
+        hint: Deaths with exactly one enemy champion involved.
+      jungleDeathsBefore14:
+        name: Deaths to the jungler before 14 min
+        hint: Deaths with the enemy jungler as killer or assistant.
+      firstShopAt:
+        name: First trip back to the shop
+        hint: Time of the first purchase after 2:00, including purchases after respawning.
+      wardsBefore10:
+        name: Wards placed before 10 min
+        hint: Trinket wards, control wards and support-item wards; other vision effects are excluded.
+      controlWardsBefore15:
+        name: Control wards placed before 15 min
+        hint: Control wards placed before 15:00.
+      roamsBefore14:
+        name: Side-lane visits before 14 min
+        hint: Mid lane only. Counts entries into the top or bottom lane from one position snapshot per minute; trips shorter than a minute can be missed.
+      cs10:
+        name: CS at 10 min
+        hint: Creep score in the 10-minute snapshot, including jungle monsters.
+      csDiff10:
+        name: CS difference at 10 min
+        hint: Against the same-role opponent; positive means ahead.
+      goldDiff10:
+        name: Gold difference at 10 min
+        hint: Total gold against the same-role opponent; positive means ahead.
+      goldDiff15:
+        name: Gold difference at 15 min
+        hint: Total gold against the same-role opponent; positive means ahead.
+      plateDiff:
+        name: Lane plate difference before 14 min
+        hint: Plates taken in your lane minus plates lost; positive means ahead. Not counted for junglers.
+      takedownsBefore14:
+        name: Takedowns before 14 min
+        hint: Kills plus assists.
+      firstCoreItemAt:
+        name: First completed item
+        hint: Time of the first purchase of an item built from components that costs at least 2,200 gold in total; boots are excluded.

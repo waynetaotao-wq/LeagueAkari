@@ -1,6 +1,7 @@
 import type {
   DetailedGameEvent,
   DetailedParticipantFrame,
+  LaneType,
   SgpGameDetailsLol,
   SgpGameSummaryLol,
   SgpParticipantLol
@@ -115,6 +116,47 @@ export function reviewKill(timestamp: number, victimId = 8, shutdownBounty = 0):
     shutdownBounty,
     killStreakLength: 0,
     victimDamageReceived: []
+  }
+}
+
+export function reviewPurchase(
+  timestamp: number,
+  itemId: number,
+  participantId = 8
+): DetailedGameEvent {
+  return { type: 'ITEM_PURCHASED', timestamp, participantId, itemId }
+}
+
+/** Undoing a purchase, in the shape observed in real timelines: beforeId = item, afterId = 0. */
+export function reviewUndo(
+  timestamp: number,
+  itemId: number,
+  participantId = 8
+): DetailedGameEvent {
+  return { type: 'ITEM_UNDO', timestamp, participantId, beforeId: itemId, afterId: 0, goldGain: 0 }
+}
+
+export function reviewWard(
+  timestamp: number,
+  wardType = 'YELLOW_TRINKET',
+  creatorId = 8
+): DetailedGameEvent {
+  return { type: 'WARD_PLACED', timestamp, creatorId, wardType }
+}
+
+/** teamId is the team that owns the damaged turret, as in real timelines. */
+export function reviewPlate(
+  timestamp: number,
+  teamId: number,
+  laneType: LaneType = 'MID_LANE'
+): DetailedGameEvent {
+  return {
+    type: 'TURRET_PLATE_DESTROYED',
+    timestamp,
+    killerId: 0,
+    laneType,
+    position: teamId === 100 ? { x: 5846, y: 6396 } : { x: 8955, y: 8510 },
+    teamId
   }
 }
 

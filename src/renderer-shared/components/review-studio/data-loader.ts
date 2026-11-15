@@ -6,6 +6,7 @@ import {
   normalizeReviewPosition,
   parseReviewMatch
 } from './analysis'
+import type { ReviewCoreItemResolver } from './match-facts'
 import type { ReviewFilter, ReviewMatch, ReviewPosition } from './types'
 
 export interface ReviewIdentity {
@@ -33,6 +34,8 @@ export interface ReviewFetchApi {
   ): Promise<SgpGameSummaryLol[]>
   summary(identity: ReviewIdentity, gameId: number, signal: AbortSignal): Promise<SgpGameSummaryLol>
   details(identity: ReviewIdentity, gameId: number, signal: AbortSignal): Promise<SgpGameDetailsLol>
+  /** Item catalogue lookup for the first completed item; omit when no catalogue is available. */
+  coreItem?: ReviewCoreItemResolver
 }
 
 export interface ReviewLoadProgress {
@@ -305,7 +308,13 @@ export function createReviewDataLoader(
           failure: { gameId, kind: 'invalid' as const, reason: '服务器返回了不匹配的时间线编号' }
         }
       }
-      const parsed = parseReviewMatch(actualSummary, details, identity.puuid, identity.sgpServerId)
+      const parsed = parseReviewMatch(
+        actualSummary,
+        details,
+        identity.puuid,
+        identity.sgpServerId,
+        { coreItem: api.coreItem }
+      )
       assertReviewNotAborted(signal)
       if (!parsed.ok)
         return {

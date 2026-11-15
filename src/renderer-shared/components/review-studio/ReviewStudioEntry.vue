@@ -17,7 +17,7 @@
       <NTag size="small" :bordered="false">赛后训练</NTag>
     </div>
     <div class="mt-2 text-xs leading-relaxed opacity-65">
-      关键片段 · 对位档案 · 地图回放 · 领先兑现
+      关键片段 · 对位档案 · 领先兑现 · 死亡地图 · 胜负差异
     </div>
     <NButton
       class="mt-3"

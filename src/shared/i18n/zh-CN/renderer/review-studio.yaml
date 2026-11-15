@@ -80,3 +80,171 @@ reviewStudio:
   range: '范围 {{min}} ～ {{max}}'
   deviation: '样本标准差 {{value}}'
   deviationHint: 标准差描述对局间波动，不是准确率或均值的置信区间。
+  tabs:
+    deaths: 死亡地图
+    gap: 胜负差异
+  deathMap:
+    title: 死亡地图
+    hint: 把所选对局里的每一次死亡画到地图上，看清反复出事的时间和地点。坐标取自击杀记录本身。
+    empty: 先在上方读取并分析历史对局，再查看死亡地图
+    legacyOnly: 这些对局是旧存档，没有保存死亡坐标。在上方重新分析后即可生成死亡地图。
+    partialOnly: 这些对局的击杀记录未能与战绩核对，无法生成可靠的死亡地图。
+    legacy: '另有 {{count}} 场旧存档没有死亡坐标，重新分析后可纳入。'
+    partial: '另有 {{count}} 场的击杀记录未能与战绩核对，未纳入。'
+    games: 纳入对局
+    deaths: 死亡次数
+    perGame: 平均每局
+    soloShare: 被单杀占比
+    jungleShare: 敌方打野参与
+    hotspot: '{{range}}的死亡中，{{share}} 发生在{{zone}}。'
+    noHotspot: '{{range}}的死亡地点比较分散，没有明显集中的区域。'
+    tooFew: '{{range}}的死亡记录太少，暂时看不出规律。'
+    rangeAll: 全程
+    rangeUntil: '前 {{to}} 分钟'
+    rangeBetween: '{{from}}–{{to}} 分钟'
+    rangeAfter: '{{from}} 分钟后'
+    presetAll: 全程
+    presetUntil: '前 {{to}} 分钟'
+    presetBetween: '{{from}}–{{to}} 分钟'
+    presetAfter: '{{from}} 分钟后'
+    sliderMinute: '{{minute}} 分钟'
+    sliderEnd: 直到结束
+    time: 时间段
+    outcome: 对局结果
+    kind: 死亡方式
+    side: 所在阵营
+    all: 全部
+    wins: 赢的局
+    losses: 输的局
+    solo: 被单杀
+    group: 被多人击杀
+    jungle: 敌方打野参与
+    execute: 非英雄击杀
+    blue: 蓝色方
+    red: 红色方
+    showHeat: 显示热力
+    mapAlt: 召唤师峡谷地图
+    zonesTitle: 死亡最多的区域
+    zonesHint: 点击区域只看该处的死亡。区域已按你所在阵营换算成“己方 / 敌方”。
+    clearZone: 查看全部区域
+    zoneRow: '{{deaths}} 次 · {{share}} · {{games}} 场'
+    timelineTitle: 死亡时间分布
+    timelineHint: 每格 2 分钟，高亮部分是当前所选时间段。
+    bucket: '{{from}}–{{to}} 分钟：{{count}} 次'
+    bucketLast: '{{from}} 分钟后：{{count}} 次'
+    listTitle: 死亡记录
+    listCount: '共 {{count}} 次'
+    listEmpty: 当前筛选下没有死亡记录
+    bySolo: '被{{killer}}单杀'
+    byGroup: '被{{killer}}击杀，另有 {{count}} 名敌人参与'
+    byExecute: 被防御塔、小兵或野怪击杀
+    jungleTag: 打野参与
+    noPoint: 无坐标
+    versus: '对 {{opponent}}'
+    unknownOpponent: 对位未知
+    win: 胜利
+    loss: 失败
+    review: 回看
+    note: 只统计击杀记录与战绩核对一致的对局。区域是为复盘划分的大致范围，边界附近的点可能归到相邻区域；密集只表示次数多，不代表原因。
+    zones:
+      mid-own: 中路（己方半场）
+      mid-enemy: 中路（敌方半场）
+      top-own: 上路（己方半场）
+      top-enemy: 上路（敌方半场）
+      bot-own: 下路（己方半场）
+      bot-enemy: 下路（敌方半场）
+      river-top: 上河道（男爵侧）
+      river-bot: 下河道（小龙侧）
+      jungle-own-top: 己方上半野区
+      jungle-own-bot: 己方下半野区
+      jungle-enemy-top: 敌方上半野区
+      jungle-enemy-bot: 敌方下半野区
+      own-base: 己方基地
+      enemy-base: 敌方基地
+  outcomeGap:
+    title: 赢的局和输的局，差在哪
+    hint: 逐项比较赢局与输局的前期数据，差别越明显排得越靠前。
+    empty: 先在上方读取并分析历史对局，再比较赢局和输局
+    sample: '{{games}} 场 · {{wins}} 胜 {{losses}} 负'
+    fewGames: 样本偏少，结论只能当线索
+    notEnough: '赢局和输局至少各需要 {{count}} 场才能比较，请扩大分析范围。'
+    legacy: '另有 {{count}} 场旧存档只有经济差和补刀差，重新分析后可补齐其余指标。'
+    habit: 习惯与决策
+    habitHint: 你能直接调整的做法，优先看这里。
+    result: 对线结果
+    resultHint: 反映前期打得顺不顺。差别大通常是结果，不一定是原因。
+    winSide: 赢的局
+    lossSide: 输的局
+    samples: '{{count}} 场'
+    strength:
+      clear: 差别明显
+      possible: 可能有差别
+      none: 看不出差别
+      insufficient: 样本不足
+    unknown: 有效对局太少，暂时无法比较
+    same: 赢局和输局基本一样
+    duration: '{{minutes}} 分 {{seconds}} 秒'
+    durationSeconds: '{{seconds}} 秒'
+    diff:
+      time:
+        more: '输的局通常晚 {{value}}'
+        less: '输的局通常早 {{value}}'
+      count:
+        more: '输的局平均多 {{value}} 次'
+        less: '输的局平均少 {{value}} 次'
+      plates:
+        more: '输的局平均多 {{value}} 层'
+        less: '输的局平均少 {{value}} 层'
+      gold:
+        more: '输的局通常多 {{value}} 金币'
+        less: '输的局通常少 {{value}} 金币'
+      cs:
+        more: '输的局通常多 {{value}} 刀'
+        less: '输的局通常少 {{value}} 刀'
+    trackHint: 色带是该组中间一半对局的范围，竖线是典型值；两条色带重叠越多，差别越不可靠。
+    noValues: 没有可用数值
+    valuesHint: 点击数值可打开对应的那一局。
+    note: 这里只说明赢局和输局有什么不同，不能直接当成输的原因：落后本身也会让装备变慢、死亡变多。“差别明显”表示两组数据分得比较开，并非百分之百确定；同时比较十几项，个别差别也可能只是巧合。
+    metrics:
+      deathsBefore10:
+        name: 10 分钟前死亡次数
+        hint: 开局到 10:00 之前的死亡次数。
+      soloDeathsBefore14:
+        name: 前 14 分钟被单杀
+        hint: 只有一名敌方英雄参与的死亡次数。
+      jungleDeathsBefore14:
+        name: 前 14 分钟被打野抓死
+        hint: 敌方打野作为击杀者或助攻者的死亡次数。
+      firstShopAt:
+        name: 首次回家补给时间
+        hint: 2 分钟之后第一次购买物品的时间，阵亡复活后的购买也算。
+      wardsBefore10:
+        name: 10 分钟前放置守卫
+        hint: 饰品眼、控制守卫和辅助装的眼，不含其它视野效果。
+      controlWardsBefore15:
+        name: 15 分钟前放置控制守卫
+        hint: 15:00 之前放下的控制守卫数量。
+      roamsBefore14:
+        name: 前 14 分钟去边路的次数
+        hint: 仅中路。按每分钟一次的位置快照统计进入上、下路的次数，一分钟内来回的短游走可能漏记。
+      cs10:
+        name: 10 分钟补刀
+        hint: 10 分钟快照中的补刀数，含野怪。
+      csDiff10:
+        name: 10 分钟对位补刀差
+        hint: 相对同位置对手，正值为领先。
+      goldDiff10:
+        name: 10 分钟对位经济差
+        hint: 相对同位置对手的累计经济，正值为领先。
+      goldDiff15:
+        name: 15 分钟对位经济差
+        hint: 相对同位置对手的累计经济，正值为领先。
+      plateDiff:
+        name: 前 14 分钟本路镀层差
+        hint: 本路拿到的镀层数减去丢掉的镀层数，正值为领先；打野不统计。
+      takedownsBefore14:
+        name: 前 14 分钟参与击杀
+        hint: 击杀加助攻的次数。
+      firstCoreItemAt:
+        name: 第一件成装完成时间
+        hint: 第一次买下由散件合成、总价不低于 2200 金币的装备的时间，不含鞋子。

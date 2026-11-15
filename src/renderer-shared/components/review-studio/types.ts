@@ -84,6 +84,51 @@ export interface ReviewQuality {
   warnings: string[]
 }
 
+/** An enemy champion credited with a kill or an assist on the reviewed player. */
+export interface ReviewDeathSource {
+  championId: number
+  role: ReviewPosition
+}
+
+/** One recorded death of the reviewed player. */
+export interface ReviewDeath {
+  timestamp: number
+  /** Coordinates recorded with the kill event itself; never taken from a minute snapshot. */
+  point: ReviewPoint | null
+  /** Null when a turret, minion or monster dealt the killing blow. */
+  killer: ReviewDeathSource | null
+  assists: ReviewDeathSource[]
+  shutdownBounty: number | null
+}
+
+/**
+ * Early-game measurements used to compare wins with losses. Each field stays null when the
+ * game is too short, the role does not apply or the timeline cannot prove the value.
+ */
+export interface ReviewEarlyFacts {
+  /** Own creep score in the 10-minute snapshot. */
+  cs10: number | null
+  deathsBefore10: number | null
+  /** Deaths before 14:00 to exactly one enemy champion. */
+  soloDeathsBefore14: number | null
+  /** Deaths before 14:00 credited to the enemy jungler as killer or assistant. */
+  jungleDeathsBefore14: number | null
+  /** Own kills plus assists before 14:00. */
+  takedownsBefore14: number | null
+  wardsBefore10: number | null
+  controlWardsBefore15: number | null
+  /** First purchase after 2:00, i.e. the first time back at the shop. */
+  firstShopAt: number | null
+  firstCoreItemAt: number | null
+  firstCoreItemId: number | null
+  /** Plates of the own lane's enemy turrets destroyed before 14:00. */
+  platesTaken: number | null
+  /** Plates of the own lane's allied turrets destroyed before 14:00. */
+  platesLost: number | null
+  /** Mid lane only: separate visits to a side-lane corridor before 14:00, from minute snapshots. */
+  roamsBefore14: number | null
+}
+
 export interface ReviewMatch {
   meta: {
     gameId: number
@@ -107,6 +152,10 @@ export interface ReviewMatch {
   moments: ReviewMoment[]
   snapshots: ReviewSnapshot[]
   quality: ReviewQuality
+  /** Own deaths with coordinates. Missing in archives saved before the death map existed. */
+  deaths?: ReviewDeath[] | null
+  /** Missing in archives saved before the win/loss comparison existed. */
+  early?: ReviewEarlyFacts | null
 }
 
 export type ReviewParseResult = { ok: true; match: ReviewMatch } | { ok: false; reason: string }

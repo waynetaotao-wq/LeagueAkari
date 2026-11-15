@@ -6,6 +6,7 @@ import type {
   SgpParticipantLol
 } from '@shared/types/sgp/match-history'
 
+import { type ReviewCoreItemResolver, readReviewDeaths, readReviewEarlyFacts } from './match-facts'
 import type {
   ReviewEvent,
   ReviewFrame,
@@ -423,7 +424,8 @@ export function parseReviewMatch(
   summary: SgpGameSummaryLol,
   details: SgpGameDetailsLol,
   puuid: string,
-  sgpServerId: string
+  sgpServerId: string,
+  options: { coreItem?: ReviewCoreItemResolver } = {}
 ): ReviewParseResult {
   const eligible = getReviewSummaryEligibility(summary, puuid)
   if (!eligible.ok) return eligible
@@ -571,6 +573,7 @@ export function parseReviewMatch(
   if (duplicates) warnings.push('服务端包含重复时间帧，重复帧已去重。')
   if (conflictingFrames.size)
     warnings.push('同一时刻的玩家快照互相冲突，已留空，避免任选一份产生错误差值。')
+  const deaths = readReviewDeaths(events, participants, self)
   const match: ReviewMatch = {
     meta: {
       gameId: summary.json.gameId,
@@ -602,7 +605,20 @@ export function parseReviewMatch(
       validTeamSnapshots: snapshots.filter((snapshot) => snapshot.teamGoldDiff !== null).length,
       eventCoverage: eventsComplete ? 'complete' : 'partial',
       warnings
-    }
+    },
+    deaths,
+    early: readReviewEarlyFacts({
+      rawFrames: orderedRawFrames,
+      frames,
+      events,
+      deaths,
+      participants,
+      self,
+      durationMs,
+      eventsComplete,
+      snapshotToleranceMs: REVIEW_SNAPSHOT_TOLERANCE_MS,
+      coreItem: options.coreItem
+    })
   }
   match.moments = buildMoments(match)
   return { ok: true, match }

@@ -20,6 +20,8 @@
           <NRadioButton value="match">单局复盘</NRadioButton>
           <NRadioButton value="matchups">对位档案</NRadioButton>
           <NRadioButton value="conversion">领先兑现</NRadioButton>
+          <NRadioButton value="deaths">{{ t('tabs.deaths') }}</NRadioButton>
+          <NRadioButton value="gap">{{ t('tabs.gap') }}</NRadioButton>
         </NRadioGroup>
       </div></template
     >
@@ -267,6 +269,7 @@
               :key="`${selectedMatch.meta.sgpServerId}:${selectedMatch.meta.gameId}`"
               :model="selectedMatch"
               :active="show && activeTab === 'match'"
+              :focus="matchFocus"
             />
             <div v-else-if="selectableGames.length" class="recent-games">
               <div class="welcome-title">{{ t('chooseMatch') }}</div>
@@ -347,6 +350,32 @@
             <ReviewLeadAnalysis :matches="displayedMatches" @open="openMatch" />
           </div>
         </div>
+        <div v-show="activeTab === 'deaths'">
+          <div v-if="visitedTabs.has('deaths')" class="analysis-view">
+            <div class="sample-source">
+              <NRadioGroup v-model:value="sampleSource" size="small"
+                ><NRadioButton value="session">本次分析 {{ currentFiltered.length }}</NRadioButton
+                ><NRadioButton value="archive"
+                  >本机积累 {{ allFiltered.length }}</NRadioButton
+                ></NRadioGroup
+              ><span class="studio-muted">{{ sampleDescription }}</span>
+            </div>
+            <ReviewDeathMap :matches="displayedMatches" @open="openDeath" />
+          </div>
+        </div>
+        <div v-show="activeTab === 'gap'">
+          <div v-if="visitedTabs.has('gap')" class="analysis-view">
+            <div class="sample-source">
+              <NRadioGroup v-model:value="sampleSource" size="small"
+                ><NRadioButton value="session">本次分析 {{ currentFiltered.length }}</NRadioButton
+                ><NRadioButton value="archive"
+                  >本机积累 {{ allFiltered.length }}</NRadioButton
+                ></NRadioGroup
+              ><span class="studio-muted">{{ sampleDescription }}</span>
+            </div>
+            <ReviewOutcomeGap :matches="displayedMatches" @open="openMatch" />
+          </div>
+        </div>
       </div>
       <div class="studio-footer">
         <span
@@ -378,9 +407,11 @@ import {
 } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 
+import ReviewDeathMap from './ReviewDeathMap.vue'
 import ReviewLeadAnalysis from './ReviewLeadAnalysis.vue'
 import ReviewMatchView from './ReviewMatchView.vue'
 import ReviewMatchups from './ReviewMatchups.vue'
+import ReviewOutcomeGap from './ReviewOutcomeGap.vue'
 import { MAX_REVIEW_ARCHIVE_GAMES } from './archive'
 import { matchesReviewCandidate, type ReviewCandidate } from './data-loader'
 import { REVIEW_POSITION_LABELS, reviewDate } from './review-display'
@@ -389,12 +420,15 @@ import { filterReviewMatches } from './statistics'
 import type { ReviewFilter, ReviewPosition } from './types'
 import { useReviewData } from './use-review-data'
 
+type ReviewStudioTab = 'match' | 'matchups' | 'conversion' | 'deaths' | 'gap'
+
 const props = defineProps<{
   show: boolean
   puuid: string
   sgpServerId: string
   initialGameId?: number
   initialChampionId?: number
+  initialTab?: ReviewStudioTab
 }>()
 const emit = defineEmits<{ 'update:show': [show: boolean] }>()
 const resources = useAkariResourceProvider()
@@ -423,9 +457,12 @@ const {
   sgpServerId: () => props.sgpServerId,
   active: () => props.show
 })
-const activeTab = ref('match')
-const visitedTabs = ref(new Set(['match']))
+const activeTab = ref<ReviewStudioTab>(props.initialTab ?? 'match')
+const visitedTabs = ref(new Set<ReviewStudioTab>(['match', activeTab.value]))
 watch(activeTab, (tab) => visitedTabs.value.add(tab))
+/** Set when a death record asks the single-match view to open at that moment. */
+const matchFocus = ref<{ gameId: number; timestamp: number; token: number } | null>(null)
+let focusToken = 0
 const expandedControls = ref<string[]>(['history'])
 const championId = ref<number | null>(props.initialChampionId ?? null)
 const position = ref<ReviewPosition>('MIDDLE')
@@ -637,6 +674,7 @@ watch(
     patch.value = null
     sampleSource.value = 'archive'
     selectedGameId.value = props.initialGameId ?? null
+    matchFocus.value = null
     filtersTouched.value = false
     lastOperation.value = 'history'
     canceled.value = false
@@ -683,13 +721,16 @@ function broadenFilters() {
   queueId.value = null
   patch.value = null
 }
-async function openMatch(gameId: number, refresh = false) {
+async function openMatch(gameId: number, refresh = false, focusTimestamp?: number) {
+  matchFocus.value =
+    focusTimestamp === undefined ? null : { gameId, timestamp: focusTimestamp, token: ++focusToken }
   selectedGameId.value = gameId
   activeTab.value = 'match'
   canceled.value = false
   lastOperation.value = 'single'
   await loadMatch(gameId, refresh)
 }
+const openDeath = (gameId: number, timestamp: number) => openMatch(gameId, false, timestamp)
 function stopLoading() {
   canceled.value = true
   cancel()
@@ -839,6 +880,11 @@ async function resumeBatch() {
   gap: 20px;
   flex-wrap: wrap;
   padding: 6px 20px 6px 4px;
+}
+/* 页签增多后，极窄窗口里让页签组自身横向滚动，不撑出弹窗。 */
+.studio-header :deep(.n-radio-group) {
+  max-width: 100%;
+  overflow-x: auto;
 }
 .studio-views {
   min-width: 0;
