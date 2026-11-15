@@ -130,6 +130,8 @@ reviewStudio:
     zonesTitle: Where you die most
     zonesHint: Select a zone to see only its deaths. Zones are expressed as own or enemy side for the team you were on.
     clearZone: Show all zones
+    moreZones: 'Show the other zones ({{count}})'
+    fewerZones: Show fewer zones
     zoneRow: 'Deaths: {{deaths}} · {{share}} · Games: {{games}}'
     timelineTitle: Deaths over time
     timelineHint: Each bar covers 2 minutes. Highlighted bars are inside the selected time window.

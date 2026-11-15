@@ -127,6 +127,8 @@ reviewStudio:
     zonesTitle: 死亡最多的区域
     zonesHint: 点击区域只看该处的死亡。区域已按你所在阵营换算成“己方 / 敌方”。
     clearZone: 查看全部区域
+    moreZones: '展开其余 {{count}} 个区域'
+    fewerZones: 收起
     zoneRow: '{{deaths}} 次 · {{share}} · {{games}} 场'
     timelineTitle: 死亡时间分布
     timelineHint: 每格 2 分钟，高亮部分是当前所选时间段。

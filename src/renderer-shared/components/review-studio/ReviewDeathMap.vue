@@ -157,7 +157,7 @@
               :description="t('deathMap.listEmpty')"
             />
             <NButton
-              v-for="zone in summary.zones.slice(0, 8)"
+              v-for="zone in visibleZones"
               :key="zone.zone"
               block
               size="small"
@@ -179,6 +179,18 @@
                 <span class="zone-bar" :style="{ width: `${zone.share * 100}%` }" />
               </div>
             </NButton>
+            <NButton
+              v-if="summary.zones.length > ZONE_PREVIEW"
+              text
+              size="tiny"
+              class="self-start"
+              @click="showAllZones = !showAllZones"
+              >{{
+                showAllZones
+                  ? t('deathMap.fewerZones')
+                  : t('deathMap.moreZones', { count: summary.zones.length - ZONE_PREVIEW })
+              }}</NButton
+            >
           </div>
           <div class="flex flex-col gap-2">
             <NText strong>{{ t('deathMap.timelineTitle') }}</NText>
@@ -324,6 +336,7 @@ const PRESETS: Array<[number, number]> = [
   [25, RANGE_MAX]
 ]
 const PAGE_SIZE = 8
+const ZONE_PREVIEW = 6
 const HEAT_SIZE = 96
 
 const range = ref<[number, number]>([0, RANGE_MAX])
@@ -333,6 +346,7 @@ const side = ref<ReviewDeathFilter['side']>('all')
 const selectedZone = ref<ReviewDeathZone | null>(null)
 const selectedKey = ref<string | null>(null)
 const showHeat = ref(true)
+const showAllZones = ref(false)
 const page = ref(1)
 const heatCanvas = ref<HTMLCanvasElement | null>(null)
 
@@ -385,6 +399,14 @@ const markers = computed(() =>
     ]
   })
 )
+// 默认只列前几个区域；选中的区域即使排在后面也保持可见。
+const visibleZones = computed(() =>
+  showAllZones.value
+    ? summary.value.zones
+    : summary.value.zones.filter(
+        (zone, index) => index < ZONE_PREVIEW || zone.zone === selectedZone.value
+      )
+)
 const timelinePeak = computed(() => Math.max(0, ...summary.value.timeline))
 const mixedEnvironment = computed(
   () =>
@@ -424,11 +446,18 @@ function bucketTitle(index: number, count: number) {
     ? t('deathMap.bucketLast', { from, count })
     : t('deathMap.bucket', { from, to: from + REVIEW_DEATH_BUCKET_MS / 60_000, count })
 }
+/** Turns to the page holding the selected death; a selection no longer listed is dropped. */
+function showSelectedEntry() {
+  const index = selectedKey.value
+    ? listEntries.value.findIndex((entry) => entry.key === selectedKey.value)
+    : -1
+  if (index < 0) selectedKey.value = null
+  page.value = index < 0 ? 1 : Math.floor(index / PAGE_SIZE) + 1
+}
 function selectEntry(entry: ReviewDeathEntry) {
   selectedKey.value = entry.key
   if (selectedZone.value && entry.zone !== selectedZone.value) selectedZone.value = null
-  const index = listEntries.value.findIndex((value) => value.key === entry.key)
-  if (index >= 0) page.value = Math.floor(index / PAGE_SIZE) + 1
+  showSelectedEntry()
 }
 
 function drawHeat() {
@@ -452,11 +481,7 @@ function drawHeat() {
   context.putImageData(image, 0, 0)
 }
 
-watch(listEntries, () => {
-  page.value = 1
-  if (selectedKey.value && !listEntries.value.some((entry) => entry.key === selectedKey.value))
-    selectedKey.value = null
-})
+watch(listEntries, showSelectedEntry)
 watch(
   () => summary.value.zones,
   (zones) => {
