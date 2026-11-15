@@ -146,7 +146,12 @@
               默认使用有记录的单双排和该队列最近版本；可手动放宽。选择全部队列或全部版本时，结果会混合这些环境，请谨慎比较。
             </div>
             <NButton
-              v-if="availableMetadata.length && !matchingCandidates.length"
+              v-if="
+                availableMetadata.length &&
+                !matchingCandidates.length &&
+                filtersNarrowed &&
+                !showBroadenOffer
+              "
               size="small"
               secondary
               :disabled="busy"
@@ -159,6 +164,17 @@
           </div>
         </NCollapseItem>
       </NCollapse>
+      <div v-if="broadenText && showBroadenOffer" class="broaden-offer">
+        <span class="studio-muted">{{ broadenText.hint }}</span
+        ><NButton
+          size="small"
+          secondary
+          type="primary"
+          :disabled="broadenText.needsClient && !availability.ready"
+          @click="applyBroadenOffer"
+          >{{ broadenText.action }}</NButton
+        >
+      </div>
 
       <div
         v-if="busy || canceled || progress.failed"
@@ -415,7 +431,7 @@ import ReviewOutcomeGap from './ReviewOutcomeGap.vue'
 import { MAX_REVIEW_ARCHIVE_GAMES } from './archive'
 import { matchesReviewCandidate, type ReviewCandidate } from './data-loader'
 import { REVIEW_POSITION_LABELS, reviewDate } from './review-display'
-import { getReviewDefaultContext } from './review-selection'
+import { getReviewBroadenOffer, getReviewDefaultContext } from './review-selection'
 import { filterReviewMatches } from './statistics'
 import type { ReviewFilter, ReviewPosition } from './types'
 import { useReviewData } from './use-review-data'
@@ -552,6 +568,48 @@ const allFiltered = computed(() =>
 )
 const displayedMatches = computed(() =>
   sampleSource.value === 'archive' ? allFiltered.value : currentFiltered.value
+)
+/** 跨局页签上的「一键放宽」：默认的队列 / 版本筛选挡住了同英雄同位置的其它对局时才出现。 */
+const broadenOffer = computed(() =>
+  getReviewBroadenOffer(filter.value, candidates.value, [
+    ...matches.value,
+    ...archivedMatches.value
+  ])
+)
+const broadenText = computed(() => {
+  const offer = broadenOffer.value
+  if (!offer) return null
+  const scope = [
+    opponentChampionId.value
+      ? t('broadenOffer.versus', { opponent: resources.champions.name(opponentChampionId.value) })
+      : '',
+    queueId.value ? resources.queues.name(queueId.value) : '',
+    patch.value === null ? '' : patch.value || t('broadenOffer.unknownPatch')
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const values = { scope, current: offer.current, total: offer.total }
+  return offer.mode === 'analyze'
+    ? {
+        hint: t('broadenOffer.analyzeHint', values),
+        action: t('broadenOffer.analyze', { count: Math.min(offer.total, offer.limit) }),
+        needsClient: true
+      }
+    : {
+        hint: t('broadenOffer.showHint', values),
+        action: t('broadenOffer.show'),
+        needsClient: false
+      }
+})
+const showBroadenOffer = computed(
+  () =>
+    broadenOffer.value !== null &&
+    !busy.value &&
+    (activeTab.value === 'deaths' || activeTab.value === 'gap')
+)
+/** 筛选面板里原有的放宽按钮：没有任何限制时点了也没用，一键放宽已显示时不重复出现。 */
+const filtersNarrowed = computed(
+  () => opponentChampionId.value !== null || queueId.value !== null || patch.value !== null
 )
 const selectableGames = computed(() => {
   const records = new Map(availableMetadata.value.map((meta) => [meta.gameId, meta]))
@@ -721,6 +779,18 @@ function broadenFilters() {
   queueId.value = null
   patch.value = null
 }
+/** 放宽后还有没分析过的历史就直接分析；只是被筛选挡住的本机档案则立即显示。 */
+async function applyBroadenOffer() {
+  const offer = broadenOffer.value
+  if (!offer || busy.value) return
+  broadenFilters()
+  if (offer.mode === 'show') {
+    sampleSource.value = 'archive'
+    return
+  }
+  limit.value = offer.limit
+  await analyzeHistory()
+}
 async function openMatch(gameId: number, refresh = false, focusTimestamp?: number) {
   matchFocus.value =
     focusTimestamp === undefined ? null : { gameId, timestamp: focusTimestamp, token: ++focusToken }
@@ -808,6 +878,17 @@ async function resumeBatch() {
 .filter-field > span {
   font-size: 11px;
   opacity: 0.65;
+}
+.broaden-offer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: rgb(var(--la-card-tint-rgb) / 0.04);
+  border: 1px solid rgb(var(--la-card-border-rgb) / 0.1);
+  border-radius: 6px;
 }
 .load-progress {
   display: flex;

@@ -10,6 +10,9 @@ import { NButton, NTag } from 'naive-ui'
 import { getCurrentInstance, onBeforeUnmount, ref } from 'vue'
 
 import ReviewStudioModal from './ReviewStudioModal.vue'
+import { parseReviewMatch } from './analysis'
+import { writeReviewArchive } from './archive'
+import { isReviewCoreItem } from './match-facts'
 import {
   addReviewEvent,
   createReviewFixture,
@@ -68,8 +71,10 @@ const STORY_ITEMS = Object.fromEntries(
  * Thirty synthetic games with deaths, purchases, wards and plates, so the cross-game views have
  * something to show. Lost games die earlier and more often around the bottom river and finish
  * their first item later — an invented pattern for checking the interface, not real play.
+ * With `mixed`, a third of the games are flex queue and the oldest twelve are one patch older, so the
+ * default solo-queue / latest-patch filter leaves most of them out.
  */
-function patternFixtures() {
+function patternFixtures(mixed = false) {
   let seed = 20261114
   const random = () => {
     seed = (seed * 1664525 + 1013904223) >>> 0
@@ -85,7 +90,8 @@ function patternFixtures() {
     const fixture = createReviewFixture({ gameId: 70_000 + index, win, duration: 1680 })
     const { summary, details } = fixture
     summary.json.gameCreation = Date.UTC(2026, 10, 12, 20) - index * 5_400_000
-    summary.json.gameVersion = '16.22.1'
+    summary.json.gameVersion = mixed && index >= 18 ? '16.21.1' : '16.22.1'
+    if (mixed && index % 3 === 1) summary.json.queueId = 440
     const championIds = [238, 122, 64, 51, 412, [103, 61, 7, 245][index % 4], 114, 59, 222, 117]
     summary.json.participants.forEach((participant, i) => {
       participant.championId = championIds[i]
@@ -162,7 +168,9 @@ const meta = {
           ? []
           : context.name === 'Death Map' || context.name === 'Outcome Gap'
             ? patternFixtures()
-            : fixtures(context.name === 'Missing Data')
+            : context.name === 'Broaden Offer' || context.name === 'Broaden Stored'
+              ? patternFixtures(true)
+              : fixtures(context.name === 'Missing Data')
       const appContext = getCurrentInstance()!.appContext
       const previousManager = appContext.config.globalProperties.$akariManager
       const storage = new Map<string, unknown>()
@@ -214,6 +222,30 @@ const meta = {
         }
       }
       lcs.summoner.me = { puuid: 'preview-owner' } as SummonerInfo
+      // "Broaden Stored" opens with every game already kept on this device and no history read yet.
+      const ready = ref(context.name !== 'Broaden Stored')
+      if (!ready.value)
+        void writeReviewArchive(
+          storedSettings,
+          {
+            ownerPuuid: 'preview-owner',
+            ownerServerId: 'REVIEW_STORY',
+            targetPuuid: 'player-8',
+            targetServerId: 'REVIEW_STORY'
+          },
+          games.flatMap((game) => {
+            const parsed = parseReviewMatch(
+              game.summary,
+              game.details,
+              'player-8',
+              'REVIEW_STORY',
+              {
+                coreItem: (itemId) => isReviewCoreItem(STORY_ITEMS[itemId])
+              }
+            )
+            return parsed.ok ? [parsed.match] : []
+          })
+        ).then(() => (ready.value = true))
       onBeforeUnmount(() => {
         appContext.config.globalProperties.$akariManager = previousManager
         sgpStore.availability.sgpServerId = previousState.sgpServerId
@@ -223,9 +255,9 @@ const meta = {
         lcs.gameData.items = previousState.items
       })
       const show = ref(true)
-      return { args, show }
+      return { args, show, ready }
     },
-    template: `<div class="flex items-center gap-3 p-4"><NTag type="warning">演示数据 · 仅验证界面交互</NTag><NButton @click="show = true">打开复盘台</NButton><ReviewStudioModal v-bind="args" v-model:show="show" /></div>`
+    template: `<div class="flex items-center gap-3 p-4"><NTag type="warning">演示数据 · 仅验证界面交互</NTag><NButton @click="show = true">打开复盘台</NButton><ReviewStudioModal v-if="ready" v-bind="args" v-model:show="show" /></div>`
   })
 } satisfies Meta<typeof ReviewStudioModal>
 
@@ -238,3 +270,5 @@ export const EmptyHistory: Story = { args: { initialGameId: undefined } }
 export const Disconnected: Story = { args: { initialGameId: undefined } }
 export const DeathMap: Story = { args: { initialGameId: undefined, initialTab: 'deaths' } }
 export const OutcomeGap: Story = { args: { initialGameId: undefined, initialTab: 'gap' } }
+export const BroadenOffer: Story = { args: { initialGameId: undefined, initialTab: 'gap' } }
+export const BroadenStored: Story = { args: { initialGameId: undefined, initialTab: 'deaths' } }

@@ -86,6 +86,14 @@ reviewStudio:
   tabs:
     deaths: Death map
     gap: Wins vs losses
+  broadenOffer:
+    analyzeHint: 'Games matching the current filters ({{scope}}): {{current}}. Without those filters: {{total}}.'
+    showHint: 'Saved games matching the current filters ({{scope}}): {{current}}. Without those filters: {{total}}.'
+    analyze_one: Widen filters and analyze the latest game
+    analyze_other: 'Widen filters and analyze the latest {{count}} games'
+    show: Widen filters
+    versus: 'vs {{opponent}}'
+    unknownPatch: Unknown patch
   deathMap:
     title: Death map
     hint: Every death in the selected games, drawn on the map to show where and when trouble repeats. Coordinates come from the kill records themselves.

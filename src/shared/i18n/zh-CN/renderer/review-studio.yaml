@@ -83,6 +83,13 @@ reviewStudio:
   tabs:
     deaths: 死亡地图
     gap: 胜负差异
+  broadenOffer:
+    analyzeHint: '当前筛选（{{scope}}）只有 {{current}} 场，放宽后共 {{total}} 场。'
+    showHint: '当前筛选（{{scope}}）下本机已有 {{current}} 场，放宽后共 {{total}} 场。'
+    analyze: '放宽并分析最近 {{count}} 场'
+    show: 放宽筛选
+    versus: '对 {{opponent}}'
+    unknownPatch: 版本未知
   deathMap:
     title: 死亡地图
     hint: 把所选对局里的每一次死亡画到地图上，看清反复出事的时间和地点。坐标取自击杀记录本身。
