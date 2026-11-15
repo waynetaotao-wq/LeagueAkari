@@ -881,10 +881,18 @@ async function resumeBatch() {
   flex-wrap: wrap;
   padding: 6px 20px 6px 4px;
 }
-/* 页签增多后，极窄窗口里让页签组自身横向滚动，不撑出弹窗。 */
+/*
+ * 页签增多后，极窄窗口里让页签组自身横向滚动，不撑出弹窗。
+ * 按钮的描边和文字行框会比页签组高出 1px：只开横向滚动会连带出现一截竖向滚动条，
+ * 所以纵向固定不滚动，并用 1px 内边距（外边距抵消）容纳描边，避免被裁掉。
+ */
 .studio-header :deep(.n-radio-group) {
   max-width: 100%;
+  margin: -1px;
+  padding: 1px;
   overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 .studio-views {
   min-width: 0;
