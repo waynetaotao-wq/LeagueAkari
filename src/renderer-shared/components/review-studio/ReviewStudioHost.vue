@@ -16,6 +16,10 @@ import { useLeagueClientStore } from '@renderer-shared/shards/league-client/stor
 import { defineAsyncComponent, ref, shallowRef, watch } from 'vue'
 
 import { parseReviewStudioLink, type ReviewStudioTarget } from './link'
+import { useReviewAutoArchive } from './use-review-auto-archive'
+
+// [lolps] 主窗口常驻：每局结束后自动把本人的对局存进复盘档案。
+useReviewAutoArchive()
 
 const ReviewStudioModal = defineAsyncComponent(() => import('./ReviewStudioModal.vue'))
 const appCommon = useInstance(AppCommonRenderer)

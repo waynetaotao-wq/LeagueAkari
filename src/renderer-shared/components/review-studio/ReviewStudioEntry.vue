@@ -17,7 +17,7 @@
       <NTag size="small" :bordered="false">赛后训练</NTag>
     </div>
     <div class="mt-2 text-xs leading-relaxed opacity-65">
-      关键片段 · 对位档案 · 领先兑现 · 死亡地图 · 胜负差异
+      关键片段 · 对位档案 · 领先兑现 · 死亡地图 · 胜负差异{{ isSelf ? ' · 上分日志' : '' }}
     </div>
     <NButton
       class="mt-3"
@@ -35,7 +35,9 @@
 </template>
 
 <script setup lang="ts">
+import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import { NButton, NCard, NTag } from 'naive-ui'
+import { computed } from 'vue'
 
 import { useOpenReviewStudio } from './use-open-review-studio'
 
@@ -47,6 +49,9 @@ const props = defineProps<{
   compact?: boolean
 }>()
 const { open, opening, error } = useOpenReviewStudio()
+/** 上分日志只对登录账号本人出现。 */
+const leagueClient = useLeagueClientStore()
+const isSelf = computed(() => !!props.puuid && props.puuid === leagueClient.summoner.me?.puuid)
 const openTarget = () =>
   open({
     puuid: props.puuid,

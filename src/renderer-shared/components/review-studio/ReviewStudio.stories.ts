@@ -1,8 +1,11 @@
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
+import { RankLogRenderer } from '@renderer-shared/shards/rank-log'
+import { useRankLogStore } from '@renderer-shared/shards/rank-log/store'
 import { SettingUtilsRenderer } from '@renderer-shared/shards/setting-utils'
 import { SgpRenderer } from '@renderer-shared/shards/sgp'
 import { useSgpStore } from '@renderer-shared/shards/sgp/store'
 import type { AkariManager } from '@shared/akari-shard'
+import { type RankLogEntryDto, fromAbsoluteLp } from '@shared/shards/rank-log'
 import type { Item } from '@shared/types/league-client/game-data'
 import type { SummonerInfo } from '@shared/types/league-client/summoner'
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
@@ -254,6 +257,139 @@ function withReportData(fixture: ReturnType<typeof createReviewFixture>) {
   return fixture
 }
 
+/**
+ * An invented rank log: games backfilled without points, a starting point, two weeks of play with a
+ * remake, a dodge penalty, a gap and a change whose game is still unknown, plus a few flex games.
+ * With `lossStreak` the last three games are losses that ended within the hour.
+ */
+function rankLogEntries(lossStreak: boolean): RankLogEntryDto[] {
+  let seed = 20261123
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0
+    return seed / 2 ** 32
+  }
+  const HOUR = 3_600_000
+  const champions = [238, 103, 61, 7, 245, 84]
+  const entries: RankLogEntryDto[] = []
+  let id = 1
+  const add = (values: Partial<RankLogEntryDto> & Pick<RankLogEntryDto, 'kind' | 'occurredAt'>) =>
+    entries.push({
+      id: id++,
+      queueType: 'RANKED_SOLO_5x5',
+      observedAt: null,
+      gameId: null,
+      gameCreation: null,
+      gameDuration: null,
+      championId: null,
+      position: null,
+      win: null,
+      remake: null,
+      kills: null,
+      deaths: null,
+      assists: null,
+      cs: null,
+      games: null,
+      lpDelta: null,
+      tier: null,
+      division: null,
+      leaguePoints: null,
+      absoluteLp: null,
+      provisional: null,
+      wins: null,
+      losses: null,
+      ...values
+    })
+  const facts = (endedAt: number, win: boolean) => {
+    const duration = Math.round(1300 + random() * 900)
+    return {
+      occurredAt: endedAt,
+      gameId: 80_000 + id,
+      gameCreation: endedAt - duration * 1000 - 5 * 60_000,
+      gameDuration: duration,
+      championId: champions[Math.floor(random() * champions.length)],
+      position: 'MIDDLE',
+      win,
+      remake: false,
+      kills: Math.round(2 + random() * (win ? 10 : 6)),
+      deaths: Math.round(1 + random() * (win ? 5 : 8)),
+      assists: Math.round(2 + random() * 10),
+      cs: Math.round((duration / 60) * (6.2 + random() * 2))
+    }
+  }
+  let absoluteLp = 1362
+  let wins = 31
+  let losses = 29
+  const reading = (observedAt: number) => ({
+    observedAt,
+    ...fromAbsoluteLp(absoluteLp),
+    absoluteLp,
+    provisional: false,
+    wins,
+    losses
+  })
+  const start = Date.now() - 13 * 24 * HOUR
+  // 装上功能之前的对局：只有胜负。
+  for (let index = 0; index < 4; index++)
+    add({ kind: 'game', ...facts(start - (index + 1) * 5 * HOUR, index % 2 === 0) })
+  add({ kind: 'baseline', occurredAt: start, ...reading(start) })
+
+  let clock = start + 3 * HOUR
+  const play = (win: boolean) => {
+    clock += 40 * 60_000
+    const lpDelta = win ? Math.round(20 + random() * 4) : -Math.round(17 + random() * 4)
+    absoluteLp += lpDelta
+    if (win) wins++
+    else losses++
+    add({ kind: 'game', ...facts(clock, win), lpDelta, ...reading(clock + 8000) })
+  }
+  for (let day = 0; day < 12; day++) {
+    clock = start + day * 24 * HOUR + (18 + random() * 2) * HOUR
+    const games = 2 + Math.floor(random() * 4)
+    for (let index = 0; index < games; index++) {
+      // 连着打到后面胜率走低，让「状态分析」有内容可看。
+      play(random() < (index < 2 ? 0.62 : 0.4))
+    }
+    if (day === 3) {
+      clock += 6 * 60_000
+      add({ kind: 'game', ...facts(clock, false), remake: true, gameDuration: 210 })
+    }
+    if (day === 5) {
+      clock += 10 * 60_000
+      absoluteLp -= 5
+      add({ kind: 'adjustment', occurredAt: clock, lpDelta: -5, ...reading(clock) })
+    }
+    if (day === 7) {
+      clock += (30 * HOUR) / 10
+      for (let index = 0; index < 2; index++)
+        add({ kind: 'game', ...facts(clock - index * 45 * 60_000, index === 0) })
+      absoluteLp += 3
+      wins++
+      losses++
+      add({ kind: 'gap', occurredAt: clock + HOUR, games: 2, lpDelta: 3, ...reading(clock + HOUR) })
+    }
+    if (day === 9) {
+      clock += 50 * 60_000
+      absoluteLp += 21
+      wins++
+      add({ kind: 'game', occurredAt: clock, win: true, lpDelta: 21, ...reading(clock) })
+    }
+  }
+  if (lossStreak) {
+    clock = Date.now() - 115 * 60_000
+    play(true)
+    play(false)
+    play(false)
+    play(false)
+  }
+  for (let index = 0; index < 3; index++)
+    add({
+      kind: 'game',
+      queueType: 'RANKED_FLEX_SR',
+      ...facts(start + (index * 3 + 1) * 24 * HOUR, index !== 1)
+    })
+  return entries.sort((a, b) => b.occurredAt - a.occurredAt || b.id - a.id)
+}
+
 const meta = {
   title: 'Renderer Shared/Review Studio',
   component: ReviewStudioModal,
@@ -298,10 +434,29 @@ const meta = {
           return { data: games.find((game) => game.summary.json.gameId === id)!.details }
         }
       }
+      // The rank log stories look at the logged-in player's own log, served from memory.
+      const isRankStory = context.name.startsWith('Rank Log')
+      const rankStore = useRankLogStore()
+      const rankEntries =
+        context.name === 'Rank Log Empty' ? [] : rankLogEntries(context.name.includes('Streak'))
+      const rankLog = {
+        queryEntries: async () => {
+          await wait()
+          return rankEntries
+        },
+        syncNow: async () => {
+          await wait()
+          return { result: 'ok', historyLoaded: true }
+        },
+        setEnabled: async (enabled: boolean) => {
+          rankStore.settings.enabled = enabled
+        }
+      }
       appContext.config.globalProperties.$akariManager = {
         getInstance: (constructor: unknown) => {
           if (constructor === SettingUtilsRenderer) return storedSettings
           if (constructor === SgpRenderer) return { api: { matchHistoryQuery: query } }
+          if (constructor === RankLogRenderer) return rankLog
           throw new Error('Unexpected shard requested by review preview')
         }
       } as AkariManager
@@ -312,8 +467,12 @@ const meta = {
         tokenReady: sgpStore.isTokenReady,
         leagueServers: sgpStore.leagueServers,
         summoner: lcs.summoner.me,
-        items: lcs.gameData.items
+        items: lcs.gameData.items,
+        rankAvailable: rankStore.state.available,
+        rankEnabled: rankStore.settings.enabled
       }
+      rankStore.state.available = true
+      rankStore.settings.enabled = true
       lcs.gameData.items = STORY_ITEMS
       sgpStore.availability.sgpServerId = 'REVIEW_STORY'
       sgpStore.isTokenReady = context.name !== 'Disconnected'
@@ -324,7 +483,7 @@ const meta = {
           REVIEW_STORY: { matchHistory: 'https://example.test', common: '', isTencent: true }
         }
       }
-      lcs.summoner.me = { puuid: 'preview-owner' } as SummonerInfo
+      lcs.summoner.me = { puuid: isRankStory ? 'player-8' : 'preview-owner' } as SummonerInfo
       // "Broaden Stored" opens with every game already kept on this device and no history read yet.
       const ready = ref(context.name !== 'Broaden Stored')
       if (!ready.value)
@@ -356,6 +515,8 @@ const meta = {
         sgpStore.leagueServers = previousState.leagueServers
         lcs.summoner.me = previousState.summoner
         lcs.gameData.items = previousState.items
+        rankStore.state.available = previousState.rankAvailable
+        rankStore.settings.enabled = previousState.rankEnabled
       })
       const show = ref(true)
       return { args, show, ready }
@@ -377,3 +538,7 @@ export const OutcomeGap: Story = { args: { initialGameId: undefined, initialTab:
 export const FullReport: Story = { args: { initialGameId: 70_000 } }
 export const BroadenOffer: Story = { args: { initialGameId: undefined, initialTab: 'gap' } }
 export const BroadenStored: Story = { args: { initialGameId: undefined, initialTab: 'deaths' } }
+export const RankLog: Story = { args: { initialGameId: undefined, initialTab: 'rank' } }
+/** The last three games of the running session were lost: the break reminder is showing. */
+export const RankLogLossStreak: Story = { args: { initialGameId: undefined, initialTab: 'rank' } }
+export const RankLogEmpty: Story = { args: { initialGameId: undefined, initialTab: 'rank' } }

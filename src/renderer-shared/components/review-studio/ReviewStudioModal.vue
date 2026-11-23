@@ -22,21 +22,22 @@
           <NRadioButton value="conversion">领先兑现</NRadioButton>
           <NRadioButton value="deaths">{{ t('tabs.deaths') }}</NRadioButton>
           <NRadioButton value="gap">{{ t('tabs.gap') }}</NRadioButton>
+          <NRadioButton v-if="isSelf" value="rank">{{ t('tabs.rank') }}</NRadioButton>
         </NRadioGroup>
       </div></template
     >
     <div class="studio-content">
-      <NAlert v-if="!availability.ready" type="info" :show-icon="false"
+      <NAlert v-if="!availability.ready && activeTab !== 'rank'" type="info" :show-icon="false"
         >{{ availability.reason }}。已保存在本机的档案仍可查看。</NAlert
       >
-      <div v-if="activeTab !== 'match'" class="studio-context">
+      <div v-if="isAnalysisTab" class="studio-context">
         <div class="flex min-w-0 flex-wrap items-center gap-2">
           <NTag size="small" :bordered="false">SGP 战绩与时间线</NTag
           ><span class="studio-muted">{{ contextTitle }}</span>
         </div>
         <span class="studio-muted">本机已积累 {{ archivedMatches.length }} 场</span>
       </div>
-      <NCollapse v-if="activeTab !== 'match'" v-model:expanded-names="expandedControls">
+      <NCollapse v-if="isAnalysisTab" v-model:expanded-names="expandedControls">
         <NCollapseItem
           name="history"
           :title="`${t('filters')}${candidates.length ? ` · ${matchingCandidates.length} 场候选` : ''}`"
@@ -177,7 +178,7 @@
       </div>
 
       <div
-        v-if="busy || canceled || progress.failed"
+        v-if="activeTab !== 'rank' && (busy || canceled || progress.failed)"
         class="load-progress"
         role="status"
         aria-live="polite"
@@ -205,7 +206,7 @@
           本次仅覆盖已读取或所选数量的对局，不是该玩家的全部历史。
         </div>
       </div>
-      <NAlert v-if="error" type="warning" :show-icon="false"
+      <NAlert v-if="error && activeTab !== 'rank'" type="warning" :show-icon="false"
         ><div class="error-content">
           <span>{{ error }}</span
           ><NButton
@@ -225,7 +226,7 @@
           >
         </div></NAlert
       >
-      <NCollapse v-if="failures.length"
+      <NCollapse v-if="failures.length && activeTab !== 'rank'"
         ><NCollapseItem :title="`${failures.length} 场未能分析 · 已从统计排除`" name="failures"
           ><div class="failure-list">
             <div v-for="failure in failures" :key="failure.gameId" class="studio-muted">
@@ -241,7 +242,7 @@
           </div></NCollapseItem
         ></NCollapse
       >
-      <NAlert v-if="archiveError" type="warning" :show-icon="false"
+      <NAlert v-if="archiveError && activeTab !== 'rank'" type="warning" :show-icon="false"
         ><div class="error-content">
           <span>{{ archiveError }}</span
           ><NButton size="tiny" secondary @click="retryArchive">重试档案</NButton>
@@ -392,8 +393,17 @@
             <ReviewOutcomeGap :matches="displayedMatches" @open="openMatch" />
           </div>
         </div>
+        <div v-show="activeTab === 'rank'">
+          <ReviewRankLog
+            v-if="isSelf && visitedTabs.has('rank')"
+            :puuid="puuid"
+            :sgp-server-id="sgpServerId"
+            :active="show && activeTab === 'rank'"
+            @open="openMatch"
+          />
+        </div>
       </div>
-      <div class="studio-footer">
+      <div v-if="activeTab !== 'rank'" class="studio-footer">
         <span
           >位置来自时间线快照，无法还原完整走位和技能操作。关键片段用于提示复盘，不自动判责。</span
         ><span>{{ archiveStatusText }}</span>
@@ -405,6 +415,7 @@
 <script setup lang="ts">
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
+import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import { useTranslation } from 'i18next-vue'
 import {
   NAlert,
@@ -428,6 +439,7 @@ import ReviewLeadAnalysis from './ReviewLeadAnalysis.vue'
 import ReviewMatchView from './ReviewMatchView.vue'
 import ReviewMatchups from './ReviewMatchups.vue'
 import ReviewOutcomeGap from './ReviewOutcomeGap.vue'
+import ReviewRankLog from './ReviewRankLog.vue'
 import { MAX_REVIEW_ARCHIVE_GAMES } from './archive'
 import { matchesReviewCandidate, type ReviewCandidate } from './data-loader'
 import { REVIEW_POSITION_LABELS, reviewDate } from './review-display'
@@ -436,7 +448,7 @@ import { filterReviewMatches } from './statistics'
 import type { ReviewFilter, ReviewPosition } from './types'
 import { useReviewData } from './use-review-data'
 
-type ReviewStudioTab = 'match' | 'matchups' | 'conversion' | 'deaths' | 'gap'
+type ReviewStudioTab = 'match' | 'matchups' | 'conversion' | 'deaths' | 'gap' | 'rank'
 
 const props = defineProps<{
   show: boolean
@@ -476,6 +488,14 @@ const {
 const activeTab = ref<ReviewStudioTab>(props.initialTab ?? 'match')
 const visitedTabs = ref(new Set<ReviewStudioTab>(['match', activeTab.value]))
 watch(activeTab, (tab) => visitedTabs.value.add(tab))
+/** 跨局分析的四个页签共用上方的筛选和读取进度；单局复盘和上分日志不用。 */
+const isAnalysisTab = computed(() => activeTab.value !== 'match' && activeTab.value !== 'rank')
+/** 上分日志只记录登录账号本人，查看别人时不出现。 */
+const leagueClient = useLeagueClientStore()
+const isSelf = computed(() => !!props.puuid && props.puuid === leagueClient.summoner.me?.puuid)
+watch(isSelf, (self) => {
+  if (!self && activeTab.value === 'rank') activeTab.value = 'match'
+})
 /** Set when a death record asks the single-match view to open at that moment. */
 const matchFocus = ref<{ gameId: number; timestamp: number; token: number } | null>(null)
 let focusToken = 0

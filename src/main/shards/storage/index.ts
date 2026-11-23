@@ -14,8 +14,10 @@ import {
 import { StorageDatabaseLifecycle } from './database-lifecycle'
 import { EncounteredGame } from './entities/EncounteredGame'
 import { Metadata } from './entities/Metadata'
+import { RankLogEntry } from './entities/RankLogEntry'
 import { SavedPlayer } from './entities/SavedPlayers'
 import { Setting } from './entities/Settings'
+import { StorageLolpsSchemaLifecycle } from './lolps-schema-lifecycle'
 import { StorageState } from './state'
 
 /**
@@ -33,11 +35,18 @@ export class StorageMain implements IAkariShardInitDispose {
   private readonly _dataSource: DataSource
   private readonly _context: StorageMainContext
   private readonly _databaseLifecycle: StorageDatabaseLifecycle
+  private readonly _lolpsSchemaLifecycle: StorageLolpsSchemaLifecycle
+  private _isLolpsSchemaReady = false
 
   public readonly state = new StorageState()
 
   get dataSource() {
     return this._dataSource
+  }
+
+  /** [lolps] 定制版自己的表（上分日志等）是否已建好可用 */
+  get isLolpsSchemaReady() {
+    return this._isLolpsSchemaReady
   }
 
   constructor(
@@ -50,7 +59,7 @@ export class StorageMain implements IAkariShardInitDispose {
       type: 'better-sqlite3',
       database: join(app.getPath('userData'), StorageMain.LEAGUE_AKARI_DB_FILENAME),
       synchronize: false,
-      entities: [Metadata, SavedPlayer, Setting, EncounteredGame]
+      entities: [Metadata, SavedPlayer, Setting, EncounteredGame, RankLogEntry]
     })
 
     this._context = {
@@ -60,11 +69,13 @@ export class StorageMain implements IAkariShardInitDispose {
       state: this.state
     }
     this._databaseLifecycle = new StorageDatabaseLifecycle(this._context)
+    this._lolpsSchemaLifecycle = new StorageLolpsSchemaLifecycle(this._context)
   }
 
   async onInit() {
     this._mobxUtils.propSync(StorageMain.id, 'state', this.state, ['usingHigherVersionDb'])
     await this._databaseLifecycle.initialize(this._dataSource)
+    this._isLolpsSchemaReady = await this._lolpsSchemaLifecycle.initialize(this._dataSource)
   }
 
   async onDispose() {

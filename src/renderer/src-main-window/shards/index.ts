@@ -24,6 +24,7 @@ import { MatchRatingRenderer } from '@renderer-shared/shards/match-rating'
 import { NetworkRenderer } from '@renderer-shared/shards/network'
 import { OngoingGameRenderer } from '@renderer-shared/shards/ongoing-game'
 import { PiniaMobxUtilsRenderer } from '@renderer-shared/shards/pinia-mobx-utils'
+import { RankLogRenderer } from '@renderer-shared/shards/rank-log'
 import { RendererDebugRenderer } from '@renderer-shared/shards/renderer-debug'
 import { RespawnTimerRenderer } from '@renderer-shared/shards/respawn-timer'
 import { RiotClientRenderer } from '@renderer-shared/shards/riot-client'
@@ -73,6 +74,7 @@ manager.use(RendererDebugRenderer)
 manager.use(RespawnTimerRenderer)
 manager.use(GameRefocusRenderer)
 manager.use(MatchRatingRenderer)
+manager.use(RankLogRenderer)
 manager.use(RiotClientRenderer)
 manager.use(SavedPlayerRenderer)
 manager.use(SelfHostedLcuDataRenderer)

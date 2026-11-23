@@ -83,6 +83,7 @@ reviewStudio:
   tabs:
     deaths: 死亡地图
     gap: 胜负差异
+    rank: 上分日志
   fullReport: 完整数据
   report:
     hint: 战绩和时间线里记录的全部事实，按类别整理。点时间可以跳到地图上的对应时刻。
@@ -472,3 +473,79 @@ reviewStudio:
       firstCoreItemAt:
         name: 第一件成装完成时间
         hint: 第一次买下由散件合成、总价不低于 2200 金币的装备的时间，不含鞋子。
+  rankLog:
+    hint: 每打完一局排位，自动记下结果和这一局的胜点变化。记录只保存在这台电脑上。
+    autoRecord: 自动记录
+    sync: 立即同步
+    unavailable: 本机的数据表没能建立，上分日志暂时用不了。请重启程序再试。
+    disabled: 自动记录已关闭，新的对局不会被记下。
+    empty: 还没有记录。保持程序开着打一局排位，结束后几秒内就会出现在这里。
+    emptyQueue: 这个队列还没有记录。
+    result:
+      ok: 已同步。
+      noHistory: 段位已读取；这次没读到战绩，对局详情稍后会自动补上。
+      notConnected: 需要先连接客户端才能同步。
+      rankUnreadable: 这次没读到段位，请稍后再试。
+      disabled: 自动记录已关闭，请先打开。
+      unavailable: 上分日志暂时用不了。
+    unranked: 未定级
+    provisional: 定位赛中
+    rank: '{{tier}} {{division}} · {{lp}} 胜点'
+    apexRank: '{{tier}} · {{lp}} 胜点'
+    record: '{{wins}} 胜 {{losses}} 负'
+    cards:
+      net: 记录以来净胜点
+      since: '自 {{date}} 起'
+      recent: '近 {{count}} 场'
+      streak: 当前走势
+      winStreak: '{{count}} 连胜'
+      lossStreak: '{{count}} 连败'
+      average: 平均每局胜点
+      averageWin: '赢 {{value}}'
+      averageLoss: '输 {{value}}'
+      winRate: '胜率 {{rate}}%'
+      fewGames: 场次太少，暂不算胜率
+      none: 暂无
+      today: '今天 {{record}}，{{net}} 胜点'
+      todayNoLp: '今天 {{record}}'
+      todayNone: 今天还没打这个队列
+    alert:
+      lossStreak: '这一段已经连败 {{count}} 场。'
+      worse: '你在连败 {{threshold}} 场后接着打的胜率是 {{after}}%（{{afterGames}} 场），低于其余对局的 {{other}}%（{{otherGames}} 场），建议先休息一下再打。'
+      notWorse: '你在连败 {{threshold}} 场后接着打的胜率是 {{after}}%（{{afterGames}} 场），其余对局是 {{other}}%（{{otherGames}} 场），记录里看不出连败后打得更差。'
+      unknown: '连败后接着打的对局还不到 {{min}} 场，暂时看不出你自己的规律；觉得上头的话先休息一下。'
+    chart:
+      title: 胜点曲线
+      hint: 每个点是一次段位读数，点一下对局可以打开这一局的复盘。
+      empty: 至少要有两次段位读数才能画出曲线。
+      win: 胜
+      loss: 负
+      other: 其他变动
+    form:
+      title: 状态分析
+      hint: '「连着打」指中间休息不超过 {{minutes}} 分钟。少于 {{min}} 场的只列场次，不算胜率。'
+      index: '连着打的第 {{index}} 局'
+      indexRest: '连着打的第 {{index}} 局及以后'
+      afterLossStreak: '连败 {{threshold}} 场后接着打'
+      otherGames: 其余对局
+      games: '{{count}} 场'
+    days:
+      title: 每天
+      hint: '一天从凌晨 {{hour}} 点算起，后半夜的对局仍算前一天。'
+      day: 日期
+      games: 对局
+      net: 净胜点
+    table:
+      title: 对局记录
+      win: 胜
+      loss: 负
+      remake: 重开
+      noLp: 未记录胜点
+      more: 显示更多
+      unidentified: 尚未认出是哪一局
+      gap: '期间有 {{count}} 局没能逐局读到'
+      adjustment: 非对局变动（秒退扣分、长期不打的衰减等）
+      baseline: 开始记录
+      review: 复盘
+      cs: '{{count}} 刀'
+    note: 胜点只能在对局结束的当时读出来。装上这个功能之前的对局，以及程序没开时连着打的几局，只有胜负，没有逐局胜点。

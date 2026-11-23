@@ -86,6 +86,7 @@ reviewStudio:
   tabs:
     deaths: Death map
     gap: Wins vs losses
+    rank: Rank log
   fullReport: Full data
   report:
     hint: Every fact the match summary and the timeline record, grouped by topic. Select a time to jump to that moment on the map.
@@ -477,3 +478,85 @@ reviewStudio:
       firstCoreItemAt:
         name: First completed item
         hint: Time of the first purchase of an item built from components that costs at least 2,200 gold in total; boots are excluded.
+  rankLog:
+    hint: After every ranked game the result and its LP change are recorded automatically. The log stays on this computer.
+    autoRecord: Record automatically
+    sync: Sync now
+    unavailable: The local table could not be created, so the rank log is unavailable. Restart the app and try again.
+    disabled: Automatic recording is off. New games will not be recorded.
+    empty: Nothing recorded yet. Keep the app open while you play a ranked game; it appears here a few seconds after the game ends.
+    emptyQueue: Nothing recorded for this queue yet.
+    result:
+      ok: Synced.
+      noHistory: Rank was read, but match history was not available this time. Game details will be filled in later.
+      notConnected: Connect to the client before syncing.
+      rankUnreadable: The rank could not be read this time. Try again later.
+      disabled: Automatic recording is off. Turn it on first.
+      unavailable: The rank log is unavailable.
+    unranked: Unranked
+    provisional: In placements
+    rank: '{{tier}} {{division}} · {{lp}} LP'
+    apexRank: '{{tier}} · {{lp}} LP'
+    record: '{{wins}}W {{losses}}L'
+    cards:
+      net: Net LP since recording began
+      since: 'Since {{date}}'
+      recent_one: Last game
+      recent_other: 'Last {{count}} games'
+      streak: Current streak
+      winStreak_one: '{{count}} win'
+      winStreak_other: '{{count}} wins in a row'
+      lossStreak_one: '{{count}} loss'
+      lossStreak_other: '{{count}} losses in a row'
+      average: Average LP per game
+      averageWin: 'Win {{value}}'
+      averageLoss: 'Loss {{value}}'
+      winRate: '{{rate}}% win rate'
+      fewGames: Too few games for a win rate
+      none: None yet
+      today: 'Today {{record}}, {{net}} LP'
+      todayNoLp: 'Today {{record}}'
+      todayNone: No games in this queue today
+    alert:
+      lossStreak_one: 'You have lost {{count}} game in this session.'
+      lossStreak_other: 'You have lost {{count}} games in a row this session.'
+      worse: 'Right after {{threshold}} straight losses your win rate is {{after}}% ({{afterGames}} games), below the {{other}}% of all other games ({{otherGames}} games). Consider a break before the next one.'
+      notWorse: 'Right after {{threshold}} straight losses your win rate is {{after}}% ({{afterGames}} games); in all other games it is {{other}}% ({{otherGames}} games). The log does not show you playing worse after a losing streak.'
+      unknown: 'Fewer than {{min}} games were played right after a losing streak, so your own pattern is not visible yet. Take a break if you feel tilted.'
+    chart:
+      title: LP curve
+      hint: Each point is one rank reading. Select a game to open its review.
+      empty: At least two rank readings are needed to draw the curve.
+      win: Win
+      loss: Loss
+      other: Other change
+    form:
+      title: Form
+      hint: 'Games count as played back to back when the break between them is at most {{minutes}} minutes. Fewer than {{min}} games show the count only.'
+      index: 'Game {{index}} of a session'
+      indexRest: 'Game {{index}} of a session and later'
+      afterLossStreak: 'Right after {{threshold}} straight losses'
+      otherGames: All other games
+      games_one: '{{count}} game'
+      games_other: '{{count}} games'
+    days:
+      title: By day
+      hint: 'A day starts at {{hour}} a.m.; games played after midnight still belong to the previous day.'
+      day: Date
+      games: Games
+      net: Net LP
+    table:
+      title: Games
+      win: Win
+      loss: Loss
+      remake: Remake
+      noLp: LP not recorded
+      more: Show more
+      unidentified: Game not identified yet
+      gap_one: '{{count}} game in between was not read individually'
+      gap_other: '{{count}} games in between were not read individually'
+      adjustment: Change without a game (dodge penalty, decay and the like)
+      baseline: Recording started
+      review: Review
+      cs: '{{count}} CS'
+    note: LP can only be read at the moment a game ends. Games from before this feature was installed, and several games played back to back while the app was closed, have a result but no LP of their own.

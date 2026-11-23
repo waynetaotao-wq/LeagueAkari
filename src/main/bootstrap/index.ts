@@ -28,6 +28,7 @@ import { MatchRatingMain } from '@main/shards/match-rating'
 import { MobxUtilsMain } from '@main/shards/mobx-utils'
 import { NetworkMain } from '@main/shards/network'
 import { OngoingGameMain } from '@main/shards/ongoing-game'
+import { RankLogMain } from '@main/shards/rank-log'
 import { RendererDebugMain } from '@main/shards/renderer-debug'
 import { RespawnTimerMain } from '@main/shards/respawn-timer'
 import { RiotClientMain } from '@main/shards/riot-client'
@@ -349,6 +350,7 @@ export function bootstrap() {
     manager.use(RespawnTimerMain)
     manager.use(GameRefocusMain)
     manager.use(MatchRatingMain)
+    manager.use(RankLogMain)
     manager.use(SavedPlayerMain)
     manager.use(SgpMain)
     manager.use(StatisticsMain)
