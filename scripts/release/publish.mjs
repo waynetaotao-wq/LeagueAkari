@@ -6,15 +6,14 @@ import path from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 
-// Keep this list aligned with electron-builder.yml and the workflow's normalized names.
-const REQUIRED_ASSETS = [
-  'league-akari-win-x64.7z',
-  'league-akari-mac-arm64.dmg',
-  'league-akari-mac-arm64.zip'
-]
-const ALLOWED_ASSETS = new Set([...REQUIRED_ASSETS, 'league-akari-win-x64.exe'])
+import { releaseAssets } from './build-targets.mjs'
 
-export async function collectArtifacts(directory) {
+/**
+ * @param {{ required: string[], allowed: string[] }} assets what this release must and may
+ *   contain; see build-targets.mjs
+ */
+export async function collectArtifacts(directory, assets) {
+  const allowedAssets = new Set(assets.allowed)
   const artifacts = new Map()
   async function visit(current) {
     for (const entry of await readdir(current, { withFileTypes: true })) {
@@ -23,7 +22,7 @@ export async function collectArtifacts(directory) {
         await visit(file)
         continue
       }
-      if (!entry.isFile() || !ALLOWED_ASSETS.has(entry.name) || artifacts.has(entry.name)) {
+      if (!entry.isFile() || !allowedAssets.has(entry.name) || artifacts.has(entry.name)) {
         throw new Error(`Unexpected or duplicate release artifact: ${file}`)
       }
       const { size } = await stat(file)
@@ -39,7 +38,7 @@ export async function collectArtifacts(directory) {
     }
   }
   await visit(directory)
-  for (const name of REQUIRED_ASSETS) {
+  for (const name of assets.required) {
     if (!artifacts.has(name)) throw new Error(`Missing release artifact: ${name}`)
   }
   return [...artifacts.values()].sort((a, b) => a.name.localeCompare(b.name))
@@ -207,6 +206,7 @@ function githubClient(metadata) {
 async function main() {
   for (const key of [
     'GITHUB_REPOSITORY',
+    'GITHUB_REF',
     'GITHUB_SHA',
     'GH_TOKEN',
     'RELEASE_TAG',
@@ -223,7 +223,10 @@ async function main() {
     makeLatest: process.env.RELEASE_MAKE_LATEST === 'true',
     generateNotes: process.env.RELEASE_GENERATE_NOTES === 'true'
   }
-  const artifacts = await collectArtifacts('release-artifacts')
+  const artifacts = await collectArtifacts(
+    'release-artifacts',
+    releaseAssets(process.env.GITHUB_REF)
+  )
   await publishRelease(metadata, artifacts, githubClient(metadata))
 }
 

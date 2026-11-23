@@ -20,11 +20,18 @@ jobs:
     if: github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')
     name: Validate Release Ref
     runs-on: ubuntu-latest
+    outputs:
+      build_matrix: ${{ steps.build_targets.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Test release publishing
         run: node --test scripts/release/publish-test.mjs
+
+      # [lolps] dev 只构建 Windows，版本标签构建全部平台；清单在 scripts/release/build-targets.mjs
+      - name: Select build targets
+        id: build_targets
+        run: node scripts/release/build-targets.mjs
 
       - name: Validate version tag
         if: startsWith(github.ref, 'refs/tags/v')
@@ -62,30 +69,7 @@ jobs:
     needs: validate
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: macOS
-            os: macos-15
-            build_command: yarn build:mac
-            artifact_name: macos
-            release_asset_prefix: league-akari-mac-arm64
-            cache_path: |
-              ~/Library/Caches/electron
-              ~/Library/Caches/electron-builder
-            artifact_paths: |
-              dist/*.dmg
-              dist/*.zip
-          - name: Windows
-            os: windows-2022
-            build_command: yarn build:win
-            artifact_name: windows
-            release_asset_prefix: league-akari-win-x64
-            cache_path: |
-              ~\AppData\Local\electron\Cache
-              ~\AppData\Local\electron-builder\Cache
-            artifact_paths: |
-              dist/*.7z
-              dist/*.exe
+      matrix: ${{ fromJSON(needs.validate.outputs.build_matrix) }}
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:

@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 
+import { buildMatrix, releaseAssets, selectBuildTargets } from './build-targets.mjs'
 import { collectArtifacts, publishRelease } from './publish.mjs'
 
 const names = [
@@ -12,6 +13,8 @@ const names = [
   'league-akari-mac-arm64.dmg',
   'league-akari-mac-arm64.zip'
 ]
+const tagRef = 'refs/tags/v1.2.3'
+const devRef = 'refs/heads/dev'
 const metadata = { sha: 'a'.repeat(40), tag: `ci-${'a'.repeat(40)}`, prerelease: true }
 const artifacts = names.map((name) => ({
   name,
@@ -73,12 +76,66 @@ async function artifactDirectory(t, entries = names) {
   return directory
 }
 
+test('a version tag builds every platform and a dev push builds Windows only', () => {
+  assert.deepEqual(
+    selectBuildTargets(tagRef).map((target) => target.name),
+    ['macOS', 'Windows']
+  )
+  assert.deepEqual(
+    selectBuildTargets(devRef).map((target) => target.name),
+    ['Windows']
+  )
+  assert.throws(() => selectBuildTargets(undefined), /git ref is required/)
+})
+
+test('the build matrix carries what the workflow reads and nothing else', () => {
+  const keys = [
+    'artifact_name',
+    'artifact_paths',
+    'build_command',
+    'cache_path',
+    'name',
+    'os',
+    'release_asset_prefix'
+  ]
+  for (const ref of [tagRef, devRef]) {
+    const { include } = buildMatrix(ref)
+    assert.equal(include.length, selectBuildTargets(ref).length)
+    for (const job of include) {
+      assert.deepEqual(Object.keys(job).sort(), keys)
+      for (const key of keys) assert.equal(typeof job[key], 'string')
+    }
+    // The workflow passes this through a single-line job output.
+    assert.doesNotMatch(JSON.stringify(buildMatrix(ref)), /[\r\n]/)
+  }
+})
+
+test('the expected release files follow the platforms that were built', () => {
+  assert.deepEqual(releaseAssets(tagRef).required.sort(), [...names].sort())
+  assert.deepEqual(releaseAssets(devRef).required, ['league-akari-win-x64.7z'])
+  for (const ref of [tagRef, devRef]) {
+    const { required, allowed } = releaseAssets(ref)
+    for (const name of required) assert.ok(allowed.includes(name))
+    // Every expected file is one the matching build job uploads under its normalized name.
+    for (const name of allowed) {
+      assert.ok(
+        buildMatrix(ref).include.some(
+          (job) =>
+            name.startsWith(`${job.release_asset_prefix}.`) &&
+            job.artifact_paths.split('\n').includes(`dist/*${path.extname(name)}`)
+        ),
+        name
+      )
+    }
+  }
+})
+
 test('collects all platform packages and hashes the actual bytes', async (t) => {
   const directory = await artifactDirectory(
     t,
     names.map((name) => `platform/${name}`)
   )
-  const collected = await collectArtifacts(directory)
+  const collected = await collectArtifacts(directory, releaseAssets(tagRef))
   assert.equal(collected.length, 3)
   for (const artifact of collected) {
     assert.equal(artifact.size, 4)
@@ -87,13 +144,32 @@ test('collects all platform packages and hashes the actual bytes', async (t) => 
 })
 
 test('rejects a missing platform package, empty package and duplicate name', async (t) => {
+  const assets = releaseAssets(tagRef)
   const missing = await artifactDirectory(t, names.slice(0, 2))
-  await assert.rejects(collectArtifacts(missing), /Missing release artifact/)
+  await assert.rejects(collectArtifacts(missing, assets), /Missing release artifact/)
   const empty = await artifactDirectory(t)
   await writeFile(path.join(empty, names[0]), '')
-  await assert.rejects(collectArtifacts(empty), /Empty release artifact/)
+  await assert.rejects(collectArtifacts(empty, assets), /Empty release artifact/)
   const duplicate = await artifactDirectory(t, [...names, `other/${names[0]}`])
-  await assert.rejects(collectArtifacts(duplicate), /duplicate release artifact/)
+  await assert.rejects(collectArtifacts(duplicate, assets), /duplicate release artifact/)
+})
+
+test('a dev prerelease needs the Windows package and accepts nothing it did not build', async (t) => {
+  const assets = releaseAssets(devRef)
+  const windowsOnly = await artifactDirectory(t, ['windows/league-akari-win-x64.7z'])
+  assert.deepEqual(
+    (await collectArtifacts(windowsOnly, assets)).map((artifact) => artifact.name),
+    ['league-akari-win-x64.7z']
+  )
+  const withInstaller = await artifactDirectory(t, [
+    'windows/league-akari-win-x64.7z',
+    'windows/league-akari-win-x64.exe'
+  ])
+  assert.equal((await collectArtifacts(withInstaller, assets)).length, 2)
+  const noPackage = await artifactDirectory(t, ['windows/league-akari-win-x64.exe'])
+  await assert.rejects(collectArtifacts(noPackage, assets), /Missing release artifact/)
+  const stray = await artifactDirectory(t, names)
+  await assert.rejects(collectArtifacts(stray, assets), /Unexpected or duplicate release artifact/)
 })
 
 test('creates a draft, uploads sequentially, verifies and then publishes', async () => {
