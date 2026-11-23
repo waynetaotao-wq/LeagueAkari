@@ -37,6 +37,19 @@ describe('buildReviewCoachSystemPrompt', () => {
     }
   })
 
+  it('says how to read the parts of the document a first try stumbled over', () => {
+    for (const prompt of [chinese, english]) {
+      // sections count differently: timed events win, and the difference is not a finding
+      expect(prompt).toContain('以带时间的事件记录为准')
+      // only moments of this game are written as clickable times
+      expect(prompt).toContain('平时水平里的时间写成「12 分 12 秒」')
+      // no padding to three moments
+      expect(prompt).toContain('资料撑不起三个就写两个，不要凑数')
+      // recent form is background, not a verdict on this game
+      expect(prompt).toContain('「近期排位状态」只是背景')
+    }
+  })
+
   it('asks for the answer in the language of the interface', () => {
     expect(chinese).toContain('用简体中文回答')
     expect(chinese).toContain('600 到 900 个汉字')
