@@ -67,6 +67,17 @@ export class NetworkMain implements IAkariShardInitDispose {
     )
   }
 
+  /**
+   * [lolps] 用同一套代理设置直接发请求，供需要流式读取响应的功能使用（如 AI 教练）。
+   */
+  async fetch(input: string | URL | Request, init?: RequestInit) {
+    await this._proxyController.waitUntilConfigured()
+    return this._context.electronSession.fetch(
+      input instanceof URL ? input.toString() : input,
+      init
+    )
+  }
+
   resolveProxy(url: string) {
     return this._context.electronSession.resolveProxy(url)
   }

@@ -1,3 +1,5 @@
+import { AiCoachRenderer } from '@renderer-shared/shards/ai-coach'
+import { useAiCoachStore } from '@renderer-shared/shards/ai-coach/store'
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import { RankLogRenderer } from '@renderer-shared/shards/rank-log'
 import { useRankLogStore } from '@renderer-shared/shards/rank-log/store'
@@ -5,6 +7,11 @@ import { SettingUtilsRenderer } from '@renderer-shared/shards/setting-utils'
 import { SgpRenderer } from '@renderer-shared/shards/sgp'
 import { useSgpStore } from '@renderer-shared/shards/sgp/store'
 import type { AkariManager } from '@shared/akari-shard'
+import type {
+  AiCoachChatRequest,
+  AiCoachChatResult,
+  AiCoachProvider
+} from '@shared/shards/ai-coach'
 import { type RankLogEntryDto, fromAbsoluteLp } from '@shared/shards/rank-log'
 import type { Item } from '@shared/types/league-client/game-data'
 import type { SummonerInfo } from '@shared/types/league-client/summoner'
@@ -391,6 +398,31 @@ function rankLogEntries(lossStreak: boolean): RankLogEntryDto[] {
   return entries.sort((a, b) => b.occurredAt - a.occurredAt || b.id - a.id)
 }
 
+// What the stand-in AI service "writes". Invented text: it only has to look like an answer,
+// with headings, lists and game times.
+const COACH_ANSWER = `**一句话总结**：这一局输在 10 到 15 分钟之间连续两次阵亡，对线期攒下的补刀优势没能留住。
+
+## 最关键的三个时刻
+
+1. **5:10 第一次回城**：回城前兵线停在河道，回来时少了一波兵的经验。更好的选择是先把这波兵推进塔下再回。
+2. **10:20 河道阵亡**：这是程序标出的片段。阵亡前 30 秒敌方打野没有出现在地图上，资料里看不出当时有没有视野，这一点需要你自己回看确认。
+3. **13:45 小龙团前阵亡**：你比队友早到了大约 20 秒，在人数不齐的时候被先手。等到 14:05 队友到位再靠近，这条龙有机会拿。
+
+## 做得好的地方
+
+- 前 10 分钟补刀比你平时多 9 个，对位补刀差 +12，属于明显好于平时。
+- 第一件成装的时间比平时早了约 40 秒。
+
+## 下一局只改一件事
+
+**去河道和野区之前，先看一眼小地图上敌方打野最后出现的位置和时间。** 打完之后检查：每一次阵亡前，你能不能说出敌方打野当时大概在哪。`
+const COACH_FOLLOW_UP = `对线期整体是合格的，主要有两点可以更好：
+
+- **2:40 到 4:30** 你一直在推线，资料里这段时间没有插眼的记录。推线时在河道草丛留一个眼，被抓的风险会小很多。
+- **5:10 回城的时机**上面说过了：先推线再回。
+
+其余时间的换血细节资料里看不出来。`
+
 const meta = {
   title: 'Renderer Shared/Review Studio',
   component: ReviewStudioModal,
@@ -399,12 +431,13 @@ const meta = {
   render: (args, context) => ({
     components: { ReviewStudioModal, NButton, NTag },
     setup() {
+      const isCoachStory = context.name.startsWith('Coach')
       const games =
         context.name === 'Empty History'
           ? []
           : context.name === 'Death Map' || context.name === 'Outcome Gap'
             ? patternFixtures()
-            : context.name === 'Full Report' || context.name === 'Baseline'
+            : context.name === 'Full Report' || context.name === 'Baseline' || isCoachStory
               ? patternFixtures().map((fixture, index) =>
                   index === 0 ? withReportData(fixture) : fixture
                 )
@@ -453,11 +486,72 @@ const meta = {
           rankStore.settings.enabled = enabled
         }
       }
+      // The coach stories talk to a stand-in AI service that writes a fixed answer piece by piece.
+      const coachStore = useAiCoachStore()
+      const previousCoach = { settings: { ...coachStore.settings }, state: { ...coachStore.state } }
+      Object.assign(coachStore.settings, {
+        provider: 'anthropic',
+        anthropicModel: 'claude-opus-5-5',
+        anthropicBaseUrl: '',
+        openaiBaseUrl: '',
+        openaiModel: ''
+      })
+      Object.assign(coachStore.state, {
+        hasAnthropicKey: isCoachStory && context.name !== 'Coach Setup',
+        hasOpenaiKey: false,
+        canPersistKeys: true
+      })
+      const stoppedRequests = new Set<string>()
+      const aiCoach = {
+        chat: async (
+          request: AiCoachChatRequest,
+          onDelta: (text: string) => void
+        ): Promise<AiCoachChatResult> => {
+          await new Promise((resolve) => setTimeout(resolve, 900))
+          if (context.name === 'Coach Error')
+            return { result: 'failed', code: 'auth', message: 'invalid x-api-key', text: '' }
+          const answer = request.messages.length === 1 ? COACH_ANSWER : COACH_FOLLOW_UP
+          let text = ''
+          for (let offset = 0; offset < answer.length; offset += 6) {
+            if (stoppedRequests.has(request.requestId))
+              return { result: 'failed', code: 'cancelled', message: '', text }
+            const piece = answer.slice(offset, offset + 6)
+            text += piece
+            onDelta(piece)
+            await new Promise((resolve) => setTimeout(resolve, 25))
+          }
+          return {
+            result: 'ok',
+            text,
+            truncated: false,
+            usage: {
+              inputTokens: 9_800,
+              outputTokens: 640,
+              cachedInputTokens: request.messages.length === 1 ? 0 : 9_100
+            },
+            model: 'claude-opus-5-5'
+          }
+        },
+        cancel: async (requestId: string) => stoppedRequests.add(requestId),
+        setApiKey: async (provider: AiCoachProvider, key: string) => {
+          if (key.trim().length < 8) return { result: 'failed', reason: 'invalid-key' }
+          coachStore.state[provider === 'anthropic' ? 'hasAnthropicKey' : 'hasOpenaiKey'] = true
+          return { result: 'ok', persisted: true }
+        },
+        clearApiKey: async (provider: AiCoachProvider) => {
+          coachStore.state[provider === 'anthropic' ? 'hasAnthropicKey' : 'hasOpenaiKey'] = false
+          return true
+        },
+        setSetting: async (key: keyof typeof coachStore.settings, value: string) => {
+          Object.assign(coachStore.settings, { [key]: value })
+        }
+      }
       appContext.config.globalProperties.$akariManager = {
         getInstance: (constructor: unknown) => {
           if (constructor === SettingUtilsRenderer) return storedSettings
           if (constructor === SgpRenderer) return { api: { matchHistoryQuery: query } }
           if (constructor === RankLogRenderer) return rankLog
+          if (constructor === AiCoachRenderer) return aiCoach
           throw new Error('Unexpected shard requested by review preview')
         }
       } as AkariManager
@@ -484,15 +578,19 @@ const meta = {
           REVIEW_STORY: { matchHistory: 'https://example.test', common: '', isTencent: true }
         }
       }
-      lcs.summoner.me = { puuid: isRankStory ? 'player-8' : 'preview-owner' } as SummonerInfo
-      // "Broaden Stored" and "Baseline" open with every game already kept on this device and no
-      // history read yet.
-      const ready = ref(context.name !== 'Broaden Stored' && context.name !== 'Baseline')
+      // The rank log and the coach's "recent form" exist only for the logged-in player's own games.
+      const ownerPuuid = isRankStory || isCoachStory ? 'player-8' : 'preview-owner'
+      lcs.summoner.me = { puuid: ownerPuuid } as SummonerInfo
+      // "Broaden Stored", "Baseline" and the coach stories open with every game already kept on
+      // this device and no history read yet.
+      const ready = ref(
+        context.name !== 'Broaden Stored' && context.name !== 'Baseline' && !isCoachStory
+      )
       if (!ready.value)
         void writeReviewArchive(
           storedSettings,
           {
-            ownerPuuid: 'preview-owner',
+            ownerPuuid,
             ownerServerId: 'REVIEW_STORY',
             targetPuuid: 'player-8',
             targetServerId: 'REVIEW_STORY'
@@ -520,6 +618,8 @@ const meta = {
         lcs.gameData.items = previousState.items
         rankStore.state.available = previousState.rankAvailable
         rankStore.settings.enabled = previousState.rankEnabled
+        Object.assign(coachStore.settings, previousCoach.settings)
+        Object.assign(coachStore.state, previousCoach.state)
       })
       const show = ref(true)
       return { args, show, ready }
@@ -547,3 +647,12 @@ export const RankLog: Story = { args: { initialGameId: undefined, initialTab: 'r
 /** The last three games of the running session were lost: the break reminder is showing. */
 export const RankLogLossStreak: Story = { args: { initialGameId: undefined, initialTab: 'rank' } }
 export const RankLogEmpty: Story = { args: { initialGameId: undefined, initialTab: 'rank' } }
+/**
+ * The "AI 教练" sub-view of one game, talking to a stand-in service that writes a fixed answer.
+ * A key counts as entered, so the review can be started straight away.
+ */
+export const Coach: Story = { args: { initialGameId: 70_000 } }
+/** No key has been entered yet: the coach view opens on the connection form. */
+export const CoachSetup: Story = { args: { initialGameId: 70_000 } }
+/** The stand-in service rejects the key, to show how a failure is reported. */
+export const CoachError: Story = { args: { initialGameId: 70_000 } }

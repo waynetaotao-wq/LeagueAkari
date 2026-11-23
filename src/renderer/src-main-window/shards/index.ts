@@ -1,4 +1,5 @@
 import { createManager } from '@renderer-shared/shards'
+import { AiCoachRenderer } from '@renderer-shared/shards/ai-coach'
 import { AkariApiRenderer } from '@renderer-shared/shards/akari-api'
 import { AkariNavigationRenderer } from '@renderer-shared/shards/akari-navigation'
 import { AkariProtocolRenderer } from '@renderer-shared/shards/akari-protocol'
@@ -44,6 +45,7 @@ import { SimpleNotificationsRenderer } from './simple-notifications'
 
 const manager = createManager()
 
+manager.use(AiCoachRenderer)
 manager.use(AkariNavigationRenderer)
 manager.use(AkariIpcRenderer)
 manager.use(AkariApiRenderer)

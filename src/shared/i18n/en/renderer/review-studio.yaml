@@ -627,3 +627,127 @@ reviewStudio:
       epicCredited: Epic monsters taken with you
       towersCredited: Turrets taken with you
       enemyObjectivesAfterDeath: Objectives lost within 90s of a death
+  coach:
+    tab: AI coach
+    hint: Sends the complete data of this game to the AI service you chose and asks it for a review. You can keep asking afterwards.
+    viewDocument: View what is sent
+    settings: Connection
+    documentTitle: What the AI receives
+    documentHint: This is the whole text sent to the AI. It holds no player names or accounts; players are referred to by champion and role.
+    documentLive: This is what "Start review" would send now.
+    documentSent: This is what was sent at the start of this conversation. Follow-ups resend it unchanged.
+    start:
+      title: Let the AI coach look at this game
+      size: 'The complete data of this game, about {{chars}} characters'
+      baseline: 'Your usual numbers: yes, from {{games}} other games kept on this device'
+      noBaseline: 'Your usual numbers: none yet, fewer than {{count}} games in the same role on this device'
+      form: 'Recent ranked form: yes, from the rank log'
+      noForm: 'Recent ranked form: none yet'
+      noFormOther: 'Recent ranked form: only for your own games'
+      tips: 'Laning notes for this matchup: yes'
+      privacy: Nothing sent holds a player name or account; players are referred to by champion and role.
+      focusPlaceholder: 'Anything you want to focus on? Optional. For example: why did the mid game fall apart'
+      action: Start review
+      model: 'Uses {{model}}; the cost goes to the account behind your key'
+      busy: The answer for another game is still being written. This one can start when it is done.
+    sent: Game data sent
+    focus: 'Wanted to know: {{text}}'
+    thinking: The coach is going through this game. This usually takes some tens of seconds…
+    thinkingFollowUp: The coach is thinking…
+    writing: Writing…
+    placeholder: Ask a follow-up. Enter sends, Shift + Enter adds a line
+    send: Send
+    stop: Stop
+    retry: Retry
+    back: Back
+    openSettings: Check connection
+    continue: Finish the answer
+    restart: Review again
+    restartConfirm: Reviewing again discards the current conversation about this game and sends the data once more.
+    restartYes: Review again
+    restartNo: Cancel
+    incomplete:
+      length: The answer reached the length limit and is not finished.
+      stopped: Stopped. The answer is incomplete.
+    full: This conversation has become very long. To keep asking, review the game again and start a new one.
+    saveFailed: This conversation could not be saved on this device and will be lost when the app closes.
+    usage: '{{model}} · read {{input}} · wrote {{output}} (tokens)'
+    usageCached: '{{model}} · read {{input}}, {{cached}} of them from cache · wrote {{output}} (tokens)'
+    disclaimer: The AI sees match and timeline data only, not the replay. Its conclusions can be wrong; treat them as suggestions.
+    detail: 'The service said: {{message}}'
+    quick:
+      laning: How could I have played the laning phase better?
+      deaths: What went wrong before each of my deaths?
+      items: Was anything off about my item order or recall timing?
+      midgame: Where should I have been in the mid game, and doing what?
+    errors:
+      not-configured: The connection is not completely filled in.
+      no-key: No key has been entered yet.
+      invalid-request: The request is incomplete. Please review the game again.
+      busy: The answer for another game is still being written. Try again shortly.
+      auth: The key is invalid or expired. Check it and enter it again.
+      permission: This key is not allowed to use the chosen model.
+      billing: The account behind the key has no balance, or billing is not enabled.
+      not-found: The model was not found, or the address is wrong. Check the model name and the address.
+      rate-limit: Too many requests, or the quota is used up. Try again in a while.
+      too-large: The data of this game is longer than this model can read. Choose another model.
+      bad-request: The service did not accept the request. The model name or the address most likely does not match the service.
+      server: The AI service has a temporary problem. Try again shortly.
+      network: The AI service cannot be reached. Check the network and the proxy in the app settings.
+      timeout: No reply for a long time. Check the network and the proxy, then try again.
+      cancelled: Stopped.
+      refused: The AI declined to answer this request.
+      empty: The AI returned nothing. Please try again.
+      unknown: Something unexpected happened. Please try again.
+    setup:
+      title: Connection
+      intro: Choose an AI service and enter your own key. After that, one click on "AI coach" in any game starts a review.
+      provider: Service
+      providers:
+        anthropic: Claude API
+        openai-compatible: OpenAI-compatible API
+      providerHint:
+        anthropic: Claude models by Anthropic. Keys are created on the Claude developer platform, platform.claude.com.
+        openai-compatible: Most services offer this kind of API, among them DeepSeek, Qwen, Kimi, Zhipu and OpenAI. A local Ollama works as well.
+      model: Model
+      modelPlaceholder: The model name as the provider documents it, for example deepseek-chat
+      customModel: You can also type another model name and confirm with Enter.
+      models:
+        claude-opus-5-5: Claude Opus 5.5 · strongest analysis
+        claude-sonnet-5-5: Claude Sonnet 5.5 · balanced
+        claude-haiku-5-5: Claude Haiku 5.5 · fastest and cheapest
+      preset: Common services
+      presetPlaceholder: Pick one to fill in the address
+      presets:
+        deepseek: DeepSeek
+        openai: OpenAI
+        dashscope: Alibaba Cloud Model Studio (Qwen)
+        moonshot: Moonshot (Kimi)
+        zhipu: Zhipu
+        siliconflow: SiliconFlow
+        openrouter: OpenRouter
+        ollama: Local Ollama
+      baseUrl: Address
+      baseUrlPlaceholder: For example https://api.deepseek.com
+      relay: Relay address
+      relayPlaceholder: Optional. Leave empty for the official address
+      badUrl: The address has to start with https://. Only an address on this computer may use http://.
+      key: Key
+      keyPlaceholder: Paste the API key
+      keySaved: Saved on this computer (encrypted)
+      keyMemory: Entered. It has to be entered again after the app closes
+      keySave: Save
+      keyReplace: Replace
+      keyRemove: Remove
+      keyRemoveConfirm: Remove the key saved on this computer?
+      keyInvalid: This does not look like a key. It should be one run of letters, digits and symbols without blanks.
+      keyWriteFailed: The key could not be written to this computer. It works until the app closes and has to be entered again afterwards.
+      keyNote: The key stays on this computer, encrypted by the system. It is never logged and is not part of the settings export. Requests go straight from this app to the service you chose.
+      ollamaKey: A local Ollama does not check the key. Any 8 or more letters will do.
+      done: Done
+      incomplete: 'Still missing: {{items}}'
+      separator: ', '
+      missing:
+        key: key
+        model: model name
+        baseUrl: address

@@ -12,6 +12,8 @@
 
 ## 0. 三十秒速览
 
+**2026-11-23 新增「AI 教练」**：单局复盘里多了「AI 教练」子页。点一下，把这一局的教练资料包（§3.21）发给你自己选的 AI 服务，流式写出一份复盘：一句话总结、最关键的三个时刻、做得好的地方、下一局只改一件事；之后可以接着追问，回答里的游戏时间可以点，直接跳到时间线上的那一刻。服务、模型、接口地址和密钥都由你在界面里自己填，支持 Claude 官方接口和 OpenAI 兼容接口（DeepSeek、通义千问、Kimi、OpenAI、本机 Ollama 等）。密钥只存在这台电脑上，由系统加密，不进日志。发出去的内容不含任何玩家的名字或账号。程序里的整条链路已在本机模拟的 AI 服务上验证；真实服务要等你填入自己的密钥后才能实测，回答质量也还没有评估过。详见 §3.22。
+
 **2026-11-23 开发版发布不再等 macOS**：GitHub 的 macOS 构建机器连续三次排不上队，三次推送都没有产出可下载的版本，尽管 Windows 包每次都构建成功。现在推送 `dev` 只构建并发布 Windows 包，正式版本标签仍构建全部平台。详见 §1.2。
 
 **2026-11-23 新增「与你平时的对比」和教练资料包**：单局复盘的「完整数据」页最上面多了一个分区，把这一局的对线、发育、生存、节奏、视野、团战数字和你自己平时的水平放在一起比（平时 = 本机档案里同英雄同位置的其它对局，够 5 局才显示）。同时新增一个把「这一局的全部事实 + 你的平时水平 + 近期排位状态」整理成一份文字资料的模块，这是之后 AI 教练看到的全部内容；资料里不出现任何玩家的名字或账号标识。详见 §3.21。
@@ -83,7 +85,7 @@
 
 - **Typecheck 工作流**：`.github/workflows/typecheck.yml`，与官方 `ci-release.yml` 同环境（checkout@v7、setup-node@v6、node 24、yarn immutable、corepack），触发 push[dev] + 手动；并发组独立不与 release 冲突。
 - **Release 上传（2026-09-18）**：`.github/workflows/ci-release.yml` 调用 `scripts/release/publish.mjs`，通过 GitHub CLI 逐个上传附件。先确认本次应有的附件（版本标签：Windows 7z、macOS DMG/ZIP；开发版：Windows 7z）均非空且无重名，计算实际文件 SHA-256。每项最多尝试 4 次，失败后依次等待 5/10/20 秒；重试先读取远端状态，大小、SHA-256 和 `uploaded` 状态均一致的文件直接保留，仅替换草稿内不完整或不匹配的同名附件。不得删除整个 Release/标签来重试，也不得覆盖已公开且字节不同的附件。新版本先建草稿，全部附件校验后才公开，再复核提交、发布状态和全部附件；只在发布成功后保留最近 3 个已公开 CI 预发布版本。构建目标或规范文件名变化时只改 `scripts/release/build-targets.mjs`（见下一条）。
-- **开发版只构建 Windows（2026-11-23）**：`2976ed73`、`78e9ba67`、`494f64e2` 三次推送的 Build Releases 都以同一原因失败：Windows 包约 5 分钟构建成功，macOS 任务排队 15 分钟后被系统取消，标注为「The job was not acquired by Runner of type hosted even after multiple attempts」，并提示 macOS arm64 托管机器容量不足；发布步骤因此被跳过，三次都没有可下载的版本（如 [#45236149619](https://github.com/waynetaotao-wq/LeagueAkari/actions/runs/45236149619)）。这是 GitHub 的机器排队问题，不是代码问题。现在构建清单集中在 `scripts/release/build-targets.mjs`：推送 `dev` 只构建并发布 Windows 包，`v*` 版本标签仍构建并要求全部平台。工作流的构建矩阵（`validate` 任务输出、`build` 任务用 `fromJSON` 读取）和发布脚本的预期附件清单都由这一个文件生成，不会两处不一致。开发版 Release 因此只有 `league-akari-win-x64.7z`，没有 macOS 附件；要让开发版重新带上 macOS，改 `selectBuildTargets` 里的一行。`publish-test.mjs` 增至 14 项，新增内容覆盖两类引用各自的构建目标、矩阵字段、预期附件与矩阵一致，以及开发版缺 Windows 包或混入未构建平台的附件时拒绝发布。这些是本地测试；动态矩阵在真实 Actions 上是否工作，以推送后的实际运行为准。
+- **开发版只构建 Windows（2026-11-23）**：`2976ed73`、`78e9ba67`、`494f64e2` 三次推送的 Build Releases 都以同一原因失败：Windows 包约 5 分钟构建成功，macOS 任务排队 15 分钟后被系统取消，标注为「The job was not acquired by Runner of type hosted even after multiple attempts」，并提示 macOS arm64 托管机器容量不足；发布步骤因此被跳过，三次都没有可下载的版本（如 [#45236149619](https://github.com/waynetaotao-wq/LeagueAkari/actions/runs/45236149619)）。这是 GitHub 的机器排队问题，不是代码问题。现在构建清单集中在 `scripts/release/build-targets.mjs`：推送 `dev` 只构建并发布 Windows 包，`v*` 版本标签仍构建并要求全部平台。工作流的构建矩阵（`validate` 任务输出、`build` 任务用 `fromJSON` 读取）和发布脚本的预期附件清单都由这一个文件生成，不会两处不一致。开发版 Release 因此只有 `league-akari-win-x64.7z`，没有 macOS 附件；要让开发版重新带上 macOS，改 `selectBuildTargets` 里的一行。`publish-test.mjs` 增至 14 项，新增内容覆盖两类引用各自的构建目标、矩阵字段、预期附件与矩阵一致，以及开发版缺 Windows 包或混入未构建平台的附件时拒绝发布。这些是本地测试。真实运行结果：`be1ca6c2` 的 [Build Releases #45239640219](https://github.com/waynetaotao-wq/LeagueAkari/actions/runs/45239640219) 约 7 分钟完成并成功，只跑了 Validate、Build Windows、Publish 三个任务，发布出只含 `league-akari-win-x64.7z` 的开发版（Dev Prerelease #105）；版本标签那条路径（全平台）自改动后还没有实际跑过。
 - **故障与验证记录**：`7dd8eadcf17b31af4bcfa42650480c68471c7dd5` 的 [Build Releases #35269055856](https://github.com/waynetaotao-wq/LeagueAkari/actions/runs/35269055856) 在上传步骤出现 `Error saving asset`；Windows 7z、macOS DMG 已上传，macOS ZIP 缺失。原日志没有更具体的 HTTP 原因，不能推断为应用编译错误，也不能断言网络超时。新发布逻辑本地 `node --test scripts/release/publish-test.mjs` 的 10 项行为测试通过，覆盖缺包/空包/重名、顺序上传、返回丢失、断点重跑、有限重试、摘要不符、提交不符及发布前后复核；工作流验证阶段也运行这些测试。文件刻意采用 `-test.mjs` 命名，避免 Node 原生测试被原有 Vitest 自动搜集。模拟测试仅证明编排逻辑，真实上传、最终 Actions 与下载核验须以本次推送后的实际结果为准，不能提前记为通过。
 - **Sync fork 规则**：最近一次为 2026-11-05 按用户授权同步官方 `dev@56cdfde0`，相较上次同步点新增 4 个提交、13 个文件，3 个文件双方均有改动；Git 无文本冲突，但实际界面发现并修复定制评分挤占，详见 §3.15。2026-09-14 的同步与网络兼容记录保留于该节。后续每次仍须重新获取双方历史、三方合并并验证，不在网页上丢弃定制提交，不能将历史文件数或无冲突结果当作本轮兼容结论。
 - 文件改名或删除通过 Git 差异一并提交；只处理本次需求涉及的文件。历史网页拖拽流程不能删除文件的问题，不再作为现行交付方式。
@@ -109,32 +111,33 @@
 
 ## 2. 功能总览
 
-| 功能                                        | 在哪看到                                                 | 开关 / 入口                       | 核心文件                                                                                                                                                                                       |
-| ------------------------------------------- | -------------------------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **对位构筑（OP.GG 窗口）**                  | 选人/加载/对局中 OP.GG 窗口顶部"对位克制"区 + 各区块置换 | 对位替换开关（默认开）            | `src/main/shards/champion-data/{counter-intel,matchup-build}.ts`、`src/renderer/src-opgg-window/opgg/widgets/counter-intel/OpggCounterIntel.vue`、`matchup-overlay.ts`、`matchup-lifecycle.ts` |
-| **Bz 劫攻略**                               | 玩劫时 OP.GG 窗口置顶卡片/区块；对局面板徽章             | 仅劫（238）自动                   | `champion-data/bz-guide/`、`opgg/bz-overlay.ts`、`player-info-card/BzSummaryBadge.vue`、`bz-summary-zh.ts`                                                                                     |
-| **中文对线心得（其他英雄）**                | 加载/对局后本人同位置的敌方玩家标题行                    | 自动出现「心得」；悬停或点击      | `player-info-card/matchup-tips/`、`PlayerInfoCardHeader.vue`，详见 §3.14                                                                                                                       |
-| **克制榜 / 单杀率**                         | OP.GG 窗口"对位克制"展开区                               | 随对位构筑                        | `champion-data/counter-intel-web.ts`                                                                                                                                                           |
-| **自动应用符文/召唤师/出装**                | 选人期自动写入 LCU                                       | 官方开关                          | `opgg/auto-loadout-queue.ts`、`opgg/context.ts`                                                                                                                                                |
-| **默认地区/段位 = 韩国·翡翠+**              | OP.GG 窗口顶部下拉                                       | 一次性迁移                        | `champion-data/{state,index}.ts`、`renderer-shared/shards/champion-data/store.ts`                                                                                                              |
-| **大乱斗换取推荐**                          | 大乱斗选人期 OP.GG 窗口                                  | 自动                              | `opgg/widgets/OpggMayhemPicker.vue`、`opgg/utils/mayhem-picker.ts`                                                                                                                             |
-| **绝活研究**                                | 战绩页侧栏                                               | 手动开始                          | `player-tab/mastery-research.ts`、`widgets/MasteryResearch.vue`                                                                                                                                |
-| **中单研究速读**                            | 中单头像/研究条悬停，先看队友提醒                        | 自动（SGP + 中单位）              | `player-info-card/midlane-research/`                                                                                                                                                           |
-| **对局评分（评分/MVP/SVP/标签/名次/成就）** | 战绩卡片、展开表、赛后弹窗                               | 无开关；权重可校准                | `match-card/utils/akari-score*.ts`、`widgets/AkariScoreBadge.vue`、`AchievementIcon.vue`、`shards/match-rating`                                                                                |
-| **评分权重校准**                            | 设置 → 杂项 → 对局评分；战绩页侧栏"评分权重校准"         | 按钮                              | `utils/akari-score-calibration.ts`、`akari-score-calibrate-runner.ts`、`use-rating-calibration.ts`、`RatingCalibrateFromPlayer.vue`                                                            |
-| **赛后小结弹窗**                            | 结算时屏幕右下角                                         | 设置 → 杂项 → 赛后小结弹窗        | `window-manager/post-game-window/`、`src/renderer/src-post-game-window/`                                                                                                                       |
-| **复活自动切回游戏**                        | 对局中                                                   | 设置 → 杂项（默认开）             | `src/main/shards/game-refocus/`、`renderer-shared/shards/game-refocus/`                                                                                                                        |
-| **Mini 窗时机 + 黑屏自愈**                  | 大厅小窗                                                 | 官方开关                          | `window-manager/aux-window/window.ts`                                                                                                                                                          |
-| **团队之选窗口**                            | 独立窗口（默认关）                                       | 设置 → 杂项                       | `window-manager/draftgap-window/`、`src/renderer/src-draftgap-window/`                                                                                                                         |
-| **自动举报**                                | 结算后                                                   | 官方举报开关                      | `auto-gameflow/report-controller.ts`（Codex 重写，37 测试）                                                                                                                                    |
-| **对局复盘台**                              | 战绩页侧栏、展开战绩卡、赛后小结                         | 手动打开；历史分析手动读取        | `src/renderer-shared/components/review-studio/`，详见 §3.11                                                                                                                                    |
-| **死亡地图 / 胜负差异**                     | 复盘台弹窗的「死亡地图」「胜负差异」页签                 | 手动读取并分析历史后查看          | `review-studio/{match-facts,death-map,outcome-gap}.ts`、`ReviewDeathMap.vue`、`ReviewOutcomeGap.vue`，详见 §3.18                                                                               |
-| **单局完整数据**                            | 复盘台「单局复盘」里的「完整数据」子页                   | 打开一局后查看                    | `review-studio/{match-report,match-digest}.ts`、`ReviewReportPanel.vue`，详见 §3.19                                                                                                            |
-| **上分日志**                                | 复盘台弹窗的「上分日志」页签（仅本人）                   | 页签里的「自动记录」（默认开）    | `src/main/shards/rank-log/`、`src/shared/shards/rank-log/`、`renderer-shared/shards/rank-log/`、`review-studio/ReviewRankLog.vue`，详见 §3.20                                                  |
-| **对局自动存档**                            | 无界面；每局结束后自动把对局读进复盘台的本机档案         | 同上分日志的「自动记录」          | `review-studio/{auto-archive,use-review-auto-archive}.ts`，挂在 `ReviewStudioHost.vue`，详见 §3.20                                                                                             |
-| **与平时的对比（个人基线）**                | 复盘台「单局复盘」→「完整数据」最上面的分区              | 本机档案里同位置满 5 局后自动出现 | `review-studio/baseline.ts`、`ReviewBaselinePanel.vue`，详见 §3.21                                                                                                                             |
-| **教练资料包**                              | 无界面；供 AI 教练使用的文字资料                         | —                                 | `review-studio/{coach-context,coach-form}.ts`，详见 §3.21                                                                                                                                      |
-| **Typecheck 预检**                          | GitHub Actions                                           | 自动                              | `.github/workflows/typecheck.yml`                                                                                                                                                              |
+| 功能                                        | 在哪看到                                                 | 开关 / 入口                            | 核心文件                                                                                                                                                                                                                                    |
+| ------------------------------------------- | -------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **对位构筑（OP.GG 窗口）**                  | 选人/加载/对局中 OP.GG 窗口顶部"对位克制"区 + 各区块置换 | 对位替换开关（默认开）                 | `src/main/shards/champion-data/{counter-intel,matchup-build}.ts`、`src/renderer/src-opgg-window/opgg/widgets/counter-intel/OpggCounterIntel.vue`、`matchup-overlay.ts`、`matchup-lifecycle.ts`                                              |
+| **Bz 劫攻略**                               | 玩劫时 OP.GG 窗口置顶卡片/区块；对局面板徽章             | 仅劫（238）自动                        | `champion-data/bz-guide/`、`opgg/bz-overlay.ts`、`player-info-card/BzSummaryBadge.vue`、`bz-summary-zh.ts`                                                                                                                                  |
+| **中文对线心得（其他英雄）**                | 加载/对局后本人同位置的敌方玩家标题行                    | 自动出现「心得」；悬停或点击           | `player-info-card/matchup-tips/`、`PlayerInfoCardHeader.vue`，详见 §3.14                                                                                                                                                                    |
+| **克制榜 / 单杀率**                         | OP.GG 窗口"对位克制"展开区                               | 随对位构筑                             | `champion-data/counter-intel-web.ts`                                                                                                                                                                                                        |
+| **自动应用符文/召唤师/出装**                | 选人期自动写入 LCU                                       | 官方开关                               | `opgg/auto-loadout-queue.ts`、`opgg/context.ts`                                                                                                                                                                                             |
+| **默认地区/段位 = 韩国·翡翠+**              | OP.GG 窗口顶部下拉                                       | 一次性迁移                             | `champion-data/{state,index}.ts`、`renderer-shared/shards/champion-data/store.ts`                                                                                                                                                           |
+| **大乱斗换取推荐**                          | 大乱斗选人期 OP.GG 窗口                                  | 自动                                   | `opgg/widgets/OpggMayhemPicker.vue`、`opgg/utils/mayhem-picker.ts`                                                                                                                                                                          |
+| **绝活研究**                                | 战绩页侧栏                                               | 手动开始                               | `player-tab/mastery-research.ts`、`widgets/MasteryResearch.vue`                                                                                                                                                                             |
+| **中单研究速读**                            | 中单头像/研究条悬停，先看队友提醒                        | 自动（SGP + 中单位）                   | `player-info-card/midlane-research/`                                                                                                                                                                                                        |
+| **对局评分（评分/MVP/SVP/标签/名次/成就）** | 战绩卡片、展开表、赛后弹窗                               | 无开关；权重可校准                     | `match-card/utils/akari-score*.ts`、`widgets/AkariScoreBadge.vue`、`AchievementIcon.vue`、`shards/match-rating`                                                                                                                             |
+| **评分权重校准**                            | 设置 → 杂项 → 对局评分；战绩页侧栏"评分权重校准"         | 按钮                                   | `utils/akari-score-calibration.ts`、`akari-score-calibrate-runner.ts`、`use-rating-calibration.ts`、`RatingCalibrateFromPlayer.vue`                                                                                                         |
+| **赛后小结弹窗**                            | 结算时屏幕右下角                                         | 设置 → 杂项 → 赛后小结弹窗             | `window-manager/post-game-window/`、`src/renderer/src-post-game-window/`                                                                                                                                                                    |
+| **复活自动切回游戏**                        | 对局中                                                   | 设置 → 杂项（默认开）                  | `src/main/shards/game-refocus/`、`renderer-shared/shards/game-refocus/`                                                                                                                                                                     |
+| **Mini 窗时机 + 黑屏自愈**                  | 大厅小窗                                                 | 官方开关                               | `window-manager/aux-window/window.ts`                                                                                                                                                                                                       |
+| **团队之选窗口**                            | 独立窗口（默认关）                                       | 设置 → 杂项                            | `window-manager/draftgap-window/`、`src/renderer/src-draftgap-window/`                                                                                                                                                                      |
+| **自动举报**                                | 结算后                                                   | 官方举报开关                           | `auto-gameflow/report-controller.ts`（Codex 重写，37 测试）                                                                                                                                                                                 |
+| **对局复盘台**                              | 战绩页侧栏、展开战绩卡、赛后小结                         | 手动打开；历史分析手动读取             | `src/renderer-shared/components/review-studio/`，详见 §3.11                                                                                                                                                                                 |
+| **死亡地图 / 胜负差异**                     | 复盘台弹窗的「死亡地图」「胜负差异」页签                 | 手动读取并分析历史后查看               | `review-studio/{match-facts,death-map,outcome-gap}.ts`、`ReviewDeathMap.vue`、`ReviewOutcomeGap.vue`，详见 §3.18                                                                                                                            |
+| **单局完整数据**                            | 复盘台「单局复盘」里的「完整数据」子页                   | 打开一局后查看                         | `review-studio/{match-report,match-digest}.ts`、`ReviewReportPanel.vue`，详见 §3.19                                                                                                                                                         |
+| **上分日志**                                | 复盘台弹窗的「上分日志」页签（仅本人）                   | 页签里的「自动记录」（默认开）         | `src/main/shards/rank-log/`、`src/shared/shards/rank-log/`、`renderer-shared/shards/rank-log/`、`review-studio/ReviewRankLog.vue`，详见 §3.20                                                                                               |
+| **对局自动存档**                            | 无界面；每局结束后自动把对局读进复盘台的本机档案         | 同上分日志的「自动记录」               | `review-studio/{auto-archive,use-review-auto-archive}.ts`，挂在 `ReviewStudioHost.vue`，详见 §3.20                                                                                                                                          |
+| **与平时的对比（个人基线）**                | 复盘台「单局复盘」→「完整数据」最上面的分区              | 本机档案里同位置满 5 局后自动出现      | `review-studio/baseline.ts`、`ReviewBaselinePanel.vue`，详见 §3.21                                                                                                                                                                          |
+| **教练资料包**                              | AI 教练里点「查看发送的内容」可以看到全文                | —                                      | `review-studio/{coach-context,coach-form}.ts`，详见 §3.21                                                                                                                                                                                   |
+| **AI 教练**                                 | 复盘台「单局复盘」里的「AI 教练」子页                    | 先在子页里填接口设置，再点「开始复盘」 | `src/main/shards/ai-coach/`、`src/shared/shards/ai-coach/`、`renderer-shared/shards/ai-coach/`、`review-studio/{coach-prompt,coach-markdown,coach-session,use-review-coach}.ts`、`ReviewCoachPanel.vue`、`ReviewCoachSetup.vue`，详见 §3.22 |
+| **Typecheck 预检**                          | GitHub Actions                                           | 自动                                   | `.github/workflows/typecheck.yml`                                                                                                                                                                                                           |
 
 ---
 
@@ -812,19 +815,69 @@
 
 **尚未验证**：资料包目前还没有使用者，AI 教练接入后才知道模型读它的实际效果；没有在安装包里连接真实客户端看「与平时的对比」。各项指标「越高越好 / 越低越好」的方向是人为登记的，个别英雄或打法可能不适用（例如辅助的补刀）。基线不区分排位和匹配、不区分版本，样本也不是完整战绩。Actions 与发布包按实际推送的提交另行核对。
 
-## 4. 数据源与外部契约（下表含历史契约；复测范围见 §3.13、§3.15、§3.16、§3.17、§3.18、§3.19、§3.20、§3.21）
+### 3.22 AI 教练（2026-11-23）
 
-| 源                                                                                                           | 用途                                           | 契约要点                                                                                                | 失效表现                                              |
-| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| OP.GG JSON `lol-api-champion.op.gg/api/{region}/champions/ranked/{champ}/{pos}?tier&version&target_champion` | 对位构筑、通用构筑                             | target 生效（对位样本 847 vs 通用 15939）；七区块；version 参数有效；counters 仅前 60                   | fail-closed 回通用，状态行说明                        |
-| OP.GG 网页 `op.gg/lol/champions/{c}/counters/{pos}?target_champion=`                                         | 单杀率                                         | 锚点 `Lane kill rate`，Flight/HTML 两路径                                                               | "暂无单杀率数据"                                      |
-| Bz Google Sheets XLSX / CSV 文字回退                                                                         | 劫攻略                                         | 唯一表头/英雄行、图片内容与位置、当前资源库；同一工作簿快照                                             | 自动显示带时间的核对记录并重试；参考记录不自动写入    |
-| OP.GG Mayhem 英雄页面                                                                                        | KIWI 强化及四类装备推荐                        | 英雄/模式/补丁校验，专属强化资源；不把未公开装备统计当成可靠数据                                        | 缺失分区留空，缺名称显示编号                          |
-| Data Dragon `versions.json` / `item.json` / `summoner.json`                                                  | 装备 id、图标                                  | `maps["11"]`、purchasable                                                                               | 保留文字与图片阅读记录，暂停未核对配置的自动写入      |
-| Riot Live Client Data（127.0.0.1:2999）                                                                      | 复活切回                                       | `playerlist[].isDead/respawnTimer` 官方公开接口                                                         | 静默等待                                              |
-| SGP（国服）                                                                                                  | 战绩摘要/详情/时间线、评分、校准、研究、复盘台 | 已配置端点及凭据；字段须逐项校验，不能假定完整                                                          | 评分/赛后可用 LCU 暂评；复盘台时间线不以 LCU 伪造补全 |
-| LCU                                                                                                          | 相位、召唤师、单局战绩、资源                   | —                                                                                                       | —                                                     |
-| LCU `/lol-ranked/v1/current-ranked-stats`（含事件）                                                          | 上分日志的段位读数（§3.20）                    | `queues[]` 中 `RANKED_SOLO_5x5` / `RANKED_FLEX_SR` 的段位、小段、胜点、胜负场数与定位标记；全空读数忽略 | 这次不记录，下次再读；已记录的内容不受影响            |
+**基线与范围**：从干净且与 `origin/dev` 一致的 `be1ca6c21984235f28de07fb23c8ad8a13c6bf80` 出发，未同步上游。新增一个依赖 `@anthropic-ai/sdk` 1.12.0（连带 7 个子依赖）、一个主进程 shard `ai-coach-main`、一个只在主窗口注册的渲染层 shard `ai-coach-renderer`、4 个 IPC 调用和 1 个事件、5 项设置、一个加密的密钥文件；`NetworkMain` 多了一个 `fetch` 方法。不改已有功能，不连接游戏客户端，不读写游戏。
+
+**它做什么**：单局复盘多了第五个子页「AI 教练」。点「开始复盘」，把 §3.21 的教练资料包发给用户自己选的 AI 服务，流式显示一份复盘，之后可以接着追问。服务、模型、接口地址和密钥全部由用户在界面里填，程序不内置任何密钥，费用由用户的接口账号承担。
+
+**两类接口**
+
+- **Claude 官方接口**（`anthropic-executor.ts`）：用官方 SDK 调 Messages 接口。默认模型 `claude-opus-5-5`，可选 `claude-sonnet-5-5`、`claude-haiku-5-5`，也可以手填别的模型名；「中转地址」留空就是官方地址。请求只带模型、长度上限（16,000，含模型的思考）、提示词、对话和流式开关，不带采样参数，也不指定思考方式，交给模型默认，所以同一份请求对现在的各个 Claude 模型都有效。第一条消息（整份资料）末尾设了缓存点，追问时原样重发，服务端可以复用缓存。SDK 在第一次发问时才加载，不拖慢启动。
+- **OpenAI 兼容接口**（`openai-compatible-executor.ts`）：向「接口地址 + `/chat/completions`」发流式请求，只带模型、对话和流式开关这三样各家都认的字段。内置 DeepSeek、OpenAI、阿里云百炼、Moonshot、智谱、硅基流动、OpenRouter、本机 Ollama 八个常用地址，只用来一键填地址；模型名由用户按服务商文档填写，程序不替任何服务商维护模型清单。不理会流式开关、一次性返回整段回答的服务也能读；只返回思考过程、没有正文的算空回答。
+
+**密钥怎么保管**（`credential-loader.ts`）：密钥只在主进程里。界面只知道「有没有填过」，拿不到密钥本身，填写时也只在点保存的那一下交给主进程。保存时用 Electron 的 `safeStorage`（Windows 上是系统自带的 DPAPI，绑定当前系统账号）加密，写进数据目录里单独的 `ai-coach-credentials.json`：不进设置表，不写日志，不随设置导出。换电脑或换系统账号后解不开，当作没填过。系统没有可用的加密时只留在内存里，界面会说明关闭程序后要重填。删掉最后一个密钥时文件一并删除。发请求时密钥放在认证头里，不出现在地址和正文中；服务返回的报错如果带着密钥，显示前会被抹成 `***`。
+
+**接口地址的规则**（`normalizeAiCoachBaseUrl`）：必须是 https；只有本机地址（localhost、127.0.0.1、::1）可以用 http；不能带用户名密码。写错的地址不保存，界面直接提示。
+
+**请求、时限与失败**（`chat-controller.ts`）：同一时间只写一个回答，另一局要等这一个写完。请求从主进程发出，走程序统一的代理设置（`NetworkMain.fetch`）。每次连接 2 分钟内服务不开始回应算超时，整个回答最长 10 分钟。随时可以停止，已经写出来的部分保留为这次的回答。回答每 60 毫秒攒一批发给界面。Claude 的 SDK 对连接失败、限流和服务过载会自己重试最多两次；兼容接口不自动重试，由用户决定。失败分成 18 类（密钥无效、余额不足、找不到模型或地址不对、限流、资料太长、连不上、超时、被拒绝、空回答等），界面给出对应的说明，并附上服务返回的原话。
+
+**提示词**（`coach-prompt.ts`）：固定用中文写，告诉模型这份资料是什么、不是什么（不是录像：技能命中、走位、血量、视野、沟通都看不到）；结论只建立在资料写明的事实上，看不出来就说看不出来；提到时刻要带游戏内时间；「与平时的对比」只是线索，不是结论；只分析本人的决定，不评价队友和对手；不说放在哪一局都成立的空话。第一次回答固定四段：一句话总结、最关键的三个时刻、做得好的一到两点、下一局只改一件事，600 到 900 字；英文界面改为用英文回答、350 到 500 词。看别人的对局时多一句说明提问的人不一定是本人。第一条消息是「资料 + 一句请求 + 可选的『我特别想了解』」。提示词版本号 `REVIEW_COACH_PROMPT_VERSION` 目前是 1，随对话一起保存。
+
+**对话管理**（`coach-session.ts`）：对话不放在界面组件里。回答要写几十秒到一两分钟，这期间可以切到时间线，甚至关掉复盘台，回来对话还在。写完的对话存进本机（设置存储 `review-studio` 命名空间下的 `coach:<账号作用域>`），每个账号最多留 20 局，超出时丢掉最久没动过的；下次打开同一局可以接着问。保存的是实际发出去的原文，追问时原样重发，保证教练后面看到的资料和第一次回答时是同一份。没答上的提问不落盘。重新复盘失败时可以退回之前保存的对话。一段对话最多 40 条消息，满了提示重新复盘。
+
+**界面**（`ReviewCoachPanel.vue`、`ReviewCoachSetup.vue`）：没填好接口时先显示设置表单，密钥保存后自动进入下一步。开始前列出会发送什么（资料字数、有没有平时水平、近期排位状态、对线心得），点「查看发送的内容」能看到全文。回答用一份单独的 Markdown 解析器渲染（`coach-markdown.ts`）：不解析 HTML，不生成链接和图片，模型写的任何内容都不会变成网页标签。回答里的游戏时间（如 12:30，不超过本局时长）是按钮，点了跳到「时间线与地图」的那一刻。第一次回答后给四个快捷追问。底部显示模型名和用量（读入、其中多少来自缓存、写出）。
+
+**隐私**：发出去的只有教练资料包（§3.21，不含任何玩家的名字和账号标识）、提示词和用户自己打的字。请求从本程序直接发往用户选的服务，除非用户自己填了中转地址。日志只记服务类别、模型名、消息条数、耗时、用量和错误类别，不记资料、回答和密钥。
+
+**费用量级**：一次复盘读入约一万 token（资料中位数约 9,500 字），写出几千 token（含模型的思考）。按 2026-11 的 Claude 官方标价估算，Opus 5.5 一次约 0.1 美元，Sonnet 5.5 约一半，Haiku 5.5 不到 1 美分；追问因为有缓存会更便宜。这只是估算，以服务商实际计费为准。
+
+**文件索引**
+
+- 共用：`src/shared/shards/ai-coach/index.ts`（类型、请求校验、地址与密钥的规范化、流式数据解析、报错脱敏）。
+- 主进程 `src/main/shards/ai-coach/`：`index.ts`、`context.ts`、`state.ts`、`credential-loader.ts`、`chat-controller.ts`、`anthropic-executor.ts`、`openai-compatible-executor.ts`、`ipc-handlers.ts`，测试用的本机替身服务 `test-server.ts`；`network/index.ts` 的 `fetch`；在 `bootstrap/index.ts` 注册。
+- 渲染层：`src/renderer-shared/shards/ai-coach/{index,store}.ts`；`review-studio/` 下的 `coach-prompt.ts`、`coach-markdown.ts`、`coach-session.ts`、`use-review-coach.ts`、`ReviewCoachPanel.vue`、`ReviewCoachSetup.vue`；`ReviewMatchView.vue` 加子页；文案在 `review-studio.yaml` 的 `coach` 分组（中英文各 113 条，键和占位符逐一对应）；预览是 `ReviewStudio.stories.ts` 的「Coach」「Coach Setup」「Coach Error」，用一个写固定回答的替身服务。
+
+**验证记录**
+
+- 新增 218 项行为测试：共用逻辑 50、密钥保管 17、请求调度 21、Claude 请求 23、兼容接口请求 34、提示词 18、回答渲染 24、对话管理 31。两类请求的测试都对着本机起的真实 HTTP 服务跑，Claude 那组用的是真实的官方 SDK，覆盖流式、思考内容不混进回答、被截断、被拒绝、空回答、各类 HTTP 报错、流中途出错、中途停止、连不上、密钥不出现在报错里。整仓 **179 文件 / 1,752 项 Vitest**（`--maxWorkers=3`）、node/web 类型检查和生产构建通过。
+- **真实程序验证**（本地构建，隔离配置，不连接游戏客户端，对着本机模拟的 AI 服务，用编造的测试密钥）：初始没有密钥、系统加密可用；没填密钥时不会发出任何请求；远程的 http 地址被拒绝、本机地址保留；过短的密钥被拒绝，正常的保存成功；Claude 请求经官方 SDK 和程序自己的网络层发出，回答分 5 段依次到达界面，用量读数正确，请求路径、认证头、正文结构与预期一致；中途停止后保留已写部分且连接被关闭；第二个请求被告知要等；被拒绝的密钥得到正确的说明且报错里的密钥被抹掉；兼容接口同样流式到达。重启程序后两个密钥都还在并能正常使用；删除后密钥文件消失。在整个配置目录和程序的控制台输出共 255 个文件里按 UTF-8 和 UTF-16 两种编码搜索，找不到明文密钥。日志只有「开始、结束、耗时、用量、错误类别」。
+- **预览（Storybook）**：设置表单、开始页、流式回答、点时间跳到时间线再回来、快捷追问和手打追问、停止后保留部分回答、重新复盘的确认、报错页，在深色中文、浅色英文、宽 1280 与窄 760 下显示正常，没有未翻译的键名，内容不溢出。
+
+**尚未验证**
+
+- **没有用真实密钥调用过任何真实的 AI 服务。**请求格式是按官方 SDK 和 OpenAI 兼容格式写的，并在本机模拟服务上验证过；真实服务的鉴权、模型名、限流和计费，要用户填入自己的密钥后才能实测。
+- **回答质量没有评估过。**提示词还没有对着真实回答校对过，模型可能说错，也可能把线索当成结论；界面上写了提醒。
+- 第三方中转地址是否接受官方 SDK 的请求（认证头用的是 `Authorization: Bearer`，带 `anthropic-version` 头）没有实测。
+- 各家 OpenAI 兼容服务的差异（思考型模型、用量字段、报错格式）只按常见格式处理，没有逐家实测；部分服务在流式下不返回用量，界面就不显示用量。
+- 没有在连接真实客户端的情况下从界面点过；界面流程是在预览里用替身服务验证的。
+- macOS 上的密钥加密（钥匙串）没有验证。
+- Actions 与发布包按实际推送的提交另行核对。
+
+## 4. 数据源与外部契约（下表含历史契约；复测范围见 §3.13、§3.15、§3.16、§3.17、§3.18、§3.19、§3.20、§3.21、§3.22）
+
+| 源                                                                                                           | 用途                                           | 契约要点                                                                                                | 失效表现                                                       |
+| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| OP.GG JSON `lol-api-champion.op.gg/api/{region}/champions/ranked/{champ}/{pos}?tier&version&target_champion` | 对位构筑、通用构筑                             | target 生效（对位样本 847 vs 通用 15939）；七区块；version 参数有效；counters 仅前 60                   | fail-closed 回通用，状态行说明                                 |
+| OP.GG 网页 `op.gg/lol/champions/{c}/counters/{pos}?target_champion=`                                         | 单杀率                                         | 锚点 `Lane kill rate`，Flight/HTML 两路径                                                               | "暂无单杀率数据"                                               |
+| Bz Google Sheets XLSX / CSV 文字回退                                                                         | 劫攻略                                         | 唯一表头/英雄行、图片内容与位置、当前资源库；同一工作簿快照                                             | 自动显示带时间的核对记录并重试；参考记录不自动写入             |
+| OP.GG Mayhem 英雄页面                                                                                        | KIWI 强化及四类装备推荐                        | 英雄/模式/补丁校验，专属强化资源；不把未公开装备统计当成可靠数据                                        | 缺失分区留空，缺名称显示编号                                   |
+| Data Dragon `versions.json` / `item.json` / `summoner.json`                                                  | 装备 id、图标                                  | `maps["11"]`、purchasable                                                                               | 保留文字与图片阅读记录，暂停未核对配置的自动写入               |
+| Riot Live Client Data（127.0.0.1:2999）                                                                      | 复活切回                                       | `playerlist[].isDead/respawnTimer` 官方公开接口                                                         | 静默等待                                                       |
+| SGP（国服）                                                                                                  | 战绩摘要/详情/时间线、评分、校准、研究、复盘台 | 已配置端点及凭据；字段须逐项校验，不能假定完整                                                          | 评分/赛后可用 LCU 暂评；复盘台时间线不以 LCU 伪造补全          |
+| LCU                                                                                                          | 相位、召唤师、单局战绩、资源                   | —                                                                                                       | —                                                              |
+| LCU `/lol-ranked/v1/current-ranked-stats`（含事件）                                                          | 上分日志的段位读数（§3.20）                    | `queues[]` 中 `RANKED_SOLO_5x5` / `RANKED_FLEX_SR` 的段位、小段、胜点、胜负场数与定位标记；全空读数忽略 | 这次不记录，下次再读；已记录的内容不受影响                     |
+| 用户自选的 AI 服务：Claude Messages 接口（官方 SDK）或 OpenAI 兼容的 `chat/completions`                      | AI 教练（§3.22）                               | 地址、模型和密钥由用户填写；流式返回；只发送教练资料包、提示词和用户的提问                              | 界面给出分类后的说明和服务返回的原话，可以重试；不影响其它功能 |
 
 Google/Data Dragon 等外部站点能否访问取决于当前网络。自 2026-09-14 同步后，由 `network-main` 使用共享 Electron Session 应用“跟随系统 / 手动代理 / 关闭代理”，并统一处理外部数据、资源及更新请求；本机 LCU/Live Client 不使用外部代理。旧代理设置自动迁移，Bz 的网络重试和已核对记录回退保持不变。
 
@@ -842,7 +895,7 @@ Google/Data Dragon 等外部站点能否访问取决于当前网络。自 2026-0
 
 ### 6.1 仓库内测试（Actions 不跑 vitest，靠本地/Codex）
 
-2026-11-23 最近一次整仓运行共 **171 个文件 / 1,534 项通过**（同日此前为 168 个文件 / 1,478 项和 163 个文件 / 1,320 项，2026-11-15 为 161 个文件 / 1,295 项，2026-11-06 为 158 个文件 / 1,255 项）；机器负载很高时，`in-game-send` 与 `self-update` 里按时限判定的测试可能超时，可用 `--maxWorkers=3` 降低并发后重跑；数量随代码变动，以当次实际执行结果为准。上分日志的建表与记录流程测试（§3.20）用真实的内存 SQLite：数据库驱动是原生模块，在运行测试的 Node 里加载不了时，这两组测试会整组显示为 skipped 而不是报错——看到 skipped 说明这部分没有被验证，需要换能加载驱动的环境重跑。定制测试包括 `matchup-build*.test.ts`、`bz-guide.test.ts`、`bz-summary-zh.test.ts`、`BzSummaryBadge.test.ts`、`matchup-lifecycle*.test.ts`、`refocus-logic.test.ts`、`akari-*.test.ts`、`midlane-research-*.test.ts`、`report-controller*.test.ts` 等；还包含网络适配器、旧设置迁移、本地化网页口径、好友申请状态确认/单次收尾、OP.GG/LOL.PS 筛选及统计口径、选人助手 queue 700/710/440/720 隔离、Clash 两轮禁用、身份与自动刷新边界，可选 / 可禁列表同步生命周期，以及 Mayhem 装备栏目和选人换取测试。官方 6 项队列筛选测试继续保留，此前新增的 12 项战绩请求生命周期、详情去重/取消、录像失败及筛选记忆测试见 §3.15；五排助手第一轮新增 24 项禁选规则、独立历史读取及跨窗口同步测试，第二轮新增 15 项数据完整性、联合分路与交互边界测试，第三轮新增 11 项连续禁用、唯一替代分配及可用英雄口径测试，第四轮再新增 9 项禁用额度、轮间状态、锁定后熟练池及未知风险测试；第五轮新增 10 项组合前瞻、独立穷举对照、混合位置质量及阵容唯一性测试；第六轮新增 14 项冲突归并、全池分析、位置约束及本方唯一替补分配测试，见 §3.17。复盘台死亡地图与胜负差异新增 35 项（单局事实提取、区域判定与汇总、秩和比较、存档读写），一键放宽筛选新增 5 项判定测试，见 §3.18。单局完整数据新增 25 项（物品分类、完整报告各分区、摘要数字与存档），见 §3.19。上分日志与自动存档新增 158 项（段位换算与读数比较、统计、建表、记录流程、自动存档），见 §3.20。个人基线与教练资料包新增 56 项，见 §3.21。
+2026-11-23 最近一次整仓运行共 **179 个文件 / 1,752 项通过**（同日此前为 171 个文件 / 1,534 项、168 个文件 / 1,478 项和 163 个文件 / 1,320 项，2026-11-15 为 161 个文件 / 1,295 项，2026-11-06 为 158 个文件 / 1,255 项）；机器负载很高时，`in-game-send` 与 `self-update` 里按时限判定的测试可能超时，可用 `--maxWorkers=3` 降低并发后重跑；数量随代码变动，以当次实际执行结果为准。上分日志的建表与记录流程测试（§3.20）用真实的内存 SQLite：数据库驱动是原生模块，在运行测试的 Node 里加载不了时，这两组测试会整组显示为 skipped 而不是报错——看到 skipped 说明这部分没有被验证，需要换能加载驱动的环境重跑。定制测试包括 `matchup-build*.test.ts`、`bz-guide.test.ts`、`bz-summary-zh.test.ts`、`BzSummaryBadge.test.ts`、`matchup-lifecycle*.test.ts`、`refocus-logic.test.ts`、`akari-*.test.ts`、`midlane-research-*.test.ts`、`report-controller*.test.ts` 等；还包含网络适配器、旧设置迁移、本地化网页口径、好友申请状态确认/单次收尾、OP.GG/LOL.PS 筛选及统计口径、选人助手 queue 700/710/440/720 隔离、Clash 两轮禁用、身份与自动刷新边界，可选 / 可禁列表同步生命周期，以及 Mayhem 装备栏目和选人换取测试。官方 6 项队列筛选测试继续保留，此前新增的 12 项战绩请求生命周期、详情去重/取消、录像失败及筛选记忆测试见 §3.15；五排助手第一轮新增 24 项禁选规则、独立历史读取及跨窗口同步测试，第二轮新增 15 项数据完整性、联合分路与交互边界测试，第三轮新增 11 项连续禁用、唯一替代分配及可用英雄口径测试，第四轮再新增 9 项禁用额度、轮间状态、锁定后熟练池及未知风险测试；第五轮新增 10 项组合前瞻、独立穷举对照、混合位置质量及阵容唯一性测试；第六轮新增 14 项冲突归并、全池分析、位置约束及本方唯一替补分配测试，见 §3.17。复盘台死亡地图与胜负差异新增 35 项（单局事实提取、区域判定与汇总、秩和比较、存档读写），一键放宽筛选新增 5 项判定测试，见 §3.18。单局完整数据新增 25 项（物品分类、完整报告各分区、摘要数字与存档），见 §3.19。上分日志与自动存档新增 158 项（段位换算与读数比较、统计、建表、记录流程、自动存档），见 §3.20。个人基线与教练资料包新增 56 项，见 §3.21。AI 教练新增 218 项（密钥保管、请求调度、两类接口的请求、提示词、回答渲染、对话管理），其中两类接口的请求测试会在本机临时起一个 HTTP 服务，Claude 那组有两项要等 SDK 自动重试，各多花一两秒，见 §3.22。发布脚本另有 14 项 Node 原生测试（`node --test scripts/release/publish-test.mjs`），不在 Vitest 的计数里，见 §1.2。
 
 ### 6.2 历史无依赖时的临时验证（不能替代实际工具）
 
@@ -878,7 +931,8 @@ Google/Data Dragon 等外部站点能否访问取决于当前网络。自 2026-0
 - 死亡地图与胜负差异（§3.18）：尚未在安装包里连接真实客户端走完整界面流程；真实数据只核对过北美服中路。「去边路的次数」来自每分钟一次的位置快照，一分钟内来回的短游走会漏记；「首次回家补给」把阵亡复活后的购买也算在内；从未做出成装的对局不参与首件成装比较。镀层、守卫类型和物品价格口径依赖当前版本的数据格式，版本大改后需重新实证。胜负差异同时比较 14 项，个别「差别明显」可能只是巧合，且所有差别都只是相关。
 - 单局完整数据（§3.19）：尚未在安装包里连接真实客户端打开；界面只看过中单本人的对局。阵亡详情里的伤害是击杀记录自带的统计，不是整场交战的全部伤害；地图资源的「在附近 / 很远」取自最多相差 45 秒的分钟快照，只能说明大致远近；交战是按时间和坐标聚类出来的，不代表游戏里真有一场「团战」。官方挑战统计原样显示，除单杀和参团率外没有逐项核对口径。时间线事件的字段含义依赖当前版本，16.23 新出现的 `voidGator` 还没有样本。
 - 上分日志与自动存档（§3.20）：真实打完一局排位后的胜点归属还没有实机确认，是这一版最需要验收的一点。胜点只能从装上这一版起逐局记录；程序没开时连着打的几局只有合计。大师及以上、定位赛结束、国服没有真实样本；`current-lp-change-notification` 的结构未知，目前不依赖。「连着打」的 60 分钟、一天从 5 点算起、连败 2 场提醒都是人为设定的展示规则，没有校准。自动存档按对局逐个读取时间线，每局多一次战绩请求和一次时间线请求。
-- 个人基线与教练资料包（§3.21）：基线只说明这一局和平时哪里不一样，样本少时偏离常常只是偶然；指标的好坏方向是人为登记的；不区分排位与匹配、不区分版本。资料包还没有接入 AI 教练，模型读它的实际效果未知。
+- 个人基线与教练资料包（§3.21）：基线只说明这一局和平时哪里不一样，样本少时偏离常常只是偶然；指标的好坏方向是人为登记的；不区分排位与匹配、不区分版本。资料包现在由 AI 教练使用（§3.22），模型读它的实际效果仍未评估。
+- AI 教练（§3.22）：没有用真实密钥调用过任何真实的 AI 服务，是这一版最需要用户亲自验收的一点；回答质量没有评估过，提示词没有对着真实回答校对。第三方中转地址和各家兼容服务只按常见格式处理，没有逐家实测。同一时间只能写一个回答。对话每个账号最多留 20 局。模型清单和标价会变：内置的三个 Claude 模型名和费用估算是 2026-11 的情况，过时后改 `src/shared/shards/ai-coach/index.ts` 里的清单即可，手填模型名不受影响。
 
 ---
 
@@ -926,6 +980,9 @@ Google/Data Dragon 等外部站点能否访问取决于当前网络。自 2026-0
 12. **纯对位比较**：对手越菜分越高，须与位置基线混合。
 13. **定制表不占官方数据库版本号**：官方按 `Metadata.version` 决定跑哪些升级；定制版若把自己的表挂在下一个版本号上，以后官方发布同号升级时就会被整段跳过。定制表走独立的 `lolps-schema-version` 升级链（§3.20）。
 14. **客户端接口的「空数据」不等于「零」**：刚启动或重连时接口可能先返回一份全空的结果。拿它当真实读数去和前后比较，会凭空算出巨大的变化；先判断读数是否可信，再比较。
+15. **第三方库的用法以装上的版本为准，不凭印象**：写 AI 教练时以为 Claude 的密钥放在 `x-api-key` 头里，实际装上的官方 SDK 1.12.0 用的是 `Authorization: Bearer`，是对着本机替身服务跑测试才发现的。接入外部库时读它自带的类型定义和源码，并让测试经过真实的库，不要只测自己想象中的请求。
+16. **预览开着的时候别在仓库根目录建临时文件**：Storybook 会监视整个目录，临时文件刚建就删会让它报 `EBUSY` 直接退出。临时脚本放到仓库外面。
+17. **按「越早失败越好」处理新依赖**：只有一个功能用得到的库不要在启动时就加载。AI 教练的 SDK 改成第一次发问时才加载，这样它出问题只影响教练，不会让整个程序打不开。
 
 ---
 
@@ -1012,3 +1069,20 @@ Google/Data Dragon 等外部站点能否访问取决于当前网络。自 2026-0
 | 给出基线所需的最少对局 / 最多取最近多少局 | baseline.ts      | 5 局 / 60 局 |
 | 算「明显」需要超过的对局比例              | baseline.ts      | 九成         |
 | 资料包里逐项展开的「最突出项目」上限      | coach-context.ts | 12 项        |
+
+AI 教练常量补充（口径见 §3.22）：
+
+| 项                                        | 位置                            | 当前值                                              |
+| ----------------------------------------- | ------------------------------- | --------------------------------------------------- |
+| 内置的 Claude 模型 / 默认模型             | shared/shards/ai-coach/index.ts | Opus 5.5、Sonnet 5.5、Haiku 5.5 / `claude-opus-5-5` |
+| 内置的兼容接口地址                        | shared/shards/ai-coach/index.ts | 8 个（`AI_COACH_OPENAI_PRESETS`）                   |
+| 回答长度上限（Claude 接口，含思考）       | shared/shards/ai-coach/index.ts | 16,000 token                                        |
+| 一段对话最多的消息数 / 一次请求最多的字数 | shared/shards/ai-coach/index.ts | 40 条 / 40 万字                                     |
+| 密钥长度                                  | shared/shards/ai-coach/index.ts | 8 到 500 个不含空白的英文字符                       |
+| 等服务开始回应的时限 / 整个回答的时限     | main/shards/ai-coach/context.ts | 2 分钟 / 10 分钟                                    |
+| 回答片段攒多久发给界面一次                | main/shards/ai-coach/context.ts | 60 毫秒                                             |
+| 展示服务报错原话的最大长度                | main/shards/ai-coach/context.ts | 300 字                                              |
+| 密钥文件名                                | main/shards/ai-coach/context.ts | `ai-coach-credentials.json`（在程序的数据目录）     |
+| 提示词版本 / 第一次回答的篇幅             | review-studio/coach-prompt.ts   | 1 / 中文 600 到 900 字，英文 350 到 500 词          |
+| 「想重点了解什么」/ 一条追问的最大长度    | review-studio/coach-prompt.ts   | 300 字 / 2,000 字                                   |
+| 每个账号最多保存的对话局数                | review-studio/coach-session.ts  | 20 局                                               |

@@ -616,3 +616,127 @@ reviewStudio:
       epicCredited: 参与拿下的史诗野怪
       towersCredited: 参与推掉的防御塔
       enemyObjectivesAfterDeath: 阵亡后 90 秒内丢的资源
+  coach:
+    tab: AI 教练
+    hint: 把这一局的完整数据交给你自己选的 AI 服务，由它写一份复盘，之后可以接着追问。
+    viewDocument: 查看发送的内容
+    settings: 接口设置
+    documentTitle: 发送给 AI 的内容
+    documentHint: 下面是发给 AI 的全部文字，不含任何玩家的名字或账号，只用英雄和位置指代。
+    documentLive: 这是现在点「开始复盘」会发送的内容。
+    documentSent: 这是这次对话开头实际发送的内容，追问时原样重发。
+    start:
+      title: 让 AI 教练看这一局
+      size: '本局的完整数据，约 {{chars}} 字'
+      baseline: '你平时的水平：有，来自本机档案里的另外 {{games}} 局'
+      noBaseline: '你平时的水平：暂无，本机档案里同位置的对局不足 {{count}} 局'
+      form: 近期排位状态：有，来自上分日志
+      noForm: 近期排位状态：暂无
+      noFormOther: 近期排位状态：只在复盘自己的对局时提供
+      tips: 这个对位的对线心得：有
+      privacy: 发送的内容不含任何玩家的名字或账号，只用英雄和位置指代。
+      focusPlaceholder: 想重点了解什么？可以不填。例如：中期为什么崩了
+      action: 开始复盘
+      model: '使用 {{model}}，费用由你填写的接口账号承担'
+      busy: 另一局的回答还在写，写完才能开始这一局。
+    sent: 已发送本局资料
+    focus: '想重点了解：{{text}}'
+    thinking: 教练正在看这一局，通常要等几十秒…
+    thinkingFollowUp: 教练正在想…
+    writing: 正在写…
+    placeholder: 接着问。Enter 发送，Shift + Enter 换行
+    send: 发送
+    stop: 停止
+    retry: 重试
+    back: 返回
+    openSettings: 检查接口设置
+    continue: 继续写完
+    restart: 重新复盘
+    restartConfirm: 重新复盘会丢掉这一局现有的对话，并重新发送一次资料。
+    restartYes: 重新复盘
+    restartNo: 取消
+    incomplete:
+      length: 回答写到长度上限，没写完。
+      stopped: 已停止，回答不完整。
+    full: 这次对话已经很长了。想继续问，请重新复盘，开始一段新的对话。
+    saveFailed: 这段对话没能保存到本机，关闭程序后会丢失。
+    usage: '{{model}} · 读入 {{input}} · 写出 {{output}}（单位 token）'
+    usageCached: '{{model}} · 读入 {{input}}，其中 {{cached}} 来自缓存 · 写出 {{output}}（单位 token）'
+    disclaimer: AI 只看得到战绩和时间线数据，看不到录像。它的结论可能有错，仅供参考。
+    detail: '服务返回：{{message}}'
+    quick:
+      laning: 对线期怎么打更好？
+      deaths: 每次阵亡分别错在哪？
+      items: 出装和回城时机有问题吗？
+      midgame: 中期我应该去哪里、做什么？
+    errors:
+      not-configured: 接口还没填完整。
+      no-key: 还没有填写密钥。
+      invalid-request: 请求内容不完整，请重新复盘。
+      busy: 另一局的回答还在写，稍后再试。
+      auth: 密钥无效或已过期，请检查后重新填写。
+      permission: 这个密钥没有权限使用所选的模型。
+      billing: 接口账号余额不足，或者还没开通付费。
+      not-found: 找不到这个模型，或者接口地址不对。请检查模型名和地址。
+      rate-limit: 请求太频繁，或者额度用完了。过一会儿再试。
+      too-large: 这一局的资料超过了这个模型能读的长度，请换一个模型。
+      bad-request: 服务不接受这个请求，多半是模型名或接口地址和服务对不上。
+      server: AI 服务暂时出了问题，稍后重试。
+      network: 连不上 AI 服务。请检查网络和程序设置里的代理。
+      timeout: 等了很久没有回应。请检查网络和代理后重试。
+      cancelled: 已停止。
+      refused: AI 拒绝回答这次请求。
+      empty: AI 没有返回任何内容，请重试。
+      unknown: 出了点意外，请重试。
+    setup:
+      title: 接口设置
+      intro: 选一个 AI 服务，填入你自己的密钥。填好以后，每一局的「AI 教练」里点一下就能复盘。
+      provider: 服务
+      providers:
+        anthropic: Claude 官方接口
+        openai-compatible: OpenAI 兼容接口
+      providerHint:
+        anthropic: Anthropic 的 Claude 模型。密钥在 Claude 开发者平台 platform.claude.com 创建。
+        openai-compatible: DeepSeek、通义千问、Kimi、智谱、OpenAI 等大多数服务都支持这种接口，也可以连本机的 Ollama。
+      model: 模型
+      modelPlaceholder: 填模型名，以服务商的文档为准，例如 deepseek-chat
+      customModel: 也可以直接输入别的模型名，按回车确认。
+      models:
+        claude-opus-5-5: Claude Opus 5.5 · 分析最强
+        claude-sonnet-5-5: Claude Sonnet 5.5 · 均衡
+        claude-haiku-5-5: Claude Haiku 5.5 · 最快最便宜
+      preset: 常用服务
+      presetPlaceholder: 选一个，自动填入接口地址
+      presets:
+        deepseek: DeepSeek
+        openai: OpenAI
+        dashscope: 阿里云百炼（通义千问）
+        moonshot: Moonshot（Kimi）
+        zhipu: 智谱
+        siliconflow: 硅基流动
+        openrouter: OpenRouter
+        ollama: 本机 Ollama
+      baseUrl: 接口地址
+      baseUrlPlaceholder: 例如 https://api.deepseek.com
+      relay: 中转地址
+      relayPlaceholder: 可不填，留空使用官方地址
+      badUrl: 地址需要以 https:// 开头，只有本机地址可以用 http://。
+      key: 密钥
+      keyPlaceholder: 粘贴 API Key
+      keySaved: 已保存在这台电脑上（已加密）
+      keyMemory: 已填写，关闭程序后需要重填
+      keySave: 保存
+      keyReplace: 更换
+      keyRemove: 删除
+      keyRemoveConfirm: 删除保存在这台电脑上的密钥？
+      keyInvalid: 这不像一个密钥：应为一串不含空格的英文字符。
+      keyWriteFailed: 密钥没能写入本机。这次打开期间仍可使用，关闭程序后需要重新填写。
+      keyNote: 密钥只保存在这台电脑上，由系统加密，不写进日志，也不随设置导出。请求从本程序直接发往你选的服务。
+      ollamaKey: 本机 Ollama 不校验密钥，随便填 8 个以上的英文字符即可。
+      done: 完成
+      incomplete: '还差：{{items}}'
+      separator: 、
+      missing:
+        key: 密钥
+        model: 模型名
+        baseUrl: 接口地址

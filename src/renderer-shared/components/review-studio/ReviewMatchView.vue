@@ -37,6 +37,7 @@
         <NRadioButton value="timeline">{{ t('timeline') }}</NRadioButton>
         <NRadioButton value="report">{{ t('fullReport') }}</NRadioButton>
         <NRadioButton value="details">{{ t('details') }}</NRadioButton>
+        <NRadioButton value="coach">{{ t('coach.tab') }}</NRadioButton>
       </NRadioGroup>
       <NButton
         v-if="model.quality.warnings.length"
@@ -97,6 +98,15 @@
       />
       <NEmpty v-else :description="t('report.unavailable')" />
     </template>
+    <!-- 打开过就留着：去时间线看教练提到的时刻再回来，没发出去的追问还在。 -->
+    <ReviewCoachPanel
+      v-if="coachVisited"
+      v-show="view === 'coach'"
+      :model="model"
+      :archive="archive"
+      :active="active && view === 'coach'"
+      @timeline="openTimeline"
+    />
     <div v-if="view === 'details'" class="detail-view">
       <div class="section-heading">
         <NText strong>{{ t('checkpoints') }}</NText
@@ -179,6 +189,7 @@ import { useTranslation } from 'i18next-vue'
 import { NAlert, NButton, NCard, NEmpty, NRadioButton, NRadioGroup, NTag, NText } from 'naive-ui'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
+import ReviewCoachPanel from './ReviewCoachPanel.vue'
 import ReviewGoldChart from './ReviewGoldChart.vue'
 import ReviewMoments from './ReviewMoments.vue'
 import ReviewOverview from './ReviewOverview.vue'
@@ -204,7 +215,11 @@ const props = withDefaults(
 const resources = useAkariResourceProvider()
 const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
 const replayRoot = ref<HTMLElement | null>(null)
-const view = ref<'overview' | 'timeline' | 'report' | 'details'>('overview')
+const view = ref<'overview' | 'timeline' | 'report' | 'details' | 'coach'>('overview')
+const coachVisited = ref(false)
+watch(view, (value) => {
+  if (value === 'coach') coachVisited.value = true
+})
 const frameIndex = ref(0)
 const selectedMoment = ref<ReviewMoment | null>(null)
 const selectedEventId = ref<string | null>(null)
@@ -282,6 +297,7 @@ watch(
     selectedMoment.value = null
     selectedEventId.value = null
     view.value = 'overview'
+    coachVisited.value = false
     void applyFocus()
   }
 )

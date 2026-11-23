@@ -2,6 +2,7 @@ import { is, optimizer } from '@electron-toolkit/utils'
 import '@main/i18n'
 import { initAppLogger } from '@main/logger'
 import { initializeNativeRuntime } from '@main/native'
+import { AiCoachMain } from '@main/shards/ai-coach'
 import { AkariApiMain } from '@main/shards/akari-api'
 import { AkariProtocolMain } from '@main/shards/akari-protocol'
 import { AppCommonMain } from '@main/shards/app-common'
@@ -339,6 +340,7 @@ export function bootstrap() {
     manager.use(FeatureGatingMain)
 
     // functional shards
+    manager.use(AiCoachMain)
     manager.use(AutoChampionConfigMain)
     manager.use(AutoGameflowMain)
     manager.use(AutoMiscMain)
