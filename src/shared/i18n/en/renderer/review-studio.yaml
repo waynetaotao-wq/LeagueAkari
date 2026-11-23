@@ -86,6 +86,221 @@ reviewStudio:
   tabs:
     deaths: Death map
     gap: Wins vs losses
+  fullReport: Full data
+  report:
+    hint: Every fact the match summary and the timeline record, grouped by topic. Select a time to jump to that moment on the map.
+    incomplete: The event log of this game could not be reconciled with the summary, so the lists below may miss entries.
+    unavailable: Archived games do not carry the full data. Reload this game above.
+    noOpponent: The lane opponent could not be identified, so the opponent column is empty.
+    scoreboard:
+      title: Stat line
+      metric: Stat
+      own: You
+      opponent: Opponent
+      teamShare: Share of team
+      kda: Kills / deaths / assists
+      killParticipation: Kill participation
+      level: Level
+      cs: Creep score
+      csPerMinute: CS per minute
+      gold: Gold
+      damage: Damage to champions
+      damageTaken: Damage taken
+      visionScore: Vision score
+      wards: Wards placed / cleared
+      controlWards: Control wards bought
+      timeDead: Time spent dead
+      unspentGold: Unspent gold
+      players: All ten players
+      champion: Champion
+      vision: Vision
+    laning:
+      title: Laning and tempo
+      checkpoints: Against the lane opponent
+      checkpointsHint: Positive means ahead. Taken from the snapshot closest to the minute; empty when there is none.
+      minute: '{{minute}} min'
+      gold: Gold
+      cs: CS
+      xp: XP
+      level: Level
+      teamGold: Team gold
+      levels: Level timings
+      levelColumn: Level
+      ownTime: You
+      opponentTime: Opponent
+      lead: Order
+      leadAhead: '{{time}} earlier'
+      leadBehind: '{{time}} later'
+      leadEven: Same time
+    build:
+      title: Build and abilities
+      coreItems: Completed items
+      boots: Boots
+      noCore: No completed item
+      noCatalogue: The item catalogue is not loaded, so completed items cannot be told apart
+      visits: Shopping
+      visitOpening: Starting items
+      visitRecall: Recall
+      visitAfterDeath: After death
+      sales: Sold
+      skills: Ability order
+      skillPriority: Max order
+      skillPriorityUnknown: Too few points to tell the max order
+      runes: Runes
+      spells: Summoner spells
+      casts: 'Casts: {{count}}'
+      abilityCasts: Ability casts
+    takedowns:
+      title: Kills and assists
+      empty: No kills or assists in this game
+      kill: Kill
+      assist: Assist
+      solo: Solo kill
+      withAllies: 'Allies involved: {{count}}'
+      gold: '{{gold}} gold'
+      shutdown: 'Shutdown {{gold}}'
+      firstBlood: First blood
+    deaths:
+      title: Deaths
+      empty: No deaths in this game
+      killedBy: 'Killed by {{killer}}'
+      executed: Killed by a turret, minion or monster
+      damageTaken: 'Took {{damage}}'
+      damageDealt: 'Dealt {{damage}}'
+      levels: 'Level {{own}} vs {{killer}}'
+      inFight: In a fight
+      isolated: Outside a fight
+      gaveGold: 'Gave {{gold}} gold'
+      objectivesAfter: 'Enemy took within 90 s: {{objectives}}'
+      sourcesHint: Damage comes from the kill record itself, which is not the full damage of the fight.
+      physical: Physical
+      magic: Magic
+      trueDamage: 'True'
+      slots:
+        basic: Attacks
+        passive: Passive
+        q: Q
+        w: W
+        e: E
+        r: R
+        summoner: Summoner spell
+        other: Other
+      sourceKinds:
+        turret: Turret
+        minion: Minions
+        monster: Monster
+        other: Other
+    objectives:
+      title: Objectives
+      empty: The timeline has no objective events
+      own: Ally
+      enemy: Enemy
+      unassigned: Unassigned
+      credited: Involved
+      sinceDeath: '{{seconds}} s after your death'
+      proximity:
+        near: You were nearby
+        away: You were not nearby
+        far: You were far away
+      distanceHint: 'About {{distance}} units apart (the map is about 15,000 wide). Position from the snapshot {{seconds}} s {{direction}}; a rough indication only.'
+      before: earlier
+      after: later
+      dragonName: '{{element}} Dragon'
+      towerName: '{{lane}} {{tier}}'
+      inhibitorName: '{{lane}} inhibitor'
+      otherName: 'Other objective ({{raw}})'
+      sideName: '{{side}} {{name}}'
+      separator: ', '
+      kinds:
+        dragon: Dragon
+        elder: Elder Dragon
+        herald: Rift Herald
+        grubs: Void Grubs
+        baron: Baron Nashor
+        atakhan: Atakhan
+        tower: Turret
+        inhibitor: Inhibitor
+        other: Other objective
+      details:
+        FIRE_DRAGON: Infernal
+        WATER_DRAGON: Ocean
+        EARTH_DRAGON: Mountain
+        AIR_DRAGON: Cloud
+        HEXTECH_DRAGON: Hextech
+        CHEMTECH_DRAGON: Chemtech
+        ELDER_DRAGON: Elder
+        OUTER_TURRET: outer turret
+        INNER_TURRET: inner turret
+        BASE_TURRET: inhibitor turret
+        NEXUS_TURRET: nexus turret
+      lanes:
+        TOP_LANE: Top
+        MID_LANE: Mid
+        BOT_LANE: Bottom
+    fights:
+      title: Fights
+      hint: Kills within 15 seconds and close together form one fight; it takes two kills, or one kill with six champions involved.
+      empty: No fights by this definition
+      score: '{{kills}} for {{deaths}}'
+      sides: '{{allies}} vs {{enemies}}'
+      own: 'You: {{kills}} K / {{assists}} A'
+      survived: Survived
+      deathOrder: 'Death order on your team: {{order}}'
+      absent: Not involved
+      objectivesAfter: 'Within 60 s: {{objectives}}'
+    vision:
+      title: Vision
+      hint: Counts trinket wards, control wards and support-item wards only, the same scope as the summary's ward numbers.
+      phase: Period
+      placed: Placed
+      cleared: Cleared
+      early: 0–10 min
+      middle: 10–20 min
+      late: After 20 min
+      total: Total
+      wardTypes:
+        YELLOW_TRINKET: Stealth trinket
+        SIGHT_WARD: Support ward
+        CONTROL_WARD: Control ward
+        BLUE_TRINKET: Farsight
+    challenges:
+      title: Official challenge counters
+      hint: Counters the server tracks itself. Their exact rules are Riot's; they are shown as recorded.
+      empty: The summary of this game has no challenge counters
+      keys:
+        soloKills: Solo kills
+        quickSoloKills: Quick solo kills
+        outnumberedKills: Outnumbered kills
+        killsNearEnemyTurret: Kills near enemy turret
+        killsUnderOwnTurret: Kills under own turret
+        skillshotsHit: Skillshots hit
+        skillshotsDodged: Skillshots dodged
+        dodgeSkillShotsSmallWindow: Narrow skillshot dodges
+        landSkillShotsEarlyGame: Early skillshots hit
+        enemyChampionImmobilizations: Enemy immobilizations
+        immobilizeAndKillWithAlly: Immobilize and kill with ally
+        pickKillWithAlly: Picks with ally
+        saveAllyFromDeath: Allies saved
+        survivedSingleDigitHpCount: Survived on single-digit HP
+        tookLargeDamageSurvived: Survived heavy damage
+        laneMinionsFirst10Minutes: Lane minions in first 10 min
+        jungleCsBefore10Minutes: Jungle CS before 10 min
+        maxCsAdvantageOnLaneOpponent: Max CS lead on opponent
+        maxLevelLeadLaneOpponent: Max level lead on opponent
+        turretPlatesTaken: Turret plates taken
+        bountyGold: Bounty gold
+        controlWardsPlaced: Control wards placed
+        stealthWardsPlaced: Stealth wards placed
+        wardTakedowns: Ward takedowns
+        wardTakedownsBefore20M: Ward takedowns before 20 min
+        visionScoreAdvantageLaneOpponent: Vision score advantage on opponent
+        enemyJungleMonsterKills: Enemy jungle monsters
+        alliedJungleMonsterKills: Allied jungle monsters
+        scuttleCrabKills: Scuttle crabs
+        buffsStolen: Buffs stolen
+        epicMonsterSteals: Epic monster steals
+        abilityUses: Ability uses
+        unseenRecalls: Unseen recalls
   broadenOffer:
     analyzeHint: 'Games matching the current filters ({{scope}}): {{current}}. Without those filters: {{total}}.'
     showHint: 'Saved games matching the current filters ({{scope}}): {{current}}. Without those filters: {{total}}.'

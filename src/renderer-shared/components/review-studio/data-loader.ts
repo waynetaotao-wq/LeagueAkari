@@ -7,6 +7,7 @@ import {
   parseReviewMatch
 } from './analysis'
 import type { ReviewCoreItemResolver } from './match-facts'
+import type { ReviewItemKindResolver } from './match-report'
 import type { ReviewFilter, ReviewMatch, ReviewPosition } from './types'
 
 export interface ReviewIdentity {
@@ -36,6 +37,8 @@ export interface ReviewFetchApi {
   details(identity: ReviewIdentity, gameId: number, signal: AbortSignal): Promise<SgpGameDetailsLol>
   /** Item catalogue lookup for the first completed item; omit when no catalogue is available. */
   coreItem?: ReviewCoreItemResolver
+  /** Item catalogue lookup that classifies every purchase of the build path. */
+  itemKind?: ReviewItemKindResolver
 }
 
 export interface ReviewLoadProgress {
@@ -313,7 +316,7 @@ export function createReviewDataLoader(
         details,
         identity.puuid,
         identity.sgpServerId,
-        { coreItem: api.coreItem }
+        { coreItem: api.coreItem, itemKind: api.itemKind }
       )
       assertReviewNotAborted(signal)
       if (!parsed.ok)

@@ -1,0 +1,705 @@
+import type { DamageStats, SgpSelection } from '@shared/types/sgp/match-history'
+import { describe, expect, it } from 'vitest'
+
+import { parseReviewMatch } from './analysis'
+import { type ReviewItemKindResolver, classifyReviewItem } from './match-report'
+import {
+  addReviewEvent,
+  createReviewFixture,
+  reviewBuilding,
+  reviewKill,
+  reviewLevelUp,
+  reviewMonster,
+  reviewPurchase,
+  reviewSale,
+  reviewSkill,
+  reviewTakedown,
+  reviewUndo,
+  reviewUndoSale,
+  reviewWard,
+  reviewWardKill,
+  setReviewStats
+} from './test-fixtures'
+import type { ReviewItemKind } from './types'
+
+type Fixture = ReturnType<typeof createReviewFixture>
+
+function parse(fixture: Fixture, itemKind?: ReviewItemKindResolver) {
+  const parsed = parseReviewMatch(
+    fixture.summary,
+    fixture.details,
+    fixture.puuid,
+    fixture.sgpServerId,
+    { itemKind }
+  )
+  if (!parsed.ok) throw new Error(parsed.reason)
+  return parsed.match
+}
+
+/** Keeps the summary's death counts in step with the kill events of a fixture. */
+function setDeaths(fixture: Fixture, counts: Record<number, number>) {
+  for (const [participantId, deaths] of Object.entries(counts))
+    setReviewStats(fixture.summary, Number(participantId), { deaths })
+}
+
+const ITEM_KINDS: Record<number, ReviewItemKind> = {
+  1055: 'starter',
+  2003: 'consumable',
+  1036: 'component',
+  1001: 'component',
+  1037: 'component',
+  3158: 'boots',
+  6692: 'core',
+  3142: 'core'
+}
+const itemKind: ReviewItemKindResolver = (itemId) => ITEM_KINDS[itemId] ?? null
+
+describe('review item classification', () => {
+  it.each([
+    ['trinket', { priceTotal: 0, from: [], to: [], categories: ['Trinket', 'Vision'] }],
+    ['consumable', { priceTotal: 75, from: [], to: [], categories: ['Consumable', 'Vision'] }],
+    ['component', { priceTotal: 300, from: [], to: [3158], categories: ['Boots'] }],
+    ['boots', { priceTotal: 1100, from: [1001], to: [], categories: ['Boots'] }],
+    ['core', { priceTotal: 3000, from: [1036, 1036], to: [], categories: ['Damage'] }],
+    ['component', { priceTotal: 350, from: [], to: [3142], categories: ['Damage'] }],
+    ['component', { priceTotal: 1100, from: [1036], to: [], categories: ['Damage'] }],
+    ['starter', { priceTotal: 450, from: [], to: [], categories: ['Damage'] }],
+    ['other', { priceTotal: 900, from: [], to: [], categories: [] }]
+  ] as const)('recognizes a %s', (kind, item) => {
+    expect(classifyReviewItem(item)).toBe(kind)
+  })
+
+  it('does not guess for entries the catalogue cannot describe', () => {
+    expect(classifyReviewItem(undefined)).toBeNull()
+    expect(classifyReviewItem({ priceTotal: 3000, categories: [] })).toBeNull()
+  })
+})
+
+describe('review match report', () => {
+  it('copies final stat lines and derives team shares only from complete totals', () => {
+    const fixture = createReviewFixture()
+    const selection = (perk: number): SgpSelection => ({ perk, var1: 0, var2: 0, var3: 0 })
+    for (const [participantId, kills] of [
+      [8, 5],
+      [2, 1],
+      [10, 2],
+      [4, 0],
+      [6, 2]
+    ])
+      setReviewStats(fixture.summary, participantId, {
+        kills,
+        totalDamageDealtToChampions: 10_000,
+        goldEarned: 9000
+      })
+    setReviewStats(fixture.summary, 8, {
+      assists: 3,
+      champLevel: 14,
+      totalMinionsKilled: 180,
+      neutralMinionsKilled: 12,
+      goldEarned: 11_000,
+      goldSpent: 10_400,
+      totalDamageDealtToChampions: 20_000,
+      totalDamageTaken: 16_000,
+      visionScore: 21,
+      visionWardsBoughtInGame: 2,
+      totalTimeSpentDead: 95,
+      item0: 3142,
+      item1: 0,
+      item2: 6692,
+      item3: 3158,
+      item4: 0,
+      item5: 0,
+      item6: 3364,
+      roleBoundItem: 0,
+      spell1Id: 4,
+      spell2Id: 14,
+      spell1Casts: 80,
+      spell2Casts: 30,
+      spell3Casts: 60,
+      spell4Casts: 9,
+      summoner1Casts: 4,
+      summoner2Casts: 5,
+      perks: {
+        statPerks: { offense: 5008, flex: 5008, defense: 5011 },
+        styles: [
+          {
+            description: 'primaryStyle',
+            style: 8100,
+            selections: [8112, 8143, 8140, 8106].map(selection)
+          },
+          { description: 'subStyle', style: 8300, selections: [8304, 8345].map(selection) }
+        ]
+      },
+      challenges: { soloKills: 2, skillshotsHit: 40, madeUp: 9 }
+    })
+
+    const players = parse(fixture).report!.players
+    const own = players.find((player) => player.participantId === 8)!
+    expect(own).toMatchObject({
+      teamId: 100,
+      championId: 238,
+      position: 'MIDDLE',
+      kills: 5,
+      deaths: 0,
+      assists: 3,
+      level: 14,
+      cs: 192,
+      jungleCs: 12,
+      gold: 11_000,
+      goldSpent: 10_400,
+      damage: 20_000,
+      damageTaken: 16_000,
+      visionScore: 21,
+      controlWardsBought: 2,
+      secondsDead: 95,
+      items: [3142, 6692, 3158],
+      trinket: 3364,
+      roleItem: null,
+      summonerSpells: [4, 14],
+      casts: { q: 80, w: 30, e: 60, r: 9, summoner1: 4, summoner2: 5 },
+      runes: {
+        primaryStyle: 8100,
+        subStyle: 8300,
+        perks: [8112, 8143, 8140, 8106, 8304, 8345],
+        shards: [5008, 5008, 5011]
+      },
+      // Counters outside the supported list are not copied.
+      challenges: { soloKills: 2, skillshotsHit: 40 }
+    })
+    expect(own.killParticipation).toBeCloseTo(8 / 10)
+    expect(own.damageShare).toBeCloseTo(20_000 / 60_000)
+    expect(own.goldShare).toBeCloseTo(11_000 / 47_000)
+    // One teammate without the number is enough to leave the share unknown.
+    expect(own.damageTakenShare).toBeNull()
+
+    const enemy = players.find((player) => player.participantId === 3)!
+    expect(enemy).toMatchObject({
+      kills: null,
+      gold: null,
+      items: [],
+      runes: null,
+      challenges: null,
+      killParticipation: null
+    })
+  })
+
+  it('reads team objectives, bans and the order of dragons', () => {
+    const fixture = createReviewFixture()
+    const none = { first: false, kills: 0 }
+    fixture.summary.json.teams = [
+      {
+        teamId: 100,
+        win: true,
+        bans: [
+          { championId: 157, pickTurn: 1 },
+          { championId: -1, pickTurn: 2 }
+        ],
+        objectives: {
+          baron: { first: true, kills: 1 },
+          champion: none,
+          dragon: { first: true, kills: 2 },
+          horde: { first: true, kills: 3 },
+          inhibitor: none,
+          riftHerald: none,
+          tower: { first: false, kills: 7 },
+          atakhan: none
+        }
+      },
+      {
+        teamId: 200,
+        win: false,
+        bans: [],
+        objectives: {
+          baron: none,
+          champion: { first: true, kills: 6 },
+          dragon: none,
+          horde: none,
+          inhibitor: none,
+          riftHerald: { first: true, kills: 1 },
+          tower: { first: true, kills: 2 },
+          atakhan: none
+        }
+      }
+    ]
+    addReviewEvent(
+      fixture.details,
+      reviewMonster(360_000, 'DRAGON', 10, { subType: 'FIRE_DRAGON' })
+    )
+    addReviewEvent(
+      fixture.details,
+      reviewMonster(660_000, 'DRAGON', 9, { subType: 'WATER_DRAGON' })
+    )
+    addReviewEvent(
+      fixture.details,
+      reviewMonster(960_000, 'DRAGON', 10, { subType: 'EARTH_DRAGON' })
+    )
+    addReviewEvent(fixture.details, {
+      type: 'DRAGON_SOUL_GIVEN',
+      timestamp: 1_300_000,
+      name: 'Mountain',
+      teamId: 100
+    })
+
+    const [blue, red] = parse(fixture).report!.teams
+    expect(blue).toMatchObject({
+      teamId: 100,
+      win: true,
+      towers: 7,
+      dragons: 2,
+      barons: 1,
+      grubs: 3,
+      heralds: 0,
+      firstBlood: false,
+      firstTower: false,
+      firstDragon: true,
+      firstBaron: true,
+      bans: [157],
+      dragonTypes: ['FIRE_DRAGON', 'EARTH_DRAGON'],
+      soul: 'Mountain'
+    })
+    expect(red).toMatchObject({
+      teamId: 200,
+      win: false,
+      towers: 2,
+      heralds: 1,
+      firstBlood: true,
+      firstTower: true,
+      bans: [],
+      dragonTypes: ['WATER_DRAGON'],
+      soul: null
+    })
+    // The players carry no kill numbers in this fixture, so the team total is unknown, not zero.
+    expect(blue.kills).toBeNull()
+  })
+
+  it('rebuilds the item path with undo, sales and separate stops at the shop', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewPurchase(5000, 1055),
+      reviewPurchase(6000, 2003),
+      reviewPurchase(240_000, 1036),
+      reviewPurchase(240_500, 1001),
+      reviewPurchase(241_000, 1037),
+      reviewUndo(241_500, 1037),
+      reviewPurchase(510_000, 3158),
+      reviewKill(720_000),
+      reviewPurchase(740_000, 6692),
+      reviewPurchase(900_000, 3142),
+      reviewSale(900_500, 1055),
+      reviewSale(901_000, 1036),
+      reviewUndoSale(901_500, 1036),
+      // Someone else's shopping never enters the reviewed player's path.
+      reviewPurchase(300_000, 6692, 3)
+    ])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 8: 1 })
+
+    const build = parse(fixture, itemKind).report!.build
+    expect(build.purchases).toEqual([
+      { timestamp: 5000, itemId: 1055, kind: 'starter' },
+      { timestamp: 6000, itemId: 2003, kind: 'consumable' },
+      { timestamp: 240_000, itemId: 1036, kind: 'component' },
+      { timestamp: 240_500, itemId: 1001, kind: 'component' },
+      { timestamp: 510_000, itemId: 3158, kind: 'boots' },
+      { timestamp: 740_000, itemId: 6692, kind: 'core' },
+      { timestamp: 900_000, itemId: 3142, kind: 'core' }
+    ])
+    expect(build.sales).toEqual([{ timestamp: 900_500, itemId: 1055 }])
+    expect(build.coreItems).toEqual([
+      { timestamp: 740_000, itemId: 6692 },
+      { timestamp: 900_000, itemId: 3142 }
+    ])
+    expect(build.boots).toEqual({ timestamp: 510_000, itemId: 3158 })
+    expect(build.visits).toEqual([
+      { timestamp: 5000, afterDeath: false, itemIds: [1055, 2003] },
+      { timestamp: 240_000, afterDeath: false, itemIds: [1036, 1001] },
+      { timestamp: 510_000, afterDeath: false, itemIds: [3158] },
+      // Bought 20 seconds after dying: the respawn, not a recall.
+      { timestamp: 740_000, afterDeath: true, itemIds: [6692] },
+      { timestamp: 900_000, afterDeath: false, itemIds: [3142] }
+    ])
+
+    // Without a catalogue nothing is classified and no completed item is claimed.
+    const unknown = parse(fixture).report!.build
+    expect(unknown.purchases.every((purchase) => purchase.kind === null)).toBe(true)
+    expect(unknown.coreItems).toEqual([])
+    expect(unknown.boots).toBeNull()
+  })
+
+  it('reports only the part of the max order that the level-ups settle', () => {
+    const order = (slots: number[]) => {
+      const fixture = createReviewFixture()
+      slots.forEach((slot, index) =>
+        addReviewEvent(fixture.details, reviewSkill(10_000 + index * 60_000, slot))
+      )
+      // Evolutions are not ability points, and other players' points are ignored.
+      addReviewEvent(fixture.details, reviewSkill(15_000, 1, 8, 'EVOLVE'))
+      addReviewEvent(fixture.details, reviewSkill(16_000, 2, 3))
+      return parse(fixture).report!.build
+    }
+
+    const full = order([1, 2, 3, 1, 1, 4, 1, 3, 1, 3, 4, 3, 3, 2, 2])
+    expect(full.skills).toHaveLength(15)
+    expect(full.skills[5]).toEqual({ timestamp: 310_000, slot: 4 })
+    // Q maxed at the ninth point, E at the thirteenth, W still at three points.
+    expect(full.skillPriority).toEqual([1, 3, 2])
+
+    // Q leads, but W and E hold one point each: only the first place is settled.
+    expect(order([1, 2, 3, 1, 1]).skillPriority).toEqual([1])
+    // Two points say nothing about a max order.
+    expect(order([1, 2, 3, 1]).skillPriority).toBeNull()
+    expect(order([]).skillPriority).toBeNull()
+  })
+
+  it('times level-ups against the lane opponent and samples fixed checkpoints', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewLevelUp(95_000, 2),
+      reviewLevelUp(160_000, 3),
+      reviewLevelUp(330_000, 6),
+      reviewLevelUp(331_000, 6),
+      reviewLevelUp(100_000, 2, 3),
+      reviewLevelUp(345_000, 6, 3),
+      reviewLevelUp(90_000, 2, 2)
+    ])
+      addReviewEvent(fixture.details, event)
+    const tenth = fixture.details.json.frames[10].participantFrames
+    Object.assign(tenth['8'], {
+      xp: 5000,
+      damageStats: { totalDamageDoneToChampions: 3000 } as DamageStats
+    })
+    Object.assign(tenth['3'], { xp: 4600 })
+    fixture.details.json.frames = fixture.details.json.frames.filter(
+      (frame) => frame.timestamp !== 900_000
+    )
+
+    const report = parse(fixture).report!
+    expect(report.levels).toEqual([
+      { level: 2, own: 95_000, opponent: 100_000 },
+      { level: 3, own: 160_000, opponent: null },
+      { level: 6, own: 330_000, opponent: 345_000 }
+    ])
+    // A 25-minute game has no 30-minute checkpoint.
+    expect(report.checkpoints.map((checkpoint) => checkpoint.minute)).toEqual([5, 10, 15, 20, 25])
+    expect(report.checkpoints[0]).toEqual({
+      minute: 5,
+      timestamp: 300_000,
+      own: { gold: 2300, cs: 40, xp: null, level: 3, damage: null },
+      opponent: { gold: 2000, cs: 35, xp: null, level: 3, damage: null },
+      goldDiff: 300,
+      csDiff: 5,
+      xpDiff: null,
+      levelDiff: 0,
+      teamGoldDiff: 900
+    })
+    expect(report.checkpoints[1]).toMatchObject({
+      timestamp: 600_000,
+      own: { gold: 4100, cs: 80, xp: 5000, level: 6, damage: 3000 },
+      goldDiff: 600,
+      csDiff: 10,
+      xpDiff: 400,
+      teamGoldDiff: 1800
+    })
+    // The 15-minute snapshot is missing: the checkpoint stays empty instead of borrowing a neighbour.
+    expect(report.checkpoints[2]).toEqual({
+      minute: 15,
+      timestamp: null,
+      own: null,
+      opponent: null,
+      goldDiff: null,
+      csDiff: null,
+      xpDiff: null,
+      levelDiff: null,
+      teamGoldDiff: null
+    })
+  })
+
+  it('lists own kills and assists with the allies credited beside the player', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(fixture.details, reviewTakedown(300_000, 8, 3, { assists: [10] }))
+    addReviewEvent(fixture.details, {
+      type: 'CHAMPION_SPECIAL_KILL',
+      timestamp: 300_000,
+      killerId: 8,
+      position: { x: 7500, y: 7500 },
+      killType: 'KILL_FIRST_BLOOD'
+    })
+    addReviewEvent(
+      fixture.details,
+      reviewTakedown(600_000, 10, 9, { assists: [8, 6], shutdownBounty: 450 })
+    )
+    // Finished off by a turret: still an assist for the player, with nobody else credited.
+    addReviewEvent(fixture.details, reviewTakedown(700_000, 0, 5, { assists: [8], bounty: 0 }))
+    addReviewEvent(fixture.details, reviewTakedown(800_000, 2, 1))
+    setDeaths(fixture, { 3: 1, 9: 1, 5: 1, 1: 1 })
+
+    const report = parse(fixture).report!
+    expect(report.complete).toBe(true)
+    expect(report.takedowns).toEqual([
+      {
+        timestamp: 300_000,
+        point: { x: 7500, y: 7500 },
+        victim: { championId: 103, role: 'MIDDLE' },
+        kill: true,
+        allies: 1,
+        bounty: 300,
+        shutdownBounty: 0,
+        firstBlood: true
+      },
+      {
+        timestamp: 600_000,
+        point: { x: 7500, y: 7500 },
+        victim: { championId: 109, role: 'JUNGLE' },
+        kill: false,
+        allies: 2,
+        bounty: 300,
+        shutdownBounty: 450,
+        firstBlood: false
+      },
+      {
+        timestamp: 700_000,
+        point: { x: 7500, y: 7500 },
+        victim: { championId: 105, role: 'BOTTOM' },
+        kill: false,
+        allies: 0,
+        bounty: 0,
+        shutdownBounty: 0,
+        firstBlood: false
+      }
+    ])
+  })
+
+  it('breaks an own death down by who dealt the damage and with what', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(
+      fixture.details,
+      reviewTakedown(500_000, 3, 8, {
+        assists: [9],
+        received: [
+          { participantId: 3, spellSlot: 0, magicDamage: 300, trueDamage: 20 },
+          { participantId: 3, spellSlot: 2, magicDamage: 150 },
+          { participantId: 3, basic: true, physicalDamage: 60 },
+          { participantId: 3, spellSlot: 63, magicDamage: 40 },
+          { participantId: 3, spellSlot: 4, trueDamage: 100 },
+          { participantId: 3, spellSlot: 7, magicDamage: 25 },
+          { participantId: 9, spellSlot: 3, physicalDamage: 250 },
+          { type: 'TOWER', basic: true, physicalDamage: 200 },
+          { type: 'MINION', physicalDamage: 30 },
+          { type: 'MONSTER' }
+        ],
+        dealt: [
+          { participantId: 8, spellSlot: 0, physicalDamage: 500 },
+          { participantId: 8, basic: true, magicDamage: 80 }
+        ]
+      })
+    )
+    fixture.details.json.frames[8].participantFrames['3'].level = 6
+    setDeaths(fixture, { 8: 1 })
+
+    const report = parse(fixture).report!
+    const none = { basic: 0, passive: 0, q: 0, w: 0, e: 0, r: 0, summoner: 0, other: 0 }
+    expect(report.deaths).toEqual([
+      {
+        timestamp: 500_000,
+        sources: [
+          {
+            kind: 'champion',
+            championId: 103,
+            role: 'MIDDLE',
+            total: 695,
+            physical: 60,
+            magic: 515,
+            trueDamage: 120,
+            // Slot 4 is a summoner spell; slot 7 (an item active) has no bucket of its own.
+            slots: { ...none, basic: 60, passive: 40, q: 320, e: 150, summoner: 100, other: 25 }
+          },
+          {
+            kind: 'champion',
+            championId: 109,
+            role: 'JUNGLE',
+            total: 250,
+            physical: 250,
+            magic: 0,
+            trueDamage: 0,
+            slots: { ...none, r: 250 }
+          },
+          {
+            kind: 'turret',
+            championId: null,
+            role: null,
+            total: 200,
+            physical: 200,
+            magic: 0,
+            trueDamage: 0,
+            slots: { ...none, basic: 200 }
+          },
+          {
+            kind: 'minion',
+            championId: null,
+            role: null,
+            total: 30,
+            physical: 30,
+            magic: 0,
+            trueDamage: 0,
+            slots: { ...none, other: 30 }
+          }
+        ],
+        damageTaken: 1175,
+        damageDealt: 580,
+        bounty: 300,
+        // Levels come from the 8-minute snapshot, the last one before the death.
+        level: 5,
+        killerLevel: 6,
+        fight: null,
+        objectivesAfter: []
+      }
+    ])
+  })
+
+  it('classifies objectives and states the player’s part in each', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewMonster(360_000, 'DRAGON', 10, { subType: 'FIRE_DRAGON', assists: [8] }),
+      reviewTakedown(690_000, 3, 8),
+      reviewMonster(720_000, 'RIFTHERALD', 9, { position: { x: 5000, y: 10_400 } }),
+      reviewBuilding(740_000, 200, 8, { assists: [2] }),
+      reviewMonster(840_000, 'HORDE', 9, { position: null }),
+      reviewMonster(1_200_000, 'BARON_NASHOR', 0, { killerTeamId: 100 }),
+      reviewMonster(1_260_000, 'DRAGON', 9, { subType: 'ELDER_DRAGON' }),
+      reviewMonster(1_320_000, 'ATAKHAN', 9, { subType: 'ATAKHAN_RUINOUS' }),
+      reviewBuilding(1_440_000, 100, 3, { buildingType: 'INHIBITOR_BUILDING' }),
+      reviewMonster(1_450_000, 'SCUTTLE', 9)
+    ])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 8: 1 })
+
+    const objectives = parse(fixture).report!.objectives
+    expect(
+      objectives.map((objective) => [objective.kind, objective.detail, objective.own])
+    ).toEqual([
+      ['dragon', 'FIRE_DRAGON', true],
+      ['herald', null, false],
+      ['tower', 'OUTER_TURRET', true],
+      ['grubs', null, false],
+      ['baron', null, true],
+      ['elder', 'ELDER_DRAGON', false],
+      ['atakhan', 'ATAKHAN_RUINOUS', false],
+      ['inhibitor', null, false],
+      ['other', 'SCUTTLE', false]
+    ])
+    // The fixture keeps the player at (7080, 7000) in every snapshot.
+    expect(objectives[0]).toEqual({
+      timestamp: 360_000,
+      kind: 'dragon',
+      detail: 'FIRE_DRAGON',
+      lane: null,
+      own: true,
+      credited: true,
+      sinceDeath: null,
+      distance: 3801,
+      snapshotOffset: 0,
+      point: { x: 9866, y: 4414 }
+    })
+    // The enemy herald fell 30 seconds after the player's death.
+    expect(objectives[1]).toMatchObject({ credited: false, sinceDeath: 30_000, distance: 3986 })
+    // The nearest snapshot to 12:20 is the 12:00 one, 20 seconds earlier.
+    expect(objectives[2]).toMatchObject({
+      lane: 'MID_LANE',
+      credited: true,
+      sinceDeath: 50_000,
+      distance: 2407,
+      snapshotOffset: -20_000
+    })
+    // No coordinates in the record: no distance is invented. The death is also too long ago.
+    expect(objectives[3]).toMatchObject({ sinceDeath: null, distance: null, snapshotOffset: null })
+    expect(objectives[7]).toMatchObject({ lane: 'MID_LANE', credited: false })
+  })
+
+  it('groups kills into fights by time and distance', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewTakedown(600_000, 3, 8, { assists: [9], position: { x: 5000, y: 5000 } }),
+      reviewTakedown(606_000, 10, 3, { assists: [2], position: { x: 5500, y: 5200 } }),
+      reviewTakedown(612_000, 9, 10, { position: { x: 5200, y: 5600 } }),
+      // One second later but on the other side of the map: a different skirmish.
+      reviewTakedown(613_000, 5, 4, { position: { x: 12_000, y: 2000 } }),
+      reviewMonster(630_000, 'DRAGON', 9, { subType: 'FIRE_DRAGON' }),
+      reviewTakedown(900_000, 1, 2, { position: { x: 2000, y: 12_000 } }),
+      // A single kill, but six champions are credited on it.
+      reviewTakedown(1_000_000, 8, 3, { assists: [2, 10, 4, 6], position: { x: 7000, y: 7000 } }),
+      // Same place 20 seconds later: past the time window.
+      reviewTakedown(1_020_000, 9, 6, { position: { x: 7100, y: 7100 } }),
+      reviewTakedown(1_300_000, 3, 8, { position: { x: 3000, y: 3000 } })
+    ])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 8: 2, 3: 2, 10: 1, 4: 1, 2: 1, 6: 1 })
+
+    const report = parse(fixture).report!
+    expect(report.complete).toBe(true)
+    expect(report.fights).toEqual([
+      {
+        start: 600_000,
+        end: 612_000,
+        point: { x: 5233, y: 5267 },
+        kills: 1,
+        deaths: 2,
+        allies: 3,
+        enemies: 2,
+        ownKills: 0,
+        ownAssists: 0,
+        ownDeathOrder: 1,
+        objectivesAfter: [0]
+      },
+      {
+        start: 1_000_000,
+        end: 1_000_000,
+        point: { x: 7000, y: 7000 },
+        kills: 1,
+        deaths: 0,
+        allies: 5,
+        enemies: 1,
+        ownKills: 1,
+        ownAssists: 0,
+        ownDeathOrder: null,
+        objectivesAfter: []
+      }
+    ])
+    expect(
+      report.deaths.map((death) => [death.timestamp, death.fight, death.objectivesAfter])
+    ).toEqual([
+      [600_000, 0, [0]],
+      [1_300_000, null, []]
+    ])
+  })
+
+  it('keeps only real ward placements and the wards the player cleared', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewWard(60_000),
+      reviewWard(400_000, 'CONTROL_WARD'),
+      reviewWard(500_000, 'UNDEFINED'),
+      reviewWard(520_000, 'YELLOW_TRINKET', 3),
+      reviewWardKill(700_000),
+      reviewWardKill(710_000, 'CONTROL_WARD', 3),
+      // Traps and unnamed objects are not wards: the summary does not count them either.
+      reviewWardKill(720_000, 'TEEMO_MUSHROOM'),
+      reviewWardKill(730_000, 'UNDEFINED')
+    ])
+      addReviewEvent(fixture.details, event)
+
+    expect(parse(fixture).report!.vision).toEqual({
+      placed: [
+        { timestamp: 60_000, wardType: 'YELLOW_TRINKET' },
+        { timestamp: 400_000, wardType: 'CONTROL_WARD' }
+      ],
+      cleared: [{ timestamp: 700_000, wardType: 'SIGHT_WARD' }]
+    })
+  })
+
+  it('flags the report when the event log does not reconcile with the summary', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(fixture.details, reviewKill(500_000))
+    // The summary still says zero deaths.
+    expect(parse(fixture).report!.complete).toBe(false)
+  })
+})

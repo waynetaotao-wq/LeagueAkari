@@ -6,7 +6,9 @@ import type {
   SgpParticipantLol
 } from '@shared/types/sgp/match-history'
 
+import { digestReviewMatch } from './match-digest'
 import { type ReviewCoreItemResolver, readReviewDeaths, readReviewEarlyFacts } from './match-facts'
+import { type ReviewItemKindResolver, readReviewReport } from './match-report'
 import type {
   ReviewEvent,
   ReviewFrame,
@@ -143,7 +145,11 @@ function readFrame(
       cs: cs !== null && jungleCs !== null ? cs + jungleCs : null,
       position: readPosition(valid?.position),
       level: nonnegative(valid?.level),
-      alive: health === null ? null : health > 0
+      alive: health === null ? null : health > 0,
+      xp: nonnegative(valid?.xp),
+      damage: nonnegative(valid?.damageStats?.totalDamageDoneToChampions),
+      damageTaken: nonnegative(valid?.damageStats?.totalDamageTaken),
+      unspentGold: nonnegative(valid?.currentGold)
     }
   })
   const own = parsed.find((p) => p.participantId === self.participantId)
@@ -425,7 +431,7 @@ export function parseReviewMatch(
   details: SgpGameDetailsLol,
   puuid: string,
   sgpServerId: string,
-  options: { coreItem?: ReviewCoreItemResolver } = {}
+  options: { coreItem?: ReviewCoreItemResolver; itemKind?: ReviewItemKindResolver } = {}
 ): ReviewParseResult {
   const eligible = getReviewSummaryEligibility(summary, puuid)
   if (!eligible.ok) return eligible
@@ -621,5 +627,20 @@ export function parseReviewMatch(
     })
   }
   match.moments = buildMoments(match)
+  match.report = readReviewReport({
+    summary,
+    rawFrames: orderedRawFrames,
+    frames,
+    events,
+    deaths,
+    participants,
+    self,
+    opponentId: opponent?.participantId ?? null,
+    durationMs,
+    eventsComplete,
+    snapshotToleranceMs: REVIEW_SNAPSHOT_TOLERANCE_MS,
+    itemKind: options.itemKind
+  })
+  match.digest = digestReviewMatch(match)
   return { ok: true, match }
 }

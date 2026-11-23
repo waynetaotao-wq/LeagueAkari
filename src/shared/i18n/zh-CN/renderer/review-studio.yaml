@@ -83,6 +83,221 @@ reviewStudio:
   tabs:
     deaths: 死亡地图
     gap: 胜负差异
+  fullReport: 完整数据
+  report:
+    hint: 战绩和时间线里记录的全部事实，按类别整理。点时间可以跳到地图上的对应时刻。
+    incomplete: 这一局的事件记录无法与战绩完整核对，下面的列表可能缺条目。
+    unavailable: 历史存档不含完整数据，请在上方重新读取这一局。
+    noOpponent: 未能唯一确认同位置对手，对位一列留空。
+    scoreboard:
+      title: 数据总览
+      metric: 项目
+      own: 本人
+      opponent: 对位
+      teamShare: 队内占比
+      kda: 击杀 / 死亡 / 助攻
+      killParticipation: 参团率
+      level: 等级
+      cs: 补刀
+      csPerMinute: 每分钟补刀
+      gold: 经济
+      damage: 对英雄伤害
+      damageTaken: 承受伤害
+      visionScore: 视野得分
+      wards: 插眼 / 排眼
+      controlWards: 购买控制守卫
+      timeDead: 阵亡时间
+      unspentGold: 未花掉的金币
+      players: 双方十人
+      champion: 英雄
+      vision: 视野
+    laning:
+      title: 对线与节奏
+      checkpoints: 对位差距
+      checkpointsHint: 正值为领先。取自最接近整点的快照，没有快照就留空。
+      minute: '{{minute}} 分钟'
+      gold: 经济差
+      cs: 补刀差
+      xp: 经验差
+      level: 等级差
+      teamGold: 团队经济差
+      levels: 到达等级的时间
+      levelColumn: 等级
+      ownTime: 本人
+      opponentTime: 对位
+      lead: 先后
+      leadAhead: '早 {{time}}'
+      leadBehind: '晚 {{time}}'
+      leadEven: 同时
+    build:
+      title: 出装与技能
+      coreItems: 成装顺序
+      boots: 鞋子
+      noCore: 没有买出成装
+      noCatalogue: 物品库尚未加载，无法识别成装
+      visits: 购物记录
+      visitOpening: 出门装
+      visitRecall: 回城
+      visitAfterDeath: 阵亡后
+      sales: 卖出
+      skills: 技能加点顺序
+      skillPriority: 主加顺序
+      skillPriorityUnknown: 加点太少，看不出主加顺序
+      runes: 符文
+      spells: 召唤师技能
+      casts: '{{count}} 次'
+      abilityCasts: 技能施放次数
+    takedowns:
+      title: 击杀与助攻
+      empty: 这一局没有击杀或助攻
+      kill: 击杀
+      assist: 助攻
+      solo: 单杀
+      withAllies: '{{count}} 名队友参与'
+      gold: '{{gold}} 金币'
+      shutdown: '终结赏金 {{gold}}'
+      firstBlood: 一血
+    deaths:
+      title: 阵亡详情
+      empty: 这一局没有阵亡
+      killedBy: '被{{killer}}击杀'
+      executed: 被防御塔、小兵或野怪击杀
+      damageTaken: '承受 {{damage}}'
+      damageDealt: '打出 {{damage}}'
+      levels: '{{own}} 级对 {{killer}} 级'
+      inFight: 交战中
+      isolated: 交战之外
+      gaveGold: '送出 {{gold}} 金币'
+      objectivesAfter: '此后 90 秒内对方拿下：{{objectives}}'
+      sourcesHint: 伤害取自击杀记录里的统计，不等于整场交战的全部伤害。
+      physical: 物理
+      magic: 魔法
+      trueDamage: 真实
+      slots:
+        basic: 普攻
+        passive: 被动
+        q: Q
+        w: W
+        e: E
+        r: R
+        summoner: 召唤师技能
+        other: 其它
+      sourceKinds:
+        turret: 防御塔
+        minion: 小兵
+        monster: 野怪
+        other: 其它
+    objectives:
+      title: 地图资源
+      empty: 时间线里没有资源事件
+      own: 己方
+      enemy: 敌方
+      unassigned: 未归属
+      credited: 有参与
+      sinceDeath: '本人阵亡后 {{seconds}} 秒'
+      proximity:
+        near: 本人在附近
+        away: 本人不在附近
+        far: 本人离得很远
+      distanceHint: '相距约 {{distance}}（地图宽约 15,000）。位置取自 {{seconds}} 秒{{direction}}的快照，只能说明大致远近。'
+      before: 前
+      after: 后
+      dragonName: '{{element}}小龙'
+      towerName: '{{lane}}{{tier}}'
+      inhibitorName: '{{lane}}水晶'
+      otherName: '其它目标（{{raw}}）'
+      sideName: '{{side}}{{name}}'
+      separator: 、
+      kinds:
+        dragon: 小龙
+        elder: 远古巨龙
+        herald: 峡谷先锋
+        grubs: 虚空巢虫
+        baron: 纳什男爵
+        atakhan: 厄塔汗
+        tower: 防御塔
+        inhibitor: 水晶
+        other: 其它目标
+      details:
+        FIRE_DRAGON: 炼狱
+        WATER_DRAGON: 海洋
+        EARTH_DRAGON: 山脉
+        AIR_DRAGON: 云端
+        HEXTECH_DRAGON: 海克斯
+        CHEMTECH_DRAGON: 炼金
+        ELDER_DRAGON: 远古
+        OUTER_TURRET: 外塔
+        INNER_TURRET: 二塔
+        BASE_TURRET: 高地塔
+        NEXUS_TURRET: 门牙塔
+      lanes:
+        TOP_LANE: 上路
+        MID_LANE: 中路
+        BOT_LANE: 下路
+    fights:
+      title: 交战
+      hint: 15 秒内、相距不远的击杀归为同一场交战；至少两次击杀，或一次击杀但有六名英雄参与。
+      empty: 没有符合条件的交战
+      score: '{{kills}} 换 {{deaths}}'
+      sides: '{{allies}} 人对 {{enemies}} 人'
+      own: '本人 {{kills}} 杀 {{assists}} 助'
+      survived: 存活
+      deathOrder: '己方第 {{order}} 个阵亡'
+      absent: 未参与
+      objectivesAfter: '此后 60 秒：{{objectives}}'
+    vision:
+      title: 视野
+      hint: 只计饰品眼、控制守卫和辅助装的眼，与战绩里的插眼数、排眼数口径一致。
+      phase: 时间段
+      placed: 放置
+      cleared: 清除
+      early: 0–10 分钟
+      middle: 10–20 分钟
+      late: 20 分钟后
+      total: 合计
+      wardTypes:
+        YELLOW_TRINKET: 饰品眼
+        SIGHT_WARD: 辅助眼
+        CONTROL_WARD: 控制守卫
+        BLUE_TRINKET: 远见改造
+    challenges:
+      title: 官方挑战统计
+      hint: 服务器自己记录的计数，口径由官方决定，这里原样显示。
+      empty: 这一局的战绩没有挑战统计
+      keys:
+        soloKills: 单杀
+        quickSoloKills: 快速单杀
+        outnumberedKills: 以少打多击杀
+        killsNearEnemyTurret: 敌方塔下击杀
+        killsUnderOwnTurret: 己方塔下击杀
+        skillshotsHit: 非指向技能命中
+        skillshotsDodged: 躲开非指向技能
+        dodgeSkillShotsSmallWindow: 极限躲技能
+        landSkillShotsEarlyGame: 前期技能命中
+        enemyChampionImmobilizations: 控住敌方英雄
+        immobilizeAndKillWithAlly: 控制后协同击杀
+        pickKillWithAlly: 协同抓单击杀
+        saveAllyFromDeath: 救下队友
+        survivedSingleDigitHpCount: 个位数血量存活
+        tookLargeDamageSurvived: 承受大量伤害后存活
+        laneMinionsFirst10Minutes: 前 10 分钟兵线补刀
+        jungleCsBefore10Minutes: 前 10 分钟野怪
+        maxCsAdvantageOnLaneOpponent: 对位最大补刀领先
+        maxLevelLeadLaneOpponent: 对位最大等级领先
+        turretPlatesTaken: 参与拿下镀层
+        bountyGold: 赏金金币
+        controlWardsPlaced: 放置控制守卫
+        stealthWardsPlaced: 放置隐形守卫
+        wardTakedowns: 排眼参与
+        wardTakedownsBefore20M: 20 分钟前排眼参与
+        visionScoreAdvantageLaneOpponent: 对位视野得分优势
+        enemyJungleMonsterKills: 敌方野区野怪
+        alliedJungleMonsterKills: 己方野区野怪
+        scuttleCrabKills: 河蟹
+        buffsStolen: 偷取增益野怪
+        epicMonsterSteals: 抢下史诗野怪
+        abilityUses: 技能施放总次数
+        unseenRecalls: 无视野回城
   broadenOffer:
     analyzeHint: '当前筛选（{{scope}}）只有 {{current}} 场，放宽后共 {{total}} 场。'
     showHint: '当前筛选（{{scope}}）下本机已有 {{current}} 场，放宽后共 {{total}} 场。'

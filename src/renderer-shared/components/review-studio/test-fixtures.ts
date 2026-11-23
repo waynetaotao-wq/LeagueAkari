@@ -1,10 +1,13 @@
 import type {
+  BuildingType,
+  DamageDetail,
   DetailedGameEvent,
   DetailedParticipantFrame,
   LaneType,
   SgpGameDetailsLol,
   SgpGameSummaryLol,
-  SgpParticipantLol
+  SgpParticipantLol,
+  TowerType
 } from '@shared/types/sgp/match-history'
 
 // [lolps] 最小服务端夹具；不填充与复盘无关的战绩字段。
@@ -168,4 +171,152 @@ export function reviewDragon(timestamp: number, killerId = 3): DetailedGameEvent
     monsterType: 'DRAGON',
     position: { x: 9866, y: 4414 }
   }
+}
+
+/** A champion kill with every credited player spelled out. killerId 0 is a turret or minion. */
+export function reviewTakedown(
+  timestamp: number,
+  killerId: number,
+  victimId: number,
+  options: {
+    assists?: number[]
+    position?: { x: number; y: number }
+    received?: Partial<DamageDetail>[]
+    dealt?: Partial<DamageDetail>[]
+    bounty?: number
+    shutdownBounty?: number
+  } = {}
+): DetailedGameEvent {
+  const damage = (entry: Partial<DamageDetail>): DamageDetail => ({
+    basic: false,
+    magicDamage: 0,
+    name: '',
+    participantId: 0,
+    physicalDamage: 0,
+    spellName: '',
+    spellSlot: -1,
+    trueDamage: 0,
+    type: 'OTHER',
+    ...entry
+  })
+  return {
+    type: 'CHAMPION_KILL',
+    timestamp,
+    killerId,
+    victimId,
+    assistingParticipantIds: options.assists ?? [],
+    position: options.position ?? { x: 7500, y: 7500 },
+    bounty: options.bounty ?? 300,
+    shutdownBounty: options.shutdownBounty ?? 0,
+    killStreakLength: 0,
+    victimDamageReceived: (options.received ?? []).map(damage),
+    ...(options.dealt ? { victimDamageDealt: options.dealt.map(damage) } : {})
+  }
+}
+
+export function reviewMonster(
+  timestamp: number,
+  monsterType: string,
+  killerId: number,
+  options: {
+    subType?: string
+    assists?: number[]
+    position?: { x: number; y: number } | null
+    killerTeamId?: number
+  } = {}
+): DetailedGameEvent {
+  return {
+    type: 'ELITE_MONSTER_KILL',
+    timestamp,
+    killerId,
+    monsterType,
+    ...(options.subType ? { monsterSubType: options.subType } : {}),
+    ...(options.assists ? { assistingParticipantIds: options.assists } : {}),
+    ...(options.killerTeamId ? { killerTeamId: options.killerTeamId } : {}),
+    ...(options.position === null ? {} : { position: options.position ?? { x: 9866, y: 4414 } })
+  }
+}
+
+/** teamId is the team that owns the destroyed building, as in real timelines. */
+export function reviewBuilding(
+  timestamp: number,
+  teamId: number,
+  killerId: number,
+  options: {
+    buildingType?: BuildingType
+    towerType?: TowerType
+    laneType?: LaneType
+    assists?: number[]
+    position?: { x: number; y: number }
+  } = {}
+): DetailedGameEvent {
+  const buildingType = options.buildingType ?? 'TOWER_BUILDING'
+  return {
+    type: 'BUILDING_KILL',
+    timestamp,
+    killerId,
+    teamId,
+    bounty: 0,
+    buildingType,
+    laneType: options.laneType ?? 'MID_LANE',
+    position: options.position ?? (teamId === 100 ? { x: 5846, y: 6396 } : { x: 8955, y: 8510 }),
+    ...(buildingType === 'TOWER_BUILDING'
+      ? { towerType: options.towerType ?? 'OUTER_TURRET' }
+      : {}),
+    ...(options.assists ? { assistingParticipantIds: options.assists } : {})
+  }
+}
+
+export function reviewLevelUp(
+  timestamp: number,
+  level: number,
+  participantId = 8
+): DetailedGameEvent {
+  return { type: 'LEVEL_UP', timestamp, participantId, level }
+}
+
+/** skillSlot 1-4 is Q, W, E, R. */
+export function reviewSkill(
+  timestamp: number,
+  skillSlot: number,
+  participantId = 8,
+  levelUpType: 'NORMAL' | 'EVOLVE' = 'NORMAL'
+): DetailedGameEvent {
+  return { type: 'SKILL_LEVEL_UP', timestamp, participantId, skillSlot, levelUpType }
+}
+
+export function reviewSale(
+  timestamp: number,
+  itemId: number,
+  participantId = 8
+): DetailedGameEvent {
+  return { type: 'ITEM_SOLD', timestamp, participantId, itemId }
+}
+
+/** Undoing a sale, the mirror of an undone purchase: beforeId = 0, afterId = item. */
+export function reviewUndoSale(
+  timestamp: number,
+  itemId: number,
+  participantId = 8
+): DetailedGameEvent {
+  return { type: 'ITEM_UNDO', timestamp, participantId, beforeId: 0, afterId: itemId, goldGain: 0 }
+}
+
+export function reviewWardKill(
+  timestamp: number,
+  wardType = 'SIGHT_WARD',
+  killerId = 8
+): DetailedGameEvent {
+  return { type: 'WARD_KILL', timestamp, killerId, wardType }
+}
+
+/** Overwrites summary fields of one participant and returns it. */
+export function setReviewStats(
+  summary: SgpGameSummaryLol,
+  participantId: number,
+  values: Partial<SgpParticipantLol>
+) {
+  const participant = summary.json.participants.find((p) => p.participantId === participantId)
+  if (!participant) throw new Error('Fixture participant missing')
+  return Object.assign(participant, values)
 }

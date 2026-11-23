@@ -1,4 +1,6 @@
 import { getReviewPatch } from './analysis'
+import { REVIEW_DIGEST_METRIC_KEYS } from './match-digest'
+import { REVIEW_CHALLENGE_KEYS } from './match-report'
 import {
   REVIEW_STORAGE_NAMESPACE,
   type ReviewArchiveScope,
@@ -8,6 +10,7 @@ import {
 import type {
   ReviewDeath,
   ReviewDeathSource,
+  ReviewDigest,
   ReviewEarlyFacts,
   ReviewEvent,
   ReviewMatch,
@@ -212,6 +215,67 @@ function parseEarly(value: unknown): ReviewEarlyFacts | null {
   return facts
 }
 
+/**
+ * The per-game numbers behind cross-game averages. A key an older record lacks is simply
+ * unknown; a malformed value discards the whole block. The full report is never archived.
+ */
+function parseDigest(value: unknown): ReviewDigest | null {
+  const digest = object(value)
+  const source = object(digest?.metrics)
+  if (!digest || !source) return null
+  const metrics: Record<string, number | null> = {}
+  for (const key of REVIEW_DIGEST_METRIC_KEYS) {
+    const metric = source[key] ?? null
+    if (!(metric === null || finite(metric))) return null
+    metrics[key] = metric
+  }
+  if (!Array.isArray(digest.coreItems) || digest.coreItems.length > 3) return null
+  const coreItems: ReviewDigest['coreItems'] = []
+  for (const item of digest.coreItems) {
+    const entry = object(item)
+    if (!entry || !nonnegative(entry.timestamp) || !positiveInteger(entry.itemId)) return null
+    coreItems.push({ timestamp: entry.timestamp, itemId: entry.itemId })
+  }
+  const priority = digest.skillPriority
+  if (
+    !nullableId(digest.bootsItemId) ||
+    !nullableId(digest.keystone) ||
+    !Array.isArray(digest.summonerSpells) ||
+    digest.summonerSpells.length > 2 ||
+    !digest.summonerSpells.every(positiveInteger) ||
+    !(
+      priority === null ||
+      (Array.isArray(priority) &&
+        priority.length >= 1 &&
+        priority.length <= 3 &&
+        priority.every((slot) => slot === 1 || slot === 2 || slot === 3) &&
+        new Set(priority).size === priority.length)
+    )
+  )
+    return null
+  let challenges: Record<string, number> | null = null
+  if (digest.challenges !== null) {
+    const counters = object(digest.challenges)
+    if (!counters) return null
+    challenges = {}
+    for (const key of REVIEW_CHALLENGE_KEYS) {
+      const counter = counters[key]
+      if (counter === undefined) continue
+      if (!finite(counter)) return null
+      challenges[key] = counter
+    }
+  }
+  return {
+    metrics,
+    coreItems,
+    bootsItemId: digest.bootsItemId,
+    keystone: digest.keystone,
+    summonerSpells: [...digest.summonerSpells],
+    skillPriority: priority === null ? null : [...priority],
+    challenges
+  }
+}
+
 /** Validates persisted data and rebuilds it, so accidentally stored frame tracks never survive. */
 function compactMatch(value: unknown): ReviewMatch | null {
   const match = object(value)
@@ -299,7 +363,8 @@ function compactMatch(value: unknown): ReviewMatch | null {
       warnings: [...new Set([...quality.warnings, REVIEW_ARCHIVE_WARNING])]
     },
     deaths: parseDeaths(match.deaths),
-    early: parseEarly(match.early)
+    early: parseEarly(match.early),
+    digest: parseDigest(match.digest)
   }
 }
 

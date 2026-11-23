@@ -35,6 +35,7 @@
       <NRadioGroup v-model:value="view" :aria-label="text.review" size="small">
         <NRadioButton value="overview">{{ t('overview') }}</NRadioButton>
         <NRadioButton value="timeline">{{ t('timeline') }}</NRadioButton>
+        <NRadioButton value="report">{{ t('fullReport') }}</NRadioButton>
         <NRadioButton value="details">{{ t('details') }}</NRadioButton>
       </NRadioGroup>
       <NButton
@@ -87,6 +88,10 @@
         @seek="openTimeline"
       />
     </div>
+    <template v-if="view === 'report'">
+      <ReviewReportPanel v-if="model.report" :model="model" @timeline="openTimeline" />
+      <NEmpty v-else :description="t('report.unavailable')" />
+    </template>
     <div v-if="view === 'details'" class="detail-view">
       <div class="section-heading">
         <NText strong>{{ t('checkpoints') }}</NText
@@ -166,12 +171,13 @@
 import ChampionIcon from '@renderer-shared/components/widgets/ChampionIcon.vue'
 import { useAkariResourceProvider } from '@renderer-shared/providers/akari-resource'
 import { useTranslation } from 'i18next-vue'
-import { NAlert, NButton, NCard, NRadioButton, NRadioGroup, NTag, NText } from 'naive-ui'
+import { NAlert, NButton, NCard, NEmpty, NRadioButton, NRadioGroup, NTag, NText } from 'naive-ui'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import ReviewGoldChart from './ReviewGoldChart.vue'
 import ReviewMoments from './ReviewMoments.vue'
 import ReviewOverview from './ReviewOverview.vue'
+import ReviewReportPanel from './ReviewReportPanel.vue'
 import ReviewTimeline from './ReviewTimeline.vue'
 import { REVIEW_POSITION_LABELS } from './review-display'
 import { reviewValueTone } from './review-insights'
@@ -191,7 +197,7 @@ const props = withDefaults(
 const resources = useAkariResourceProvider()
 const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
 const replayRoot = ref<HTMLElement | null>(null)
-const view = ref<'overview' | 'timeline' | 'details'>('overview')
+const view = ref<'overview' | 'timeline' | 'report' | 'details'>('overview')
 const frameIndex = ref(0)
 const selectedMoment = ref<ReviewMoment | null>(null)
 const selectedEventId = ref<string | null>(null)

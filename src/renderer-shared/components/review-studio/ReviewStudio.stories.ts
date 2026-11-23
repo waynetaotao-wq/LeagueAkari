@@ -16,11 +16,17 @@ import { isReviewCoreItem } from './match-facts'
 import {
   addReviewEvent,
   createReviewFixture,
+  reviewBuilding,
   reviewDragon,
   reviewKill,
+  reviewLevelUp,
+  reviewMonster,
   reviewPlate,
   reviewPurchase,
-  reviewWard
+  reviewSkill,
+  reviewTakedown,
+  reviewWard,
+  reviewWardKill
 } from './test-fixtures'
 
 // Synthetic fixtures only. All history and note IO stays in this story's memory.
@@ -155,6 +161,99 @@ function patternFixtures(mixed = false) {
   })
 }
 
+/**
+ * Gives one synthetic game a full stat line, level-ups, ability points, objectives and own
+ * takedowns, so the single-game "full data" page has every section filled. Invented numbers.
+ */
+function withReportData(fixture: ReturnType<typeof createReviewFixture>) {
+  const { summary, details } = fixture
+  const selection = (perk: number) => ({ perk, var1: 0, var2: 0, var3: 0 })
+  summary.json.participants.forEach((participant, index) => {
+    const own = participant.participantId === 8
+    Object.assign(participant, {
+      kills: own ? 7 : 2 + (index % 4),
+      assists: 3 + (index % 5),
+      champLevel: 13 + (index % 4),
+      totalMinionsKilled: 150 + index * 9,
+      neutralMinionsKilled: index % 5 === 2 ? 120 : 4,
+      goldEarned: 9000 + index * 420,
+      goldSpent: 8600 + index * 400,
+      totalDamageDealtToChampions: 12_000 + index * 1500,
+      totalDamageTaken: 14_000 + index * 900,
+      visionScore: 14 + index * 3,
+      wardsPlaced: 6 + index,
+      wardsKilled: index % 3,
+      visionWardsBoughtInGame: index % 3,
+      totalTimeSpentDead: 60 + index * 12,
+      item0: 6699,
+      item1: 3158,
+      item2: 1036,
+      item3: 0,
+      item4: 0,
+      item5: 0,
+      item6: 0,
+      spell1Id: 4,
+      spell2Id: 14,
+      spell1Casts: 90 + index,
+      spell2Casts: 40 + index,
+      spell3Casts: 55 + index,
+      spell4Casts: 8,
+      summoner1Casts: 4,
+      summoner2Casts: 3,
+      perks: {
+        statPerks: { offense: 5008, flex: 5008, defense: 5011 },
+        styles: [
+          {
+            description: 'primaryStyle',
+            style: 8100,
+            selections: [8112, 8143, 8140, 8106].map(selection)
+          },
+          { description: 'subStyle', style: 8300, selections: [8304, 8345].map(selection) }
+        ]
+      },
+      challenges: {
+        soloKills: own ? 2 : 0,
+        skillshotsHit: 30 + index,
+        skillshotsDodged: 20 + index,
+        turretPlatesTaken: index % 4
+      }
+    })
+  })
+  const point = (participantId: number) =>
+    summary.json.participants.find((participant) => participant.participantId === participantId)!
+  point(3).deaths = 1
+  point(9).deaths = 1
+  for (const event of [
+    reviewLevelUp(95_000, 2),
+    reviewLevelUp(100_000, 2, 3),
+    reviewLevelUp(165_000, 3),
+    reviewLevelUp(330_000, 6),
+    reviewLevelUp(352_000, 6, 3),
+    reviewLevelUp(790_000, 11),
+    reviewLevelUp(760_000, 11, 3),
+    ...[1, 2, 3, 1, 1, 4, 1, 3, 1, 3, 4, 3, 3, 2, 2].map((slot, index) =>
+      reviewSkill(20_000 + index * 62_000, slot)
+    ),
+    reviewTakedown(205_000, 8, 3, { position: { x: 7300, y: 7400 } }),
+    reviewTakedown(905_000, 8, 9, { assists: [10, 2], position: { x: 9700, y: 4600 } }),
+    reviewMonster(370_000, 'DRAGON', 10, { subType: 'FIRE_DRAGON', assists: [8] }),
+    reviewMonster(750_000, 'RIFTHERALD', 9, { position: { x: 5000, y: 10_400 } }),
+    reviewBuilding(840_000, 200, 8, { assists: [10] }),
+    reviewMonster(1_320_000, 'BARON_NASHOR', 9, { position: { x: 5000, y: 10_400 } }),
+    reviewWardKill(505_000),
+    reviewWardKill(1_105_000, 'CONTROL_WARD')
+  ])
+    addReviewEvent(details, event)
+  addReviewEvent(details, {
+    type: 'CHAMPION_SPECIAL_KILL',
+    timestamp: 205_000,
+    killerId: 8,
+    position: { x: 7300, y: 7400 },
+    killType: 'KILL_FIRST_BLOOD'
+  })
+  return fixture
+}
+
 const meta = {
   title: 'Renderer Shared/Review Studio',
   component: ReviewStudioModal,
@@ -168,9 +267,13 @@ const meta = {
           ? []
           : context.name === 'Death Map' || context.name === 'Outcome Gap'
             ? patternFixtures()
-            : context.name === 'Broaden Offer' || context.name === 'Broaden Stored'
-              ? patternFixtures(true)
-              : fixtures(context.name === 'Missing Data')
+            : context.name === 'Full Report'
+              ? patternFixtures().map((fixture, index) =>
+                  index === 0 ? withReportData(fixture) : fixture
+                )
+              : context.name === 'Broaden Offer' || context.name === 'Broaden Stored'
+                ? patternFixtures(true)
+                : fixtures(context.name === 'Missing Data')
       const appContext = getCurrentInstance()!.appContext
       const previousManager = appContext.config.globalProperties.$akariManager
       const storage = new Map<string, unknown>()
@@ -270,5 +373,7 @@ export const EmptyHistory: Story = { args: { initialGameId: undefined } }
 export const Disconnected: Story = { args: { initialGameId: undefined } }
 export const DeathMap: Story = { args: { initialGameId: undefined, initialTab: 'deaths' } }
 export const OutcomeGap: Story = { args: { initialGameId: undefined, initialTab: 'gap' } }
+/** Opens one game; the "完整数据" sub-view of that game shows every section of the full report. */
+export const FullReport: Story = { args: { initialGameId: 70_000 } }
 export const BroadenOffer: Story = { args: { initialGameId: undefined, initialTab: 'gap' } }
 export const BroadenStored: Story = { args: { initialGameId: undefined, initialTab: 'deaths' } }
