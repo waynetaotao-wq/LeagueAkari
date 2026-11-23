@@ -89,7 +89,12 @@
       />
     </div>
     <template v-if="view === 'report'">
-      <ReviewReportPanel v-if="model.report" :model="model" @timeline="openTimeline" />
+      <ReviewReportPanel
+        v-if="model.report"
+        :model="model"
+        :archive="archive"
+        @timeline="openTimeline"
+      />
       <NEmpty v-else :description="t('report.unavailable')" />
     </template>
     <div v-if="view === 'details'" class="detail-view">
@@ -191,8 +196,10 @@ const props = withDefaults(
     active?: boolean
     /** Opens the timeline at one of the player's own deaths; a new token repeats the jump. */
     focus?: { gameId: number; timestamp: number; token: number } | null
+    /** The same player's other games on this device, for the comparison with their usual numbers. */
+    archive?: readonly ReviewMatch[]
   }>(),
-  { active: true, focus: null }
+  { active: true, focus: null, archive: () => [] }
 )
 const resources = useAkariResourceProvider()
 const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })

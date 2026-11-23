@@ -16,6 +16,7 @@ import ReviewStudioModal from './ReviewStudioModal.vue'
 import { parseReviewMatch } from './analysis'
 import { writeReviewArchive } from './archive'
 import { isReviewCoreItem } from './match-facts'
+import { classifyReviewItem } from './match-report'
 import {
   addReviewEvent,
   createReviewFixture,
@@ -403,7 +404,7 @@ const meta = {
           ? []
           : context.name === 'Death Map' || context.name === 'Outcome Gap'
             ? patternFixtures()
-            : context.name === 'Full Report'
+            : context.name === 'Full Report' || context.name === 'Baseline'
               ? patternFixtures().map((fixture, index) =>
                   index === 0 ? withReportData(fixture) : fixture
                 )
@@ -484,8 +485,9 @@ const meta = {
         }
       }
       lcs.summoner.me = { puuid: isRankStory ? 'player-8' : 'preview-owner' } as SummonerInfo
-      // "Broaden Stored" opens with every game already kept on this device and no history read yet.
-      const ready = ref(context.name !== 'Broaden Stored')
+      // "Broaden Stored" and "Baseline" open with every game already kept on this device and no
+      // history read yet.
+      const ready = ref(context.name !== 'Broaden Stored' && context.name !== 'Baseline')
       if (!ready.value)
         void writeReviewArchive(
           storedSettings,
@@ -502,7 +504,8 @@ const meta = {
               'player-8',
               'REVIEW_STORY',
               {
-                coreItem: (itemId) => isReviewCoreItem(STORY_ITEMS[itemId])
+                coreItem: (itemId) => isReviewCoreItem(STORY_ITEMS[itemId]),
+                itemKind: (itemId) => classifyReviewItem(STORY_ITEMS[itemId])
               }
             )
             return parsed.ok ? [parsed.match] : []
@@ -536,6 +539,8 @@ export const DeathMap: Story = { args: { initialGameId: undefined, initialTab: '
 export const OutcomeGap: Story = { args: { initialGameId: undefined, initialTab: 'gap' } }
 /** Opens one game; the "完整数据" sub-view of that game shows every section of the full report. */
 export const FullReport: Story = { args: { initialGameId: 70_000 } }
+/** Thirty games are already kept on this device, so the full report can compare one with the rest. */
+export const Baseline: Story = { args: { initialGameId: 70_000 } }
 export const BroadenOffer: Story = { args: { initialGameId: undefined, initialTab: 'gap' } }
 export const BroadenStored: Story = { args: { initialGameId: undefined, initialTab: 'deaths' } }
 export const RankLog: Story = { args: { initialGameId: undefined, initialTab: 'rank' } }

@@ -549,3 +549,70 @@ reviewStudio:
       review: 复盘
       cs: '{{count}} 刀'
     note: 胜点只能在对局结束的当时读出来。装上这个功能之前的对局，以及程序没开时连着打的几局，只有胜负，没有逐局胜点。
+  baseline:
+    title: 与你平时的对比
+    none: '本机档案里同位置的对局不足 {{count}} 局，暂时没有「平时」可以对比。每局结束后会自动存档，多打几局就会出现。'
+    hint: 「平时」是这些对局的中位数，「平时多数」是中间一半对局所在的范围。
+    note: 这里只说明这一局和平时哪里不一样，不说明原因；样本少的时候，单独一项偏离可能只是偶然。
+    scope:
+      matchup: '对比样本：本机档案里你用 {{champion}} 打 {{position}} 对 {{opponent}} 的另外 {{games}} 局（{{wins}} 胜）。'
+      champion: '对比样本：本机档案里你用 {{champion}} 打 {{position}} 的另外 {{games}} 局（{{wins}} 胜）。'
+      position: '对比样本：本机档案里你打 {{position}} 的另外 {{games}} 局（各种英雄，{{wins}} 胜）。'
+    columns:
+      metric: 指标
+      game: 本局
+      usual: 平时
+      range: 平时多数
+      verdict: 对比
+    groups:
+      laning: 对线
+      income: 发育与输出
+      survival: 生存
+      tempo: 节奏
+      vision: 视野
+      teamplay: 团战与资源
+    verdicts:
+      typical: 与平时相近
+      muchBetter: 明显好于平时
+      better: 略好于平时
+      muchWorse: 明显差于平时
+      worse: 略差于平时
+      muchHigher: 明显偏高
+      higher: 略偏高
+      muchLower: 明显偏低
+      lower: 略偏低
+      muchLater: 明显偏晚
+      later: 略偏晚
+      muchEarlier: 明显偏早
+      earlier: 略偏早
+    earlier: '早 {{seconds}} 秒'
+    later: '晚 {{seconds}} 秒'
+    sameTime: 同时
+    metrics:
+      cs10: 10 分钟补刀
+      csDiff10: 10 分钟对位补刀差
+      goldDiff10: 10 分钟对位经济差
+      xpDiff10: 10 分钟对位经验差
+      csDiff15: 15 分钟对位补刀差
+      goldDiff15: 15 分钟对位经济差
+      level6Lead: 到 6 级相对对位
+      csPerMinute: 每分钟补刀
+      goldPerMinute: 每分钟经济
+      damagePerMinute: 每分钟对英雄伤害
+      damageShare: 输出占本队
+      killParticipation: 参团率
+      deaths: 死亡
+      soloDeaths: 被单杀
+      deathsOutsideFights: 交战外的阵亡
+      deadShare: 阵亡时间占比
+      firstRecallAt: 第一次回城补给
+      firstCoreAt: 第一件成装
+      secondCoreAt: 第二件成装
+      visionPerMinute: 每分钟视野得分
+      controlWardsBought: 购买控制守卫
+      wardsCleared: 排眼
+      fightsWon: 打赢的交战
+      fightsDiedFirst: 己方第一个阵亡的交战
+      epicCredited: 参与拿下的史诗野怪
+      towersCredited: 参与推掉的防御塔
+      enemyObjectivesAfterDeath: 阵亡后 90 秒内丢的资源

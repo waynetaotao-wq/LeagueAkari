@@ -287,6 +287,7 @@
               :model="selectedMatch"
               :active="show && activeTab === 'match'"
               :focus="matchFocus"
+              :archive="baselineArchive"
             />
             <div v-else-if="selectableGames.length" class="recent-games">
               <div class="welcome-title">{{ t('chooseMatch') }}</div>
@@ -589,6 +590,8 @@ const allFiltered = computed(() =>
 const displayedMatches = computed(() =>
   sampleSource.value === 'archive' ? allFiltered.value : currentFiltered.value
 )
+/** 单局里「与平时对比」用的样本：本次分析到的对局加上本机档案，同一局只算一次。 */
+const baselineArchive = computed(() => [...matches.value, ...archivedMatches.value])
 /** 跨局页签上的「一键放宽」：默认的队列 / 版本筛选挡住了同英雄同位置的其它对局时才出现。 */
 const broadenOffer = computed(() =>
   getReviewBroadenOffer(filter.value, candidates.value, [

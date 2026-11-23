@@ -560,3 +560,70 @@ reviewStudio:
       review: Review
       cs: '{{count}} CS'
     note: LP can only be read at the moment a game ends. Games from before this feature was installed, and several games played back to back while the app was closed, have a result but no LP of their own.
+  baseline:
+    title: Against your usual numbers
+    none: 'Fewer than {{count}} games in the same role are kept on this device, so there is no usual level to compare with yet. Games are archived automatically after they end; it appears after a few more.'
+    hint: '"Usual" is the median of those games; "usual range" is where the middle half of them falls.'
+    note: This only shows where the game differs from your usual numbers, not why. With few games, a single deviation may be chance.
+    scope:
+      matchup: 'Compared with your other {{games}} games on this device as {{champion}} {{position}} against {{opponent}} ({{wins}} won).'
+      champion: 'Compared with your other {{games}} games on this device as {{champion}} {{position}} ({{wins}} won).'
+      position: 'Compared with your other {{games}} games on this device as {{position}}, any champion ({{wins}} won).'
+    columns:
+      metric: Metric
+      game: This game
+      usual: Usual
+      range: Usual range
+      verdict: Comparison
+    groups:
+      laning: Laning
+      income: Income and damage
+      survival: Survival
+      tempo: Tempo
+      vision: Vision
+      teamplay: Fights and objectives
+    verdicts:
+      typical: About usual
+      muchBetter: Clearly better than usual
+      better: Slightly better than usual
+      muchWorse: Clearly worse than usual
+      worse: Slightly worse than usual
+      muchHigher: Clearly higher
+      higher: Slightly higher
+      muchLower: Clearly lower
+      lower: Slightly lower
+      muchLater: Clearly later
+      later: Slightly later
+      muchEarlier: Clearly earlier
+      earlier: Slightly earlier
+    earlier: '{{seconds}}s earlier'
+    later: '{{seconds}}s later'
+    sameTime: Same time
+    metrics:
+      cs10: CS at 10 min
+      csDiff10: CS difference at 10 min
+      goldDiff10: Gold difference at 10 min
+      xpDiff10: XP difference at 10 min
+      csDiff15: CS difference at 15 min
+      goldDiff15: Gold difference at 15 min
+      level6Lead: Level 6 against opponent
+      csPerMinute: CS per minute
+      goldPerMinute: Gold per minute
+      damagePerMinute: Champion damage per minute
+      damageShare: Share of team damage
+      killParticipation: Kill participation
+      deaths: Deaths
+      soloDeaths: Solo deaths
+      deathsOutsideFights: Deaths outside fights
+      deadShare: Share of time dead
+      firstRecallAt: First recall
+      firstCoreAt: First completed item
+      secondCoreAt: Second completed item
+      visionPerMinute: Vision score per minute
+      controlWardsBought: Control wards bought
+      wardsCleared: Wards cleared
+      fightsWon: Fights won
+      fightsDiedFirst: Fights where you died first
+      epicCredited: Epic monsters taken with you
+      towersCredited: Turrets taken with you
+      enemyObjectivesAfterDeath: Objectives lost within 90s of a death

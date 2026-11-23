@@ -5,6 +5,9 @@
       t('report.incomplete')
     }}</NAlert>
     <NCollapse v-model:expanded-names="expanded">
+      <NCollapseItem name="baseline" :title="t('baseline.title')">
+        <ReviewBaselinePanel :model="model" :archive="archive" />
+      </NCollapseItem>
       <NCollapseItem name="scoreboard" :title="t('report.scoreboard.title')">
         <div class="report-section">
           <NText v-if="!opponent" depth="3" class="text-xs">{{ t('report.noOpponent') }}</NText>
@@ -512,6 +515,7 @@ import { useTranslation } from 'i18next-vue'
 import { NAlert, NButton, NCollapse, NCollapseItem, NTag, NText } from 'naive-ui'
 import { computed, ref } from 'vue'
 
+import ReviewBaselinePanel from './ReviewBaselinePanel.vue'
 import { REVIEW_FIRST_SHOP_AFTER_MS } from './match-facts'
 import { REVIEW_CHALLENGE_KEYS } from './match-report'
 import { REVIEW_POSITION_LABELS, reviewClock, reviewPercent, reviewSigned } from './review-display'
@@ -527,10 +531,15 @@ import type {
   ReviewReport
 } from './types'
 
-const props = defineProps<{
-  /** A freshly parsed match; the parent renders this panel only when `model.report` exists. */
-  model: ReviewMatch
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** A freshly parsed match; the parent renders this panel only when `model.report` exists. */
+    model: ReviewMatch
+    /** The same player's other games on this device, for the comparison with their usual numbers. */
+    archive?: readonly ReviewMatch[]
+  }>(),
+  { archive: () => [] }
+)
 const emit = defineEmits<{ timeline: [timestamp: number] }>()
 const resources = useAkariResourceProvider()
 const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
@@ -554,7 +563,7 @@ const TWENTY_MINUTES_MS = 20 * 60_000
 const OBJECTIVE_NEAR_DISTANCE = 3000
 const OBJECTIVE_FAR_DISTANCE = 7000
 
-const expanded = ref<string[]>(['scoreboard', 'laning'])
+const expanded = ref<string[]>(['baseline', 'scoreboard', 'laning'])
 const report = computed<ReviewReport>(() => props.model.report!)
 const line = (participantId: number | null) =>
   participantId === null
