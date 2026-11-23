@@ -398,7 +398,10 @@ export interface ReviewObjective {
 export interface ReviewFight {
   start: number
   end: number
+  /** Centre of the located kills; it can lie between the places where they happened. */
   point: ReviewPoint | null
+  /** Where each located kill of the fight happened, in order. */
+  killPoints: ReviewPoint[]
   /** Kills scored by the reviewed player's team and by the enemy. */
   kills: number
   deaths: number

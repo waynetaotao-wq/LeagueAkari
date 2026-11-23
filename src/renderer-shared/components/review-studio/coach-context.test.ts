@@ -201,7 +201,8 @@ describe('buildReviewCoachContext', () => {
 
   it('groups purchases by shop visit and names the completed items', () => {
     const { text } = build()
-    expect(text).toContain('0:05 回城：多兰之刃')
+    // The first purchase of the game is the starting item, not a recall.
+    expect(text).toContain('0:05 开局购买：多兰之刃')
     expect(text).toContain('5:00 回城：长剑、明朗之靴')
     expect(text).toContain('10:10 阵亡后：星蚀')
     expect(text).toContain('成装完成时间：星蚀 10:10。')
@@ -216,6 +217,173 @@ describe('buildReviewCoachContext', () => {
     expect(text).toContain('召唤师技能 闪现 3 次、引燃 2 次。')
     expect(text).toContain('局末装备：星蚀、明朗之靴')
     expect(text).toContain('对位的局末装备：长剑')
+  })
+
+  it('says how the other lanes stood at each checkpoint', () => {
+    const { text } = build()
+    const section = text.split('## ').find((part) => part.startsWith('对线与节奏'))!
+
+    expect(section).toContain(
+      '各路经济差（我方减敌方同位置的人）：5 分钟 上单 +150、打野 +150、中单 +300、下路 +150、辅助 +150；10 分钟 上单 +300、打野 +300、中单 +600、下路 +300、辅助 +300；'
+    )
+    // The game lasts 25 minutes: the last checkpoint closes the sentence.
+    expect(section).toMatch(
+      /25 分钟 上单 \+750、打野 \+750、中单 \+1500、下路 \+750、辅助 \+750。\s*$/
+    )
+  })
+
+  it('lists every minute with the cumulative numbers of the player and the lane opponent', () => {
+    const { text, sections } = build()
+    const title = sections.find((entry) => entry.startsWith('逐分钟数据'))!
+    const lines = text.split(`## ${title}\n`)[1].split('\n\n')[0].split('\n')
+
+    // One line that explains the columns, then one row per snapshot of the 25-minute game.
+    expect(lines).toHaveLength(26)
+    expect(lines[0]).toContain(
+      '时间｜本人 经济、身上还没花的金币、补刀、等级、累计对英雄伤害、击杀-死亡-助攻'
+    )
+    expect(lines[0]).toContain(
+      '｜对位 经济、补刀、等级、累计对英雄伤害｜本人减对位的经济差、补刀差'
+    )
+    // The solo kill at 4:00 is on the 4:00 row; purse and damage are not in this record.
+    expect(lines[4]).toBe(
+      '4:00｜本人 1940金 身上? 32刀 3级 ?伤 1-0-0｜对位 1700金 28刀 3级 ?伤｜差 +240金 +4刀｜团队 +720｜人头 1:0'
+    )
+    // The death at 9:30 shows from the 10:00 row on.
+    expect(lines[9]).toContain('9:00｜本人 3740金 身上? 72刀 5级 ?伤 1-0-0｜')
+    expect(lines[10]).toBe(
+      '10:00｜本人 4100金 身上? 80刀 6级 ?伤 1-1-0｜对位 3500金 70刀 6级 ?伤｜差 +600金 +10刀｜团队 +1800｜人头 1:1'
+    )
+    expect(lines[25]).toContain('25:00｜本人 9500金 ')
+  })
+
+  it('writes the purse and the damage where the timeline records them', () => {
+    const match = richGame()
+    const own = match.frames[6].participants.find((entry) => entry.participantId === 8)!
+    Object.assign(own, { unspentGold: 1350.4, damage: 2400 })
+    const { text } = build({ match })
+
+    expect(text).toContain('6:00｜本人 2660金 身上1350 48刀 4级 2400伤 1-0-0｜')
+  })
+
+  it('drops the opponent columns when no lane opponent could be identified', () => {
+    const match = richGame()
+    match.meta.opponentId = null
+    match.meta.opponentChampionId = null
+    for (const frame of match.frames)
+      Object.assign(frame, { personalGoldDiff: null, personalCsDiff: null })
+    const { text } = build({ match })
+    const section = text.split('## ').find((part) => part.startsWith('逐分钟数据'))!
+
+    expect(section).not.toContain('对位')
+    expect(section).toContain('4:00｜本人 1940金 身上? 32刀 3级 ?伤 1-0-0｜团队 +720｜人头 1:0')
+  })
+
+  it('lists where all ten players were each minute, in the order of the line-ups', () => {
+    const match = richGame()
+    const move = (minute: number, participantId: number, values: object) =>
+      Object.assign(
+        match.frames[minute].participants.find((entry) => entry.participantId === participantId)!,
+        values
+      )
+    // 7:00 — the player is at his fountain, his jungler in the enemy top jungle, the enemy
+    // mid in the river on the dragon side, the enemy support dead, the enemy top unrecorded.
+    move(7, 8, { position: { x: 800, y: 900 } })
+    move(7, 10, { position: { x: 5200, y: 11_400 } })
+    move(7, 3, { position: { x: 9800, y: 4600 } })
+    move(7, 7, { alive: false })
+    move(7, 1, { position: null })
+    const { text, sections } = build({ match })
+    const title = sections.find((entry) => entry.startsWith('逐分钟位置'))!
+    const lines = text.split(`## ${title}\n`)[1].split('\n\n')[0].split('\n')
+
+    expect(lines).toHaveLength(27)
+    // Both halves of a row are named from the reviewed player's side, and the header says so.
+    expect(lines[0]).toContain('区域一律从本人一方的视角命名，敌方那一半的格子也一样')
+    expect(lines[0]).toContain('敌方英雄写着「己方上半野区」就是进了我方的野区')
+    expect(lines[1]).toBe(
+      '每行依次是：时间｜我方 上单 英雄102、打野 英雄110、中单 劫（本人）、下路 英雄104、辅助 英雄106｜敌方 上单 英雄101、打野 英雄109、中单 阿狸、下路 英雄105、辅助 英雄107。每格前面的字是位置：上 = 上单、野 = 打野、中 = 中单、下 = 下路、辅 = 辅助，本人的那一格写「本人」。'
+    )
+    // Every cell says whose it is, and the places are named as in the kill and death sections.
+    expect(lines[2]).toBe(
+      '1:00｜上 中路己方半场、野 中路己方半场、本人 中路己方半场、下 中路己方半场、辅 中路己方半场｜上 中路己方半场、野 中路己方半场、中 中路己方半场、下 中路己方半场、辅 中路己方半场'
+    )
+    expect(lines[8]).toBe(
+      '7:00｜上 中路己方半场、野 敌方上半野区、本人 己方基地、下 中路己方半场、辅 中路己方半场｜上 未知、野 中路己方半场、中 下河道（小龙侧）、下 中路己方半场、辅 阵亡'
+    )
+  })
+
+  it('names a fight after the places of its kills, not after a point between them', () => {
+    const match = richGame()
+    const fight = {
+      start: 700_000,
+      end: 709_000,
+      // The centre of the kills lies in the enemy jungle, where nothing happened.
+      point: { x: 10_867, y: 5367 },
+      killPoints: [
+        { x: 9800, y: 4600 },
+        { x: 9900, y: 4700 },
+        { x: 12_900, y: 6800 }
+      ],
+      kills: 2,
+      deaths: 1,
+      allies: 3,
+      enemies: 2,
+      ownKills: 1,
+      ownAssists: 0,
+      ownDeathOrder: null,
+      objectivesAfter: []
+    }
+    match.report!.fights = [fight, { ...fight, start: 800_000, end: 800_000, killPoints: [] }]
+    const section = build({ match })
+      .text.split('## ')
+      .find((part) => part.startsWith('交战'))!
+
+    expect(section).toContain(
+      '第 1 场 11:40–11:49 下河道（小龙侧）、下路敌方半场一带：我方击杀 2、敌方击杀 1；卷入 我方 3 名、敌方 2 名；本人 1 杀 0 助，存活。'
+    )
+    // What "卷入" counts is explained once, in the heading.
+    expect(section.split('\n')[0]).toContain('「卷入」的人数把击杀者、助攻者和被击杀者都算上')
+    // Without located kills the centre is all there is.
+    expect(section).toContain('第 2 场 13:20–13:20 敌方下半野区：')
+  })
+
+  it('says so when a death record has damage taken but none dealt', () => {
+    const match = richGame()
+    match.report!.deaths[0].damageDealt = null
+    const withSources = build({ match }).text
+    expect(withSources).toContain(
+      '击杀记录里没有本人阵亡前打出的伤害（可能没有打出，也可能没有记录）。'
+    )
+
+    // A record without any damage entries already says that nothing was recorded.
+    match.report!.deaths[0].sources = []
+    const bare = build({ match }).text
+    expect(bare).toContain('这次阵亡没有伤害来源记录。')
+    expect(bare).not.toContain('击杀记录里没有本人阵亡前打出的伤害')
+  })
+
+  it('puts the per-minute tables after the event sections and before the comparisons', () => {
+    const { sections } = build()
+    const index = (start: string) => sections.findIndex((entry) => entry.startsWith(start))
+
+    expect(index('逐分钟数据')).toBeGreaterThan(index('视野'))
+    expect(index('逐分钟位置')).toBe(index('逐分钟数据') + 1)
+    expect(index('官方挑战统计') === -1 || index('官方挑战统计') > index('逐分钟位置')).toBe(true)
+    expect(index('程序标出的关键片段')).toBeGreaterThan(index('逐分钟位置'))
+  })
+
+  it('says so when the timeline has no snapshots or no positions', () => {
+    const match = richGame()
+    const bare = build({ match: { ...match, frames: [] } }).text
+    expect(bare).toContain('时间线里没有可用的分钟快照。')
+    expect(bare).toContain('时间线里没有位置记录。')
+
+    for (const frame of match.frames)
+      for (const entry of frame.participants) Object.assign(entry, { position: null })
+    const unplaced = build({ match }).text
+    expect(unplaced).toContain('时间线里没有位置记录。')
+    expect(unplaced).toContain('4:00｜本人 1940金')
   })
 
   it('says so when no lane opponent could be identified', () => {

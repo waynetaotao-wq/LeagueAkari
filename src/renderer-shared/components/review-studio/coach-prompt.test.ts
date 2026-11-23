@@ -50,6 +50,19 @@ describe('buildReviewCoachSystemPrompt', () => {
     }
   })
 
+  it('says how to read the per-minute tables', () => {
+    for (const prompt of [chinese, english]) {
+      // cumulative numbers, a position is one instant, and no unfair hindsight
+      expect(prompt).toContain('数字是累计值，相邻两行相减才是这一分钟里的变化')
+      expect(prompt).toContain('位置只是快照那一刻所在的区域')
+      expect(prompt).toContain('队友的位置他当时在小地图上看得到')
+      expect(prompt).toContain('对手的位置是赛后才看得到的，他当时未必知道')
+      // a snapshot is a moment of this game, so it is written as a clickable time too
+      expect(prompt).toContain('逐分钟快照和检查点也是这一局的时刻，同样写成 10:00')
+      expect(prompt).not.toContain('分钟检查点写成「10 分钟」')
+    }
+  })
+
   it('asks for the answer in the language of the interface', () => {
     expect(chinese).toContain('用简体中文回答')
     expect(chinese).toContain('600 到 900 个汉字')

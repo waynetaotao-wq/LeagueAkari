@@ -326,6 +326,59 @@ describe('review match report', () => {
     expect(unknown.boots).toBeNull()
   })
 
+  it('starts a new stop at the shop after every own death, however soon the next purchase is', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      // Dies, buys while dead, walks out, dies again 38 seconds after that purchase and buys
+      // again: two stops, although the purchases are less than 45 seconds apart.
+      reviewKill(497_000),
+      reviewPurchase(509_000, 1036),
+      reviewKill(547_000),
+      reviewPurchase(550_000, 1001),
+      reviewPurchase(551_000, 2003)
+    ])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 8: 2 })
+
+    expect(parse(fixture, itemKind).report!.build.visits).toEqual([
+      { timestamp: 509_000, afterDeath: true, itemIds: [1036] },
+      { timestamp: 550_000, afterDeath: true, itemIds: [1001, 2003] }
+    ])
+  })
+
+  it('marks only the first stop after a death as following that death', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewKill(739_000),
+      // Four seconds after dying: the respawn.
+      reviewPurchase(743_000, 1036),
+      // 83 seconds after the same death, but the player has shopped since: a recall.
+      reviewPurchase(822_000, 1001),
+      // A death long before a purchase has nothing to do with it either.
+      reviewPurchase(1_100_000, 3158)
+    ])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 8: 1 })
+
+    expect(parse(fixture, itemKind).report!.build.visits).toEqual([
+      { timestamp: 743_000, afterDeath: true, itemIds: [1036] },
+      { timestamp: 822_000, afterDeath: false, itemIds: [1001] },
+      { timestamp: 1_100_000, afterDeath: false, itemIds: [3158] }
+    ])
+  })
+
+  it('does not call a late first purchase after a death a respawn', () => {
+    const fixture = createReviewFixture()
+    for (const event of [reviewKill(300_000), reviewPurchase(400_000, 1036)])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 8: 1 })
+
+    // 100 seconds after the death: he went back out and recalled, or stayed without buying.
+    expect(parse(fixture, itemKind).report!.build.visits).toEqual([
+      { timestamp: 400_000, afterDeath: false, itemIds: [1036] }
+    ])
+  })
+
   it('reports only the part of the max order that the level-ups settle', () => {
     const order = (slots: number[]) => {
       const fixture = createReviewFixture()
@@ -641,6 +694,11 @@ describe('review match report', () => {
         start: 600_000,
         end: 612_000,
         point: { x: 5233, y: 5267 },
+        killPoints: [
+          { x: 5000, y: 5000 },
+          { x: 5500, y: 5200 },
+          { x: 5200, y: 5600 }
+        ],
         kills: 1,
         deaths: 2,
         allies: 3,
@@ -654,6 +712,7 @@ describe('review match report', () => {
         start: 1_000_000,
         end: 1_000_000,
         point: { x: 7000, y: 7000 },
+        killPoints: [{ x: 7000, y: 7000 }],
         kills: 1,
         deaths: 0,
         allies: 5,

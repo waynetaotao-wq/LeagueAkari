@@ -6,7 +6,9 @@ import {
 } from './baseline'
 import { classifyReviewDeathZone } from './death-map'
 import type { ReviewDigestMetricKey } from './match-digest'
+import { REVIEW_FIRST_SHOP_AFTER_MS } from './match-facts'
 import { REVIEW_CHALLENGE_KEYS } from './match-report'
+import { buildReviewLaneGoldDiffs, buildReviewMinuteRows } from './minute-table'
 import type {
   ReviewDamageSource,
   ReviewMatch,
@@ -89,6 +91,16 @@ const ZONE: Record<ReturnType<typeof classifyReviewDeathZone>, string> = {
   'jungle-enemy-bot': '敌方下半野区',
   'own-base': '己方基地',
   'enemy-base': '敌方基地'
+}
+
+/** 逐分钟位置表里每一格前面标的位置。 */
+const ROLE_TAG: Record<ReviewPosition, string> = {
+  TOP: '上',
+  JUNGLE: '野',
+  MIDDLE: '中',
+  BOTTOM: '下',
+  UTILITY: '辅',
+  UNKNOWN: '?'
 }
 
 const OBJECTIVE_KIND: Record<ReviewObjective['kind'], string> = {
@@ -450,6 +462,7 @@ export function buildReviewCoachContext(input: ReviewCoachContextInput): ReviewC
   )
 
   // ── 对线与节奏 ─────────────────────────────────────────────────────────
+  const laneDiffs = buildReviewLaneGoldDiffs(match)
   add('对线与节奏（差值 = 本人 − 对位；取自分钟快照，没有对应快照就是未知）', [
     ...report.checkpoints
       .filter((checkpoint) => checkpoint.timestamp !== null)
@@ -467,31 +480,49 @@ export function buildReviewCoachContext(input: ReviewCoachContextInput): ReviewC
               }`
           )
           .join('；')}。`
+      : null,
+    // 其它几路当时的局面：我方同位置的人比敌方多多少经济。
+    laneDiffs.length
+      ? `各路经济差（我方减敌方同位置的人）：${laneDiffs
+          .map(
+            (entry) =>
+              `${entry.minute} 分钟 ${entry.roles
+                .map(({ role, diff }) => `${POSITION[role]} ${signed(diff)}`)
+                .join('、')}`
+          )
+          .join('；')}。`
       : null
   ])
 
   // ── 出装与技能 ─────────────────────────────────────────────────────────
-  add('出装与回城（按一次停留分组；「阵亡后」表示这次购物紧接在本人阵亡之后）', [
-    ...report.build.visits.map(
-      (visit) =>
-        `${clock(visit.timestamp)} ${visit.afterDeath ? '阵亡后' : '回城'}：${
-          visit.itemIds.length ? itemList(visit.itemIds) : '只有买了又撤销的操作'
-        }`
-    ),
-    report.build.coreItems.length
-      ? `成装完成时间：${report.build.coreItems
-          .map((item) => `${names.item(item.itemId)} ${clock(item.timestamp)}`)
-          .join('；')}。`
-      : '成装完成时间：未知（物品库不可用，或这一局没有做出成装）。',
-    report.build.boots
-      ? `第一双升级鞋：${names.item(report.build.boots.itemId)} ${clock(report.build.boots.timestamp)}。`
-      : null,
-    report.build.sales.length
-      ? `卖出：${report.build.sales
-          .map((sale) => `${clock(sale.timestamp)} ${names.item(sale.itemId)}`)
-          .join('；')}。`
-      : null
-  ])
+  add(
+    '出装与回城（按一次停留分组；「开局购买」是出门装，「阵亡后」表示这次购物紧接在本人阵亡之后）',
+    [
+      ...report.build.visits.map(
+        (visit, index) =>
+          `${clock(visit.timestamp)} ${
+            index === 0 && visit.timestamp < REVIEW_FIRST_SHOP_AFTER_MS
+              ? '开局购买'
+              : visit.afterDeath
+                ? '阵亡后'
+                : '回城'
+          }：${visit.itemIds.length ? itemList(visit.itemIds) : '只有买了又撤销的操作'}`
+      ),
+      report.build.coreItems.length
+        ? `成装完成时间：${report.build.coreItems
+            .map((item) => `${names.item(item.itemId)} ${clock(item.timestamp)}`)
+            .join('；')}。`
+        : '成装完成时间：未知（物品库不可用，或这一局没有做出成装）。',
+      report.build.boots
+        ? `第一双升级鞋：${names.item(report.build.boots.itemId)} ${clock(report.build.boots.timestamp)}。`
+        : null,
+      report.build.sales.length
+        ? `卖出：${report.build.sales
+            .map((sale) => `${clock(sale.timestamp)} ${names.item(sale.itemId)}`)
+            .join('；')}。`
+        : null
+    ]
+  )
   add('技能加点', [
     report.build.skills.length
       ? `加点顺序：${report.build.skills.map((skill) => SKILL_SLOT[skill.slot]).join(' ')}。`
@@ -574,7 +605,11 @@ export function buildReviewCoachContext(input: ReviewCoachContextInput): ReviewC
         detail.sources.length
           ? `承受伤害 ${whole(detail.damageTaken)}，来源：${detail.sources.map(sourceText).join('；')}。`
           : '这次阵亡没有伤害来源记录。',
-        detail.damageDealt === null ? '' : `阵亡前打出伤害 ${Math.round(detail.damageDealt)}。`,
+        detail.damageDealt === null
+          ? detail.sources.length
+            ? '击杀记录里没有本人阵亡前打出的伤害（可能没有打出，也可能没有记录）。'
+            : ''
+          : `阵亡前打出伤害 ${Math.round(detail.damageDealt)}。`,
         detail.level !== null || detail.killerLevel !== null
           ? `当时等级：本人 ${whole(detail.level)}、击杀者 ${whole(detail.killerLevel)}。`
           : '',
@@ -614,7 +649,7 @@ export function buildReviewCoachContext(input: ReviewCoachContextInput): ReviewC
 
   // ── 交战 ──────────────────────────────────────────────────────────────
   add(
-    `交战（共 ${report.fights.length} 场；15 秒内、相距不远的击杀归为同一场，是整理规则，不代表游戏里真有一场团战）`,
+    `交战（共 ${report.fights.length} 场；15 秒内、相距不远的击杀归为同一场，是整理规则，不代表游戏里真有一场团战；「卷入」的人数把击杀者、助攻者和被击杀者都算上）`,
     report.fights.map((fight, index) => {
       const after = fight.objectivesAfter
         .map((objectiveIndex) => report.objectives[objectiveIndex])
@@ -629,7 +664,12 @@ export function buildReviewCoachContext(input: ReviewCoachContextInput): ReviewC
               fight.ownDeathOrder === null ? '存活' : `在己方第 ${fight.ownDeathOrder} 个阵亡`
             }`
           : '本人没有参与记录'
-      return `第 ${index + 1} 场 ${clock(fight.start)}–${clock(fight.end)} ${zone(fight.point)}：我方击杀 ${fight.kills}、敌方击杀 ${fight.deaths}；记功英雄 我方 ${fight.allies} 名、敌方 ${fight.enemies} 名；${ownPart}${
+      // 地点按每次击杀各自的位置写：几次击杀的中心点可能落在它们之间的另一个区域里。
+      const places = [...new Set(fight.killPoints.map((point) => zone(point)))]
+      const where = places.length
+        ? `${places.join('、')}${places.length > 1 ? '一带' : ''}`
+        : zone(fight.point)
+      return `第 ${index + 1} 场 ${clock(fight.start)}–${clock(fight.end)} ${where}：我方击杀 ${fight.kills}、敌方击杀 ${fight.deaths}；卷入 我方 ${fight.allies} 名、敌方 ${fight.enemies} 名；${ownPart}${
         after.length ? `；此后 60 秒：${after.join('、')}` : ''
       }。`
     }),
@@ -661,6 +701,88 @@ export function buildReviewCoachContext(input: ReviewCoachContextInput): ReviewC
       opponent ? `（对位 ${whole(opponent.visionScore)}）` : ''
     }。`
   ])
+
+  // ── 逐分钟 ────────────────────────────────────────────────────────────
+  // 时间线每分钟一次的快照原样列出：前面的检查点只取了每 5 分钟，这里是全部。
+  const minutes = buildReviewMinuteRows(match)
+  const count = (value: number | null, unit: string) =>
+    `${value === null ? '?' : Math.round(value)}${unit}`
+  const hasOpponent = meta.opponentId !== null
+  add(
+    '逐分钟数据（每行是那一分钟快照时的累计数；「?」表示快照里没有这个数）',
+    minutes.length
+      ? [
+          `每行依次是：时间｜本人 经济、身上还没花的金币、补刀、等级、累计对英雄伤害、击杀-死亡-助攻${
+            hasOpponent ? '｜对位 经济、补刀、等级、累计对英雄伤害｜本人减对位的经济差、补刀差' : ''
+          }｜团队经济差（我方减敌方）｜人头 我方:敌方。`,
+          ...minutes.map((row) =>
+            [
+              clock(row.timestamp),
+              `本人 ${count(row.own.gold, '金')} 身上${count(row.own.unspentGold, '')} ${count(row.own.cs, '刀')} ${count(row.own.level, '级')} ${count(row.own.damage, '伤')} ${row.kills}-${row.deaths}-${row.assists}`,
+              ...(hasOpponent
+                ? [
+                    `对位 ${count(row.opponent?.gold ?? null, '金')} ${count(row.opponent?.cs ?? null, '刀')} ${count(row.opponent?.level ?? null, '级')} ${count(row.opponent?.damage ?? null, '伤')}`,
+                    `差 ${row.goldDiff === null ? '?' : signed(row.goldDiff)}金 ${row.csDiff === null ? '?' : signed(row.csDiff)}刀`
+                  ]
+                : []),
+              `团队 ${row.teamGoldDiff === null ? '?' : signed(row.teamGoldDiff)}`,
+              `人头 ${row.ownTeamKills}:${row.enemyTeamKills}`
+            ].join('｜')
+          )
+        ]
+      : [],
+    '时间线里没有可用的分钟快照。'
+  )
+
+  // 十个人每分钟所在的区域，顺序与「对局概况」里的阵容一致。
+  const ordered = [...match.participants].sort(
+    (a, b) =>
+      Number(b.teamId === meta.teamId) - Number(a.teamId === meta.teamId) ||
+      roleOrder(a.position) - roleOrder(b.position) ||
+      a.participantId - b.participantId
+  )
+  const orderIndex = ordered.map((participant) =>
+    match.participants.findIndex((entry) => entry.participantId === participant.participantId)
+  )
+  const ownCount = ordered.filter((participant) => participant.teamId === meta.teamId).length
+  const lineup = (members: typeof ordered) =>
+    members
+      .map(
+        (participant) =>
+          `${POSITION[participant.position]} ${names.champion(participant.championId)}${
+            participant.participantId === meta.participantId ? '（本人）' : ''
+          }`
+      )
+      .join('、')
+  const placed = minutes.filter((row) => row.places.some((place) => place.zone !== null))
+  // 每一格前面都标出是谁，免得靠数第几个来认人；地名与击杀、阵亡那几个分区用同一套。
+  const tags = ordered.map((participant) =>
+    participant.participantId === meta.participantId ? '本人' : ROLE_TAG[participant.position]
+  )
+  add(
+    '逐分钟位置（快照那一刻每个人所在的区域；只是一个瞬间，不代表这一分钟都在那里）',
+    placed.length && ordered.length
+      ? [
+          '区域一律从本人一方的视角命名，敌方那一半的格子也一样：「己方」「敌方」指地图的哪一半，所以敌方英雄写着「己方上半野区」就是进了我方的野区。「阵亡」表示快照那一刻是死的，「未知」表示快照里没有位置。',
+          `每行依次是：时间｜我方 ${lineup(ordered.slice(0, ownCount))}｜敌方 ${lineup(ordered.slice(ownCount))}。每格前面的字是位置：上 = 上单、野 = 打野、中 = 中单、下 = 下路、辅 = 辅助，本人的那一格写「本人」。`,
+          ...placed.map((row) => {
+            const cells = orderIndex.map((index, order) => {
+              const place = row.places[index]
+              const where = !place
+                ? '未知'
+                : place.alive === false
+                  ? '阵亡'
+                  : place.zone
+                    ? ZONE[place.zone]
+                    : '未知'
+              return `${tags[order]} ${where}`
+            })
+            return `${clock(row.timestamp)}｜${cells.slice(0, ownCount).join('、')}｜${cells.slice(ownCount).join('、')}`
+          })
+        ]
+      : [],
+    '时间线里没有位置记录。'
+  )
 
   // ── 官方挑战统计 ───────────────────────────────────────────────────────
   if (own.challenges) {
@@ -787,7 +909,7 @@ export function buildReviewCoachContext(input: ReviewCoachContextInput): ReviewC
 
   // ── 数据局限 ───────────────────────────────────────────────────────────
   add('这份资料不包含的东西', [
-    '位置只有每分钟一次的快照，加上击杀、资源这些事件自带的坐标；看不到分钟之内的走位。',
+    '位置只有每分钟一次的快照（见「逐分钟位置」），加上击杀、资源这些事件自带的坐标；看不到分钟之内的走位。',
     '没有技能是否命中、技能和召唤师技能的冷却、血量蓝量的逐秒变化、视野范围、兵线位置与状态。',
     '没有语音、信号和聊天，也看不到队友和对手的意图。',
     '除本人阵亡时的伤害来源外，没有逐次交手的伤害明细。'

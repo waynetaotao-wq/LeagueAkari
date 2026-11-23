@@ -411,12 +411,14 @@ function readBuild(
   const visits: ReviewShopVisit[] = []
   let lastShopTime = -Infinity
   for (const timestamp of shopTimes) {
-    if (timestamp - lastShopTime > REVIEW_SHOP_VISIT_GAP_MS) {
-      const lastDeath = deaths.filter((death) => death.timestamp <= timestamp).at(-1)
+    const lastDeath = deaths.filter((death) => death.timestamp <= timestamp).at(-1)
+    // 上一次买东西之后死过一次：哪怕两次购买只隔几十秒，中间也出过门，是另一次停留。
+    const diedSince = lastDeath !== undefined && lastDeath.timestamp > lastShopTime
+    if (timestamp - lastShopTime > REVIEW_SHOP_VISIT_GAP_MS || diedSince) {
       visits.push({
         timestamp,
-        afterDeath:
-          lastDeath !== undefined && timestamp - lastDeath.timestamp <= REVIEW_SHOP_AFTER_DEATH_MS,
+        // 只有阵亡后的第一次停留才算「阵亡后」；之后再回来买，是正常回城。
+        afterDeath: diedSince && timestamp - lastDeath.timestamp <= REVIEW_SHOP_AFTER_DEATH_MS,
         itemIds: []
       })
     }
@@ -699,6 +701,7 @@ function readFights(
     fights.push({
       start,
       end,
+      killPoints: located.map((event) => ({ x: event.position!.x, y: event.position!.y })),
       point: located.length
         ? {
             x: Math.round(located.reduce((sum, e) => sum + e.position!.x, 0) / located.length),
