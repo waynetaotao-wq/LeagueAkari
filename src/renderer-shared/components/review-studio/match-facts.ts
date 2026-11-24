@@ -14,8 +14,14 @@ import type {
 // [lolps] 跨局规律用的单局事实。时间窗与物品口径是展示规则；时间线无法证明的数值保持 null。
 export const REVIEW_EARLY_WINDOW_MS = 14 * 60_000
 export const REVIEW_FIRST_SHOP_AFTER_MS = 2 * 60_000
-/** 实测 16.22 物品库：峡谷成装最低 2200，散件与鞋子均低于此值。 */
+/** 实测 16.22 物品库：峡谷成装绝大多数在 2200 以上，散件与鞋子均低于此值。 */
 export const REVIEW_CORE_ITEM_MIN_TOTAL_PRICE = 2200
+/**
+ * 例外是「灵魂窃取者」这样的低价成装（1500）：由散件合成，自己不再往上合成。服务器自己的
+ * 成装清单（challenges.legendaryItemUsed）也列了它（实测 16.23）。辅助的任务装（400）和
+ * 不带「鞋」分类的升级鞋（1100）都低于这个数，不会被算进来。
+ */
+export const REVIEW_FINAL_ITEM_MIN_TOTAL_PRICE = 1500
 
 const TEN_MINUTES_MS = 10 * 60_000
 const FIFTEEN_MINUTES_MS = 15 * 60_000
@@ -36,19 +42,23 @@ const finite = (value: unknown): value is number =>
 const validId = (value: unknown): value is number =>
   finite(value) && Number.isInteger(value) && value > 0
 
-/** A completed item is built from components, costs a full item's price and is not footwear. */
+/**
+ * A completed item is built from components and is not footwear; it either costs a full item's
+ * price, or it is a cheaper one that nothing else is built from.
+ */
 export function isReviewCoreItem(item: unknown): boolean | null {
   if (!item || typeof item !== 'object') return null
-  const { priceTotal, from, categories } = item as {
+  const { priceTotal, from, to, categories } = item as {
     priceTotal?: unknown
     from?: unknown
+    to?: unknown
     categories?: unknown
   }
   if (!finite(priceTotal) || !Array.isArray(from) || !Array.isArray(categories)) return null
+  if (!from.length || categories.includes('Boots')) return false
   return (
-    priceTotal >= REVIEW_CORE_ITEM_MIN_TOTAL_PRICE &&
-    from.length > 0 &&
-    !categories.includes('Boots')
+    priceTotal >= REVIEW_CORE_ITEM_MIN_TOTAL_PRICE ||
+    (priceTotal >= REVIEW_FINAL_ITEM_MIN_TOTAL_PRICE && Array.isArray(to) && to.length === 0)
   )
 }
 

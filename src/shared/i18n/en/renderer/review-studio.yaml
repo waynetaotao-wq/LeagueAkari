@@ -645,6 +645,15 @@ reviewStudio:
       noForm: 'Recent ranked form: none yet'
       noFormOther: 'Recent ranked form: only for your own games'
       tips: 'Laning notes for this matchup: yes'
+      loadout: "Runes, summoner spells and items: yes, with the client's own descriptions and this game's rune numbers"
+      loadoutKits: "Runes, summoner spells, items and the enemy champions' abilities: yes, with the client's own descriptions and this game's rune numbers"
+      noLoadout: 'Runes, summoner spells and items: names only (the client is not connected, so their descriptions are unavailable)'
+      statistics: 'Same-rank statistics: yes, OP.GG {{region}} · {{tier}} · patch {{patch}}'
+      statisticsLoading: 'Same-rank statistics: loading…'
+      noStatistics: 'Same-rank statistics: not available this time. The review still works; it will not quote pick or win rates'
+      history: 'How you usually set this champion up: yes, from {{games}} other games in the archive on this device'
+      noHistory: 'How you usually set this champion up: none yet, the archive has no other game on this champion in this role'
+      waitStatistics: Loading same-rank statistics and champion ability texts. You can start as soon as they are in, a few seconds at most.
       privacy: Nothing sent holds a player name or account; players are referred to by champion and role.
       focusPlaceholder: 'Anything you want to focus on? Optional. For example: why did the mid game fall apart'
       action: Start review
@@ -674,12 +683,14 @@ reviewStudio:
     usage: '{{model}} · read {{input}} · wrote {{output}} (tokens)'
     usageCached: '{{model}} · read {{input}}, {{cached}} of them from cache · wrote {{output}} (tokens)'
     disclaimer: The AI sees match and timeline data only, not the replay. Its conclusions can be wrong; treat them as suggestions.
+    unknownTime: 'This moment is not in the data sent to the coach: it may be an estimate or a mistake'
     detail: 'The service said: {{message}}'
     quick:
       laning: How could I have played the laning phase better?
       deaths: What went wrong before each of my deaths?
       items: Was anything off about my item order or recall timing?
       midgame: Where should I have been in the mid game, and doing what?
+      loadout: What if I took different runes and summoner spells? Compare the options one by one
     errors:
       not-configured: The connection is not completely filled in.
       no-key: No key has been entered yet.

@@ -48,6 +48,25 @@
               }}
             </li>
             <li v-if="tips.length">{{ t('coach.start.tips') }}</li>
+            <li>
+              {{
+                t(
+                  catalogue
+                    ? kitsReady
+                      ? 'coach.start.loadoutKits'
+                      : 'coach.start.loadout'
+                    : 'coach.start.noLoadout'
+                )
+              }}
+            </li>
+            <li>{{ statisticsText }}</li>
+            <li>
+              {{
+                history
+                  ? t('coach.start.history', { games: history.champion.games })
+                  : t('coach.start.noHistory')
+              }}
+            </li>
           </ul>
           <NText depth="3" class="text-xs">{{ t('coach.start.privacy') }}</NText>
           <NInput
@@ -59,11 +78,21 @@
             :placeholder="t('coach.start.focusPlaceholder')"
           />
           <div class="coach-start-actions">
-            <NButton type="primary" :disabled="busyElsewhere" @click="start">{{
-              t('coach.start.action')
-            }}</NButton>
+            <NButton
+              type="primary"
+              :disabled="busyElsewhere || waitingForStatistics"
+              @click="start"
+              >{{ t('coach.start.action') }}</NButton
+            >
             <NText depth="3" class="text-xs">{{
-              t(busyElsewhere ? 'coach.start.busy' : 'coach.start.model', { model: modelName })
+              t(
+                busyElsewhere
+                  ? 'coach.start.busy'
+                  : waitingForStatistics
+                    ? 'coach.start.waitStatistics'
+                    : 'coach.start.model',
+                { model: modelName }
+              )
             }}</NText>
           </div>
         </div>
@@ -238,7 +267,12 @@ import { computed, nextTick, ref, watch } from 'vue'
 
 import ReviewCoachSetup from './ReviewCoachSetup.vue'
 import { REVIEW_BASELINE_MIN_GAMES } from './baseline'
-import { readReviewCoachTime, renderReviewCoachMarkdown } from './coach-markdown'
+import { describeReviewStatisticsScope } from './coach-loadout'
+import {
+  collectReviewCoachTimes,
+  readReviewCoachTime,
+  renderReviewCoachMarkdown
+} from './coach-markdown'
 import {
   REVIEW_COACH_MAX_FOCUS_LENGTH,
   REVIEW_COACH_MAX_QUESTION_LENGTH,
@@ -251,7 +285,7 @@ import { useReviewCoach } from './use-review-coach'
 // [lolps] AI 教练：把这一局的资料交给用户自己选的 AI 服务，流式显示回答，可以接着追问。
 // 回答里的游戏时间可以点，跳到时间线上的那一刻。
 
-const QUICK_QUESTIONS = ['laning', 'deaths', 'items', 'midgame'] as const
+const QUICK_QUESTIONS = ['laning', 'deaths', 'items', 'midgame', 'loadout'] as const
 /** 这几类错误多半要回到接口设置里改。 */
 const SETUP_ERRORS = new Set([
   'not-configured',
@@ -271,15 +305,49 @@ const props = defineProps<{
   active: boolean
 }>()
 const emit = defineEmits<{ timeline: [timestamp: number] }>()
-const { t } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
+const { t, i18next } = useTranslation(undefined, { keyPrefix: 'reviewStudio' })
 
 const coach = useReviewCoach({
   model: () => props.model,
   archive: () => props.archive,
   active: () => props.active
 })
-const { self, conversation, busyElsewhere, context, baseline, form, tips, configured, modelName } =
-  coach
+const {
+  self,
+  conversation,
+  busyElsewhere,
+  context,
+  baseline,
+  form,
+  tips,
+  catalogue,
+  kitsReady,
+  kitsLoading,
+  history,
+  statistics,
+  statisticsStatus,
+  configured,
+  modelName
+} = coach
+
+/**
+ * The statistics and the champion ability texts arrive a moment after the view opens;
+ * starting before would leave them out.
+ */
+const statisticsLoading = computed(() => statisticsStatus.value === 'loading')
+const waitingForStatistics = computed(() => statisticsLoading.value || kitsLoading.value)
+const statisticsText = computed(() => {
+  const loaded = statistics.value
+  if (!loaded)
+    return t(statisticsLoading.value ? 'coach.start.statisticsLoading' : 'coach.start.noStatistics')
+  // 地区和段位的中文叫法只在中文界面用；其它语言照原样显示来源的写法。
+  return t(
+    'coach.start.statistics',
+    i18next.language?.toLowerCase().startsWith('zh')
+      ? describeReviewStatisticsScope(loaded)
+      : { region: loaded.region, tier: loaded.tier, patch: loaded.patch ?? '?' }
+  )
+})
 
 const showSetup = ref(false)
 const showDocument = ref(false)
@@ -288,7 +356,6 @@ const question = ref('')
 const pendingRoot = ref<HTMLElement | null>(null)
 
 const durationMs = computed(() => props.model.meta.gameDuration * 1000)
-const render = (text: string) => renderReviewCoachMarkdown(text, { durationMs: durationMs.value })
 
 /** The first message is the whole document; it is shown as a tag, not as a bubble. */
 const firstMessage = computed(() => {
@@ -297,6 +364,19 @@ const firstMessage = computed(() => {
 })
 const sentFocus = computed(() => firstMessage.value?.focus ?? '')
 const sentDocument = computed(() => firstMessage.value?.document ?? null)
+// 回答里出现、资料里却没有的时刻，多半是估的或者记错的：照样能点，但标出来。
+// 逐分钟表里的「人头 12:12」是比分不是时间，先去掉。
+const knownTimes = computed(() =>
+  sentDocument.value === null
+    ? undefined
+    : collectReviewCoachTimes(sentDocument.value.replace(/人头 \d+:\d+/g, ''))
+)
+const render = (text: string) =>
+  renderReviewCoachMarkdown(text, {
+    durationMs: durationMs.value,
+    knownTimes: knownTimes.value,
+    unknownTimeTitle: t('coach.unknownTime')
+  })
 const turns = computed(() =>
   conversation.value.messages
     .slice(1)
@@ -552,6 +632,11 @@ watch(
 .coach-answer :deep(.coach-time:hover),
 .coach-answer :deep(.coach-time:focus-visible) {
   background: rgb(var(--la-card-tint-rgb) / 0.2);
+}
+/* 资料里没有的时刻：换成波浪线，鼠标停上去有说明 */
+.coach-answer :deep(.coach-time-unknown) {
+  text-decoration-style: wavy;
+  opacity: 0.75;
 }
 .coach-alert {
   display: flex;

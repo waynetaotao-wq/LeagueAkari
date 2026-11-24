@@ -10,13 +10,29 @@ const GAME_TIME_PATTERN = /(?<![\d:.：])(\d{1,3})[:：]([0-5]\d)(?![\d:：])/g
 interface CoachMarkdownEnvironment {
   /** Times after the end of the game are left as plain text. */
   durationMs?: number
+  /** Game times, in seconds, that the document sent to the coach mentions. */
+  knownTimes?: ReadonlySet<number>
+  /** Tooltip for a time the document does not mention. */
+  unknownTimeTitle?: string
+}
+
+/**
+ * Every game time a text mentions, in seconds. Used on the document sent to the coach: a time
+ * in the answer that is not among them was not read off the document, so it is an estimate or
+ * a mistake, and the reader should know.
+ */
+export function collectReviewCoachTimes(text: string): Set<number> {
+  const times = new Set<number>()
+  for (const match of text.matchAll(GAME_TIME_PATTERN))
+    times.add(Number(match[1]) * 60 + Number(match[2]))
+  return times
 }
 
 const markdown = new MarkdownIt({ html: false, linkify: false, breaks: true })
 markdown.disable(['link', 'image', 'autolink', 'html_inline', 'html_block'])
 
 markdown.core.ruler.push('coach_game_time', (state) => {
-  const durationMs = (state.env as CoachMarkdownEnvironment).durationMs
+  const { durationMs, knownTimes, unknownTimeTitle } = state.env as CoachMarkdownEnvironment
   for (const block of state.tokens) {
     if (block.type !== 'inline' || !block.children) continue
 
@@ -39,7 +55,11 @@ markdown.core.ruler.push('coach_game_time', (state) => {
         }
         const time = new state.Token('coach_game_time', '', 0)
         time.content = match[0]
-        time.meta = { milliseconds }
+        time.meta = {
+          milliseconds,
+          unknown: knownTimes !== undefined && !knownTimes.has(milliseconds / 1000),
+          title: unknownTimeTitle
+        }
         children.push(time)
         last = match.index + match[0].length
       }
@@ -59,16 +79,28 @@ markdown.core.ruler.push('coach_game_time', (state) => {
 markdown.renderer.rules.coach_game_time = (tokens, index) => {
   const token = tokens[index]
   const milliseconds = Number(token.meta?.milliseconds)
-  return `<button type="button" class="coach-time" data-coach-time="${milliseconds}">${markdown.utils.escapeHtml(token.content)}</button>`
+  const { escapeHtml } = markdown.utils
+  // 资料里没有的时刻照样可以点，只是换一种下划线，并说明它不是从资料里读出来的。
+  const unknown = token.meta?.unknown === true
+  const title =
+    unknown && typeof token.meta?.title === 'string' && token.meta.title
+      ? ` title="${escapeHtml(token.meta.title)}"`
+      : ''
+  return `<button type="button" class="coach-time${unknown ? ' coach-time-unknown' : ''}" data-coach-time="${milliseconds}"${title}>${escapeHtml(token.content)}</button>`
 }
 
 /**
  * Turns an answer into HTML that is safe to insert: nothing the model writes can become a tag,
- * a link or an image.
+ * a link or an image. With `knownTimes`, a game time that is not among them is marked.
  */
-export function renderReviewCoachMarkdown(text: string, options: { durationMs?: number } = {}) {
+export function renderReviewCoachMarkdown(
+  text: string,
+  options: { durationMs?: number; knownTimes?: ReadonlySet<number>; unknownTimeTitle?: string } = {}
+) {
   return markdown.render(text, {
-    durationMs: options.durationMs
+    durationMs: options.durationMs,
+    knownTimes: options.knownTimes,
+    unknownTimeTitle: options.unknownTimeTitle
   } satisfies CoachMarkdownEnvironment)
 }
 

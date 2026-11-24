@@ -6,13 +6,17 @@ import { type ReviewItemKindResolver, classifyReviewItem } from './match-report'
 import {
   addReviewEvent,
   createReviewFixture,
+  reviewBountyEnd,
+  reviewBountyStart,
   reviewBuilding,
   reviewKill,
   reviewLevelUp,
   reviewMonster,
+  reviewPlate,
   reviewPurchase,
   reviewSale,
   reviewSkill,
+  reviewSoul,
   reviewTakedown,
   reviewUndo,
   reviewUndoSale,
@@ -63,6 +67,10 @@ describe('review item classification', () => {
     ['core', { priceTotal: 3000, from: [1036, 1036], to: [], categories: ['Damage'] }],
     ['component', { priceTotal: 350, from: [], to: [3142], categories: ['Damage'] }],
     ['component', { priceTotal: 1100, from: [1036], to: [], categories: ['Damage'] }],
+    // A cheap completed item: built from a component, and nothing is built from it.
+    ['core', { priceTotal: 1500, from: [1082], to: [], categories: ['SpellDamage'] }],
+    // Just as dear, but a step towards something else.
+    ['component', { priceTotal: 1600, from: [1036], to: [3142], categories: ['Damage'] }],
     ['starter', { priceTotal: 450, from: [], to: [], categories: ['Damage'] }],
     ['other', { priceTotal: 900, from: [], to: [], categories: [] }]
   ] as const)('recognizes a %s', (kind, item) => {
@@ -316,7 +324,8 @@ describe('review match report', () => {
       { timestamp: 510_000, afterDeath: false, itemIds: [3158] },
       // Bought 20 seconds after dying: the respawn, not a recall.
       { timestamp: 740_000, afterDeath: true, itemIds: [6692] },
-      { timestamp: 900_000, afterDeath: false, itemIds: [3142] }
+      // The sale that was taken back is not part of the stop; the one that stood is.
+      { timestamp: 900_000, afterDeath: false, itemIds: [3142], soldIds: [1055] }
     ])
 
     // Without a catalogue nothing is classified and no completed item is claimed.
@@ -324,6 +333,50 @@ describe('review match report', () => {
     expect(unknown.purchases.every((purchase) => purchase.kind === null)).toBe(true)
     expect(unknown.coreItems).toEqual([])
     expect(unknown.boots).toBeNull()
+  })
+
+  it('tells a stop that only sold from one where everything was taken back', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewPurchase(5000, 1055),
+      // Sells and keeps it sold.
+      reviewSale(400_000, 1055),
+      // Buys and undoes, sells and undoes: nothing is left of this stop.
+      reviewPurchase(700_000, 1036),
+      reviewUndo(701_000, 1036),
+      reviewSale(702_000, 2003),
+      reviewUndoSale(703_000, 2003)
+    ])
+      addReviewEvent(fixture.details, event)
+
+    expect(parse(fixture, itemKind).report!.build.visits).toEqual([
+      { timestamp: 5000, afterDeath: false, itemIds: [1055] },
+      { timestamp: 400_000, afterDeath: false, itemIds: [], soldIds: [1055] },
+      { timestamp: 700_000, afterDeath: false, itemIds: [] }
+    ])
+  })
+
+  it('keeps a long stay at the shop together when the time in between was spent undoing', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewPurchase(5000, 1055),
+      // Dies, then sells, takes it back, sells again and takes it back, and only then buys:
+      // more than 45 seconds lie between the operations that stand, but he never left.
+      reviewKill(700_000),
+      reviewSale(720_000, 1055),
+      reviewUndoSale(757_000, 1055),
+      reviewSale(765_000, 1055),
+      reviewUndoSale(772_000, 1055),
+      reviewSale(792_000, 1055),
+      reviewPurchase(793_000, 6692)
+    ])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 8: 1 })
+
+    expect(parse(fixture, itemKind).report!.build.visits).toEqual([
+      { timestamp: 5000, afterDeath: false, itemIds: [1055] },
+      { timestamp: 720_000, afterDeath: true, itemIds: [6692], soldIds: [1055] }
+    ])
   })
 
   it('starts a new stop at the shop after every own death, however soon the next purchase is', () => {
@@ -497,7 +550,8 @@ describe('review match report', () => {
         allies: 1,
         bounty: 300,
         shutdownBounty: 0,
-        firstBlood: true
+        firstBlood: true,
+        damage: null
       },
       {
         timestamp: 600_000,
@@ -507,7 +561,8 @@ describe('review match report', () => {
         allies: 2,
         bounty: 300,
         shutdownBounty: 450,
-        firstBlood: false
+        firstBlood: false,
+        damage: null
       },
       {
         timestamp: 700_000,
@@ -517,9 +572,99 @@ describe('review match report', () => {
         allies: 0,
         bounty: 0,
         shutdownBounty: 0,
-        firstBlood: false
+        firstBlood: false,
+        damage: null
       }
     ])
+  })
+
+  it('says what the player did to each victim, with Ignite told apart', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(
+      fixture.details,
+      reviewTakedown(300_000, 8, 3, {
+        received: [
+          { participantId: 8, spellSlot: 0, physicalDamage: 210 },
+          { participantId: 8, spellSlot: 3, physicalDamage: 300, magicDamage: 40 },
+          { participantId: 8, basic: true, physicalDamage: 95 },
+          { participantId: 8, spellSlot: 4, spellName: 'summonerdot', trueDamage: 120 },
+          // An item active has no bucket of its own.
+          { participantId: 8, spellSlot: 6, spellName: '3152active', magicDamage: 60 },
+          { participantId: 10, spellSlot: 1, magicDamage: 150 },
+          { type: 'MINION', physicalDamage: 25 }
+        ]
+      })
+    )
+    // Smite is a summoner spell too, but not Ignite.
+    addReviewEvent(
+      fixture.details,
+      reviewTakedown(600_000, 10, 9, {
+        assists: [8],
+        received: [
+          {
+            participantId: 8,
+            spellSlot: 5,
+            spellName: 'summonersmiteavataroffensive',
+            trueDamage: 80
+          },
+          { participantId: 10, spellSlot: 0, physicalDamage: 400 }
+        ]
+      })
+    )
+    setDeaths(fixture, { 3: 1, 9: 1 })
+
+    const [kill, assist] = parse(fixture).report!.takedowns
+    const none = { basic: 0, passive: 0, q: 0, w: 0, e: 0, r: 0, summoner: 0, other: 0 }
+    expect(kill.damage).toEqual({
+      total: 825,
+      slots: { ...none, basic: 95, q: 210, r: 340, summoner: 120, other: 60 },
+      ignite: 120,
+      victimTotal: 1000
+    })
+    expect(assist.damage).toEqual({
+      total: 80,
+      slots: { ...none, summoner: 80 },
+      ignite: 0,
+      victimTotal: 480
+    })
+  })
+
+  it('prefers the wider damage list of a kill record when it has one', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(
+      fixture.details,
+      reviewTakedown(300_000, 8, 3, {
+        received: [{ participantId: 8, spellSlot: 0, physicalDamage: 200 }],
+        fightReceived: [
+          { participantId: 8, spellSlot: 0, physicalDamage: 450 },
+          { participantId: 2, spellSlot: 1, magicDamage: 300 }
+        ]
+      })
+    )
+    addReviewEvent(
+      fixture.details,
+      reviewTakedown(500_000, 3, 8, {
+        received: [{ participantId: 3, spellSlot: 0, magicDamage: 600 }],
+        dealt: [{ participantId: 8, spellSlot: 0, physicalDamage: 100 }],
+        fightReceived: [
+          { participantId: 3, spellSlot: 0, magicDamage: 900 },
+          { participantId: 9, basic: true, physicalDamage: 350 }
+        ],
+        fightDealt: [{ participantId: 8, spellSlot: 0, physicalDamage: 700 }]
+      })
+    )
+    setDeaths(fixture, { 3: 1, 8: 1 })
+
+    const report = parse(fixture).report!
+    expect(report.takedowns[0].damage).toMatchObject({ total: 450, victimTotal: 750 })
+    // The sources of an own death stay on the plain list; the wider totals are given beside it.
+    expect(report.deaths[0]).toMatchObject({
+      damageTaken: 600,
+      damageDealt: 100,
+      fightDamageTaken: 1250,
+      fightDamageDealt: 700
+    })
+    expect(report.deaths[0].sources).toHaveLength(1)
   })
 
   it('breaks an own death down by who dealt the damage and with what', () => {
@@ -599,13 +744,39 @@ describe('review match report', () => {
         ],
         damageTaken: 1175,
         damageDealt: 580,
+        // This record has no wider lists.
+        fightDamageTaken: null,
+        fightDamageDealt: null,
         bounty: 300,
-        // Levels come from the 8-minute snapshot, the last one before the death.
+        // No level-up is recorded here, so the levels fall back to the 8-minute snapshot,
+        // the last one before the death.
         level: 5,
         killerLevel: 6,
         fight: null,
         objectivesAfter: []
       }
+    ])
+  })
+
+  it('takes the levels at a death from the level-ups, which a minute snapshot can lag behind', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      // Both were level 5 in the 8-minute snapshot. The player reached 6 five seconds before
+      // dying; the killer reaches 6 earlier and 7 with the experience of this very kill.
+      reviewLevelUp(495_000, 6),
+      reviewLevelUp(485_000, 6, 3),
+      reviewTakedown(500_000, 3, 8),
+      reviewLevelUp(500_000, 7, 3),
+      // An execution has no killer and therefore no killer level.
+      reviewTakedown(900_000, 0, 8)
+    ])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 8: 2 })
+
+    expect(parse(fixture).report!.deaths.map((death) => [death.level, death.killerLevel])).toEqual([
+      [6, 6],
+      // By 15:00 the snapshots are ahead of the two recorded level-ups.
+      [8, null]
     ])
   })
 
@@ -666,6 +837,46 @@ describe('review match report', () => {
     // No coordinates in the record: no distance is invented. The death is also too long ago.
     expect(objectives[3]).toMatchObject({ sinceDeath: null, distance: null, snapshotOffset: null })
     expect(objectives[7]).toMatchObject({ lane: 'MID_LANE', credited: false })
+    // Nothing here was fought over by the losing side or left untaken.
+    expect(objectives.some((objective) => objective.contested || objective.unclaimed)).toBe(false)
+  })
+
+  it('says when the player fought for an objective the enemy took, and when nobody took it', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      // The enemy jungler gets the baron; the record still lists the player among those on it.
+      reviewMonster(1_200_000, 'BARON_NASHOR', 9, { assists: [5, 8] }),
+      // An own dragon the player helped with is a credit, not a contest.
+      reviewMonster(1_260_000, 'DRAGON', 10, { subType: 'FIRE_DRAGON', assists: [8] }),
+      // The herald leaves the map: no killer, the neutral team.
+      reviewMonster(1_185_000, 'RIFTHERALD', 0, { killerTeamId: 300 })
+    ])
+      addReviewEvent(fixture.details, event)
+
+    const [herald, baron, dragon] = parse(fixture).report!.objectives
+    expect(herald).toMatchObject({ kind: 'herald', own: null, credited: false, unclaimed: true })
+    expect(herald.contested).toBeUndefined()
+    expect(baron).toMatchObject({ kind: 'baron', own: false, credited: false, contested: true })
+    expect(baron.unclaimed).toBeUndefined()
+    expect(dragon).toMatchObject({ kind: 'dragon', own: true, credited: true })
+    expect(dragon.contested).toBeUndefined()
+  })
+
+  it('gives no distance to an objective while the player lies dead in the snapshot', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewTakedown(700_000, 3, 8, { position: { x: 7080, y: 7000 } }),
+      reviewMonster(725_000, 'DRAGON', 9, { subType: 'FIRE_DRAGON' })
+    ])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 8: 1 })
+
+    // The 12:00 snapshot still has him on the spot where he was killed 20 seconds earlier.
+    expect(parse(fixture).report!.objectives[0]).toMatchObject({
+      sinceDeath: 25_000,
+      distance: null,
+      snapshotOffset: null
+    })
   })
 
   it('groups kills into fights by time and distance', () => {
@@ -731,6 +942,37 @@ describe('review match report', () => {
     ])
   })
 
+  it('counts the executed of a fight apart, since they are nobody’s kill', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewTakedown(600_000, 8, 3, { position: { x: 5000, y: 5000 } }),
+      // An enemy and then a teammate die to a turret in the same skirmish.
+      reviewTakedown(604_000, 0, 9, { position: { x: 5100, y: 5000 } }),
+      reviewTakedown(608_000, 0, 2, { position: { x: 5200, y: 5000 } })
+    ])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 3: 1, 9: 1, 2: 1 })
+
+    expect(parse(fixture).report!.fights).toEqual([
+      expect.objectContaining({
+        // Two enemies and one teammate died; one on each side was an execution.
+        kills: 2,
+        deaths: 1,
+        enemyExecutions: 1,
+        allyExecutions: 1,
+        ownKills: 1
+      })
+    ])
+  })
+
+  it('samples a checkpoint every five minutes for as long as the game lasts', () => {
+    const report = parse(createReviewFixture({ duration: 2520 })).report!
+    expect(report.checkpoints.map((checkpoint) => checkpoint.minute)).toEqual([
+      5, 10, 15, 20, 25, 30, 35, 40
+    ])
+    expect(report.checkpoints.at(-1)).toMatchObject({ timestamp: 2_400_000, goldDiff: 2400 })
+  })
+
   it('keeps only real ward placements and the wards the player cleared', () => {
     const fixture = createReviewFixture()
     for (const event of [
@@ -760,5 +1002,289 @@ describe('review match report', () => {
     addReviewEvent(fixture.details, reviewKill(500_000))
     // The summary still says zero deaths.
     expect(parse(fixture).report!.complete).toBe(false)
+  })
+
+  it('keeps the numbers the server records for each rune, in page order', () => {
+    const fixture = createReviewFixture()
+    setReviewStats(fixture.summary, 8, {
+      perks: {
+        statPerks: { offense: 5008, flex: 5010, defense: 5001 },
+        styles: [
+          {
+            description: 'primaryStyle',
+            style: 8100,
+            selections: [
+              { perk: 8112, var1: 2782, var2: 0, var3: 0 },
+              { perk: 8143, var1: 1895, var2: 0, var3: 0 },
+              { perk: 8140, var1: 14, var2: 0, var3: 0 },
+              { perk: 8135, var1: 450, var2: 5, var3: 0 }
+            ]
+          },
+          {
+            description: 'subStyle',
+            style: 8300,
+            selections: [
+              { perk: 8304, var1: 9, var2: 4, var3: 5 },
+              { perk: 8345, var1: 3, var2: 0, var3: 183 }
+            ]
+          }
+        ]
+      }
+    })
+
+    expect(
+      parse(fixture).report!.players.find((player) => player.participantId === 8)!.runes
+    ).toEqual({
+      primaryStyle: 8100,
+      subStyle: 8300,
+      perks: [8112, 8143, 8140, 8135, 8304, 8345],
+      primaryCount: 4,
+      stats: [
+        [2782, 0, 0],
+        [1895, 0, 0],
+        [14, 0, 0],
+        [450, 5, 0],
+        [9, 4, 5],
+        [3, 0, 183]
+      ],
+      // Offense, flex, defense.
+      shards: [5008, 5010, 5001]
+    })
+  })
+
+  it('copies damage taken by type, the away flag and the pings', () => {
+    const fixture = createReviewFixture()
+    setReviewStats(fixture.summary, 8, {
+      physicalDamageTaken: 14_000,
+      magicDamageTaken: 8200,
+      trueDamageTaken: 1100,
+      wasAfk: false,
+      enemyMissingPings: 5,
+      onMyWayPings: 0,
+      retreatPings: 2,
+      // Always zero in real summaries and not copied.
+      holdPings: 3
+    })
+    setReviewStats(fixture.summary, 4, { wasAfk: true })
+
+    const players = parse(fixture).report!.players
+    expect(players.find((player) => player.participantId === 8)).toMatchObject({
+      physicalDamageTaken: 14_000,
+      magicDamageTaken: 8200,
+      trueDamageTaken: 1100,
+      afk: false,
+      pings: { enemyMissingPings: 5, onMyWayPings: 0, retreatPings: 2 }
+    })
+    expect(players.find((player) => player.participantId === 4)).toMatchObject({
+      physicalDamageTaken: null,
+      afk: true,
+      pings: null
+    })
+    // Without the field the summary simply does not say.
+    expect(players.find((player) => player.participantId === 2)!.afk).toBeNull()
+  })
+
+  it.each([
+    [
+      'MIDDLE.PRIMARY.MIDDLE.TOP.FILL',
+      'MIDDLE',
+      { choice: 'primary', preferences: ['MIDDLE', 'TOP'], assigned: null }
+    ],
+    [
+      'MIDDLE.SECONDARY.TOP.MIDDLE',
+      'MIDDLE',
+      { choice: 'secondary', preferences: ['TOP', 'MIDDLE'], assigned: null }
+    ],
+    [
+      'MIDDLE.AUTOFILL.TOP.JUNGLE.FILL',
+      'MIDDLE',
+      { choice: 'autofill', preferences: ['TOP', 'JUNGLE'], assigned: null }
+    ],
+    [
+      'MIDDLE.FILL_PRIMARY.FILL.UNSELECTED.FILL',
+      'MIDDLE',
+      { choice: 'fill', preferences: ['FILL'], assigned: null }
+    ],
+    [
+      'MIDDLE.PRIMARY.MIDDLE.UNSELECTED',
+      'MIDDLE',
+      { choice: 'primary', preferences: ['MIDDLE'], assigned: null }
+    ],
+    // Handed top by matchmaking, swapped to mid in champion select.
+    [
+      'MIDDLE.PRIMARY.MIDDLE.TOP',
+      'TOP',
+      { choice: 'primary', preferences: ['MIDDLE', 'TOP'], assigned: 'TOP' }
+    ]
+  ] as const)('reads the role assignment %s', (preferences, assigned, expected) => {
+    const fixture = createReviewFixture()
+    setReviewStats(fixture.summary, 8, {
+      selectedRolePreferences: preferences,
+      positionAssignedByMatchmaking: assigned
+    })
+    expect(parse(fixture).report!.assignment).toEqual(expected)
+  })
+
+  it.each([
+    // The string is about another position than the one played.
+    'TOP.PRIMARY.TOP.MIDDLE',
+    // The tag contradicts the listed choices.
+    'MIDDLE.PRIMARY.TOP.MIDDLE',
+    'MIDDLE.SECONDARY.MIDDLE.TOP',
+    'MIDDLE.AUTOFILL.MIDDLE.TOP',
+    'MIDDLE.SOMETHING.MIDDLE.TOP',
+    ''
+  ])('does not guess the role assignment from %j', (preferences) => {
+    const fixture = createReviewFixture()
+    setReviewStats(fixture.summary, 8, { selectedRolePreferences: preferences })
+    expect(parse(fixture).report!.assignment).toBeNull()
+  })
+
+  it('leaves the role assignment unknown when the summary does not carry it', () => {
+    expect(parse(createReviewFixture()).report!.assignment).toBeNull()
+  })
+
+  it('rebuilds the lane opponent’s item path from the opponent’s own purchases and deaths', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewPurchase(5000, 1055, 3),
+      reviewPurchase(300_000, 1001, 3),
+      // The opponent dies and buys on respawn; the reviewed player's shopping is not mixed in.
+      reviewTakedown(500_000, 8, 3),
+      reviewPurchase(520_000, 6692, 3),
+      reviewPurchase(521_000, 1036, 8),
+      reviewSkill(10_000, 1, 3),
+      reviewSkill(100_000, 3, 3)
+    ])
+      addReviewEvent(fixture.details, event)
+    setDeaths(fixture, { 3: 1 })
+
+    const report = parse(fixture, itemKind).report!
+    expect(report.opponentBuild).toMatchObject({
+      visits: [
+        { timestamp: 5000, afterDeath: false, itemIds: [1055] },
+        { timestamp: 300_000, afterDeath: false, itemIds: [1001] },
+        { timestamp: 520_000, afterDeath: true, itemIds: [6692] }
+      ],
+      coreItems: [{ timestamp: 520_000, itemId: 6692 }],
+      skills: [
+        { timestamp: 10_000, slot: 1 },
+        { timestamp: 100_000, slot: 3 }
+      ]
+    })
+    expect(report.build.visits).toEqual([
+      { timestamp: 521_000, afterDeath: false, itemIds: [1036] }
+    ])
+  })
+
+  it('has no opponent build without an identified lane opponent', () => {
+    const fixture = createReviewFixture()
+    // A second enemy claims the middle lane: nobody is "the" opponent any more.
+    setReviewStats(fixture.summary, 1, { teamPosition: 'MIDDLE', individualPosition: 'MIDDLE' })
+    expect(parse(fixture).report!.opponentBuild).toBeNull()
+  })
+
+  it('lists turret plates by who took them', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      // The enemy's mid turret loses a plate to the player, then one to a minion wave.
+      reviewPlate(300_000, 200, 'MID_LANE', 8),
+      reviewPlate(420_000, 200, 'MID_LANE'),
+      // The own top turret loses one.
+      reviewPlate(500_000, 100, 'TOP_LANE', 1)
+    ])
+      addReviewEvent(fixture.details, event)
+
+    expect(parse(fixture).report!.plates).toEqual([
+      { timestamp: 300_000, lane: 'MID_LANE', own: true, byPlayer: true },
+      { timestamp: 420_000, lane: 'MID_LANE', own: true, byPlayer: false },
+      { timestamp: 500_000, lane: 'TOP_LANE', own: false, byPlayer: false }
+    ])
+  })
+
+  it('records when objective bounties were live and for whom', () => {
+    const fixture = createReviewFixture()
+    for (const event of [
+      reviewBountyStart(600_000, 100),
+      reviewBountyEnd(760_000, 100),
+      // Still running when the game ends.
+      reviewBountyStart(1_200_000, 200, 1_230_000)
+    ])
+      addReviewEvent(fixture.details, event)
+
+    expect(parse(fixture).report!.bounties).toEqual([
+      { announcedAt: 600_000, start: 615_000, end: 760_000, own: true },
+      { announcedAt: 1_200_000, start: 1_230_000, end: null, own: false }
+    ])
+  })
+
+  it('tells the rift taking an element apart from a team receiving the soul', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(fixture.details, reviewSoul(729_000, 'Chemtech', 0))
+    addReviewEvent(fixture.details, reviewSoul(1_300_000, 'Chemtech', 200))
+
+    const report = parse(fixture).report!
+    expect(report.riftElement).toEqual({ timestamp: 729_000, name: 'Chemtech' })
+    expect(report.teams.map((team) => team.soul)).toEqual([null, 'Chemtech'])
+    expect(parse(createReviewFixture()).report!.riftElement).toBeNull()
+  })
+
+  it('keeps the multi-kills and aces the timeline marks, one entry per kill', () => {
+    const fixture = createReviewFixture()
+    const special = (timestamp: number, killerId: number, killType: string, length?: number) =>
+      addReviewEvent(fixture.details, {
+        type: 'CHAMPION_SPECIAL_KILL',
+        timestamp,
+        killerId,
+        position: { x: 7500, y: 7500 },
+        killType: killType as 'KILL_MULTI',
+        ...(length ? { multiKillLength: length } : {})
+      })
+    special(300_000, 8, 'KILL_FIRST_BLOOD')
+    special(600_000, 9, 'KILL_MULTI', 2)
+    // A triple kill that is also the ace: two marks for the same kill.
+    special(900_000, 8, 'KILL_MULTI', 3)
+    special(900_000, 8, 'KILL_ACE')
+    special(1_000_000, 2, 'KILL_ACE')
+    // Nothing to keep: a multi-kill of length one, and a kind this code does not know.
+    special(1_100_000, 2, 'KILL_MULTI', 1)
+    special(1_200_000, 2, 'KILL_SOMETHING_NEW')
+
+    expect(parse(fixture).report!.killMarks).toEqual([
+      { timestamp: 600_000, killerId: 9, multiKill: 2, ace: false },
+      { timestamp: 900_000, killerId: 8, multiKill: 3, ace: true },
+      { timestamp: 1_000_000, killerId: 2, multiKill: null, ace: true }
+    ])
+  })
+
+  it('reads health and combat stats into the minute snapshots', () => {
+    const fixture = createReviewFixture()
+    Object.assign(fixture.details.json.frames[10].participantFrames['8'].championStats, {
+      health: 612,
+      healthMax: 1480,
+      attackDamage: 131,
+      abilityPower: 0,
+      armor: 52,
+      magicResist: 38,
+      // Reported but not read: its meaning differs from champion to champion.
+      power: 200,
+      powerMax: 200
+    })
+
+    const match = parse(fixture)
+    expect(match.frames[10].participants.find((entry) => entry.participantId === 8)).toMatchObject({
+      health: 612,
+      healthMax: 1480,
+      attackDamage: 131,
+      abilityPower: 0,
+      armor: 52,
+      magicResist: 38
+    })
+    // The fixture's other snapshots only say that the player is alive.
+    expect(match.frames[11].participants.find((entry) => entry.participantId === 8)).toMatchObject({
+      health: 800,
+      healthMax: null,
+      armor: null
+    })
   })
 })

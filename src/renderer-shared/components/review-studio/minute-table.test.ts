@@ -77,10 +77,14 @@ describe('buildReviewMinuteRows', () => {
       })
     )
 
-    expect(at(rows, 6).own).toMatchObject({ unspentGold: 1350, damage: 2400 })
+    expect(at(rows, 6).own).toMatchObject({ unspentGold: 1350, damage: 2400, damageTaken: 1900 })
     // Nothing is filled in for the minutes that do not say.
-    expect(at(rows, 5).own).toMatchObject({ unspentGold: null, damage: null })
-    expect(at(rows, 6).opponent).toMatchObject({ unspentGold: null, damage: null })
+    expect(at(rows, 5).own).toMatchObject({ unspentGold: null, damage: null, damageTaken: null })
+    expect(at(rows, 6).opponent).toMatchObject({
+      unspentGold: null,
+      damage: null,
+      damageTaken: null
+    })
   })
 
   it('counts kills, deaths and assists up to each snapshot', () => {
@@ -179,7 +183,9 @@ describe('buildReviewMinuteRows', () => {
 
   it('tells a dead player and a missing position apart from a place', () => {
     const match = parse(({ details }) => {
-      frameOf(details, 9, 8).championStats = { health: 0 } as never
+      // Killed half a minute before the snapshot; the body lies where it fell.
+      addReviewEvent(details, reviewTakedown(510_000, 3, 8, { position: { x: 7080, y: 7000 } }))
+      frameOf(details, 9, 8).championStats = { health: 7, healthMax: 1500 } as never
       delete (frameOf(details, 9, 3) as { position?: unknown }).position
       delete (frameOf(details, 9, 1) as { championStats?: unknown }).championStats
     })
@@ -223,11 +229,47 @@ describe('buildReviewMinuteRows', () => {
       unspentGold: null,
       cs: null,
       level: null,
-      damage: null
+      damage: null,
+      damageTaken: null,
+      health: null,
+      healthMax: null,
+      alive: null
     })
     expect(row.goldDiff).toBeNull()
     expect(row.teamGoldDiff).toBeNull()
     expect(row.own.gold).toBe(4460)
+  })
+
+  it('carries the health of both laners at the instant of the snapshot', () => {
+    const rows = buildReviewMinuteRows(
+      parse(({ details }) => {
+        frameOf(details, 6, 8).championStats = { health: 312, healthMax: 1480 } as never
+        frameOf(details, 6, 3).championStats = { health: 0, healthMax: 1320 } as never
+      })
+    )
+
+    expect(at(rows, 6).own).toMatchObject({ health: 312, healthMax: 1480, alive: true })
+    // Zero health is carried as it is, not as unknown. By itself it is not a death: the kill
+    // log is complete and has none for him.
+    expect(at(rows, 6).opponent).toMatchObject({ health: 0, healthMax: 1320, alive: true })
+    // The fixture's other snapshots give the health but no maximum.
+    expect(at(rows, 5).own).toMatchObject({ health: 800, healthMax: null })
+  })
+
+  it('goes by the kill log, not by health, to say who is dead', () => {
+    const rows = buildReviewMinuteRows(
+      parse(({ details }) => {
+        addReviewEvent(details, reviewTakedown(340_000, 8, 3, { position: { x: 7030, y: 7000 } }))
+        // The lane opponent's body still reports a little health where it fell.
+        frameOf(details, 6, 3).championStats = { health: 31, healthMax: 1320 } as never
+        // A minute later he has respawned and left the spot.
+        frameOf(details, 7, 3).position = { x: 13_000, y: 13_000 }
+      })
+    )
+
+    expect(at(rows, 6).opponent).toMatchObject({ health: 31, alive: false })
+    expect(at(rows, 5).opponent).toMatchObject({ alive: true })
+    expect(at(rows, 7).opponent).toMatchObject({ alive: true })
   })
 
   it('has no rows for a game without usable snapshots', () => {

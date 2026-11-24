@@ -104,7 +104,9 @@ describe('OP.GG target-champion matchup overlay', () => {
       play: 80,
       win: 38,
       pick_rate: 0.7339,
-      primary_rune_ids: [8992, 8275, 8210, 8237]
+      primary_rune_ids: [8992, 8275, 8210, 8237],
+      // 数字是「这个基石配这个副系」的全部带法合计，符文是其中最常见的一页：给下游一个标记，免得被当成这一页的数。
+      is_group_total: true
     })
     expect(overlay.skill_masteries[0]).toMatchObject({
       ids: ['Q', 'E', 'W'],
@@ -381,6 +383,8 @@ describe('OP.GG target-champion matchup overlay', () => {
     expect(overlay.summoner_spells).toEqual([])
     expect(overlay.runes).toHaveLength(1)
     expect(overlay.runes[0].primary_rune_ids).toEqual([8992, 8275, 8210, 8237])
+    // 没有可用的 rune_pages 时退回逐页的 runes：那一行就是这一页自己的数，不带合计标记。
+    expect(overlay.runes[0]).not.toHaveProperty('is_group_total')
     expect(overlay.starter_items).toEqual([{ ids: [1055, 2003], play: 10, win: 5, pick_rate: 1 }])
     expect(overlay.boots).toEqual([])
     expect(overlay.core_items).toEqual([])

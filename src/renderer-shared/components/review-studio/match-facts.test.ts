@@ -207,6 +207,18 @@ describe('review match facts', () => {
     ['a completed item', { priceTotal: 2200, from: [1], categories: [] }, true],
     ['an expensive basic item', { priceTotal: 2600, from: [], categories: [] }, false],
     ['a component', { priceTotal: 1300, from: [1, 2], categories: [] }, false],
+    [
+      'a cheap item nothing is built from',
+      { priceTotal: 1500, from: [1], to: [], categories: [] },
+      true
+    ],
+    ['an equally dear component', { priceTotal: 1500, from: [1], to: [2], categories: [] }, false],
+    [
+      'a cheap item when the catalogue does not say what it builds into',
+      { priceTotal: 1500, from: [1], categories: [] },
+      false
+    ],
+    ['a support quest item', { priceTotal: 400, from: [3867], to: [], categories: [] }, false],
     ['upgraded boots', { priceTotal: 2500, from: [1001], categories: ['Boots'] }, false],
     ['a missing catalogue entry', undefined, null],
     ['a malformed catalogue entry', { priceTotal: '3000', from: [1] }, null]
@@ -243,8 +255,15 @@ describe('review match facts', () => {
     ownFrame(fixture, 6).position = { x: 1400, y: 9800 }
     ownFrame(fixture, 9).position = { x: 9000, y: 1500 }
     ownFrame(fixture, 10).position = { x: 9800, y: 1400 }
+    // Killed in the top lane at 11:40: the body lying there a moment later is not a visit,
+    // whatever health the snapshot reports for it.
+    fixture.summary.json.participants[0].deaths = 1
+    addReviewEvent(fixture.details, {
+      ...reviewKill(700_000),
+      position: { x: 1500, y: 9000 }
+    } as DetailedChampionKillEvent)
     ownFrame(fixture, 12).position = { x: 1500, y: 9000 }
-    ownFrame(fixture, 12).championStats = { health: 0 } as ReturnType<
+    ownFrame(fixture, 12).championStats = { health: 9, healthMax: 1400 } as ReturnType<
       typeof ownFrame
     >['championStats']
     ownFrame(fixture, 16).position = { x: 1500, y: 9000 }

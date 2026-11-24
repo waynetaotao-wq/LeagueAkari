@@ -262,6 +262,9 @@ export function digestReviewMatch(match: ReviewMatch): ReviewDigest | null {
     keystone: own.runes?.perks[0] ?? null,
     summonerSpells: [...own.summonerSpells],
     skillPriority: report.build.skillPriority ? [...report.build.skillPriority] : null,
-    challenges
+    challenges,
+    runes: own.runes
+      ? own.runes.perks.map((id, index) => [id, ...(own.runes!.stats[index] ?? [0, 0, 0])])
+      : null
   }
 }

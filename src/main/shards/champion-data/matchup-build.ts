@@ -29,7 +29,12 @@ export type MatchupSectionKey = (typeof MATCHUP_SECTION_KEYS)[number]
 
 export interface MatchupOverlayData {
   summoner_spells: OpggBuildPickItem[]
-  runes: OpggRuneBuild[]
+  /**
+   * 来自 rune_pages 的行带 `is_group_total`：一行是「同一个基石、同一个副系」的全部带法，场次、胜率和
+   * 选取率是这一组合计的，六颗符文只是其中最常见的一页（行的 id 就是基石）。把这些数当成那一页自己的数
+   * 会说错（复盘教练的资料要分清）。同一个主系里有几个基石时，会有几行主系副系都相同、基石不同。
+   */
+  runes: Array<OpggRuneBuild & { is_group_total?: true }>
   skill_masteries: OpggSkillMastery[]
   starter_items: OpggBuildPickItem[]
   boots: OpggBuildPickItem[]
@@ -181,7 +186,7 @@ function copyRuneBuild(row: unknown): OpggRuneBuild | null {
   }
 }
 
-function buildRuneRows(data: unknown): OpggRuneBuild[] {
+function buildRuneRows(data: unknown): MatchupOverlayData['runes'] {
   const pages = readArrayField(data, 'rune_pages')
   const fromPages = pages.flatMap((page) => {
     if (!hasValidStats(page)) return []
@@ -200,7 +205,8 @@ function buildRuneRows(data: unknown): OpggRuneBuild[] {
         stat_mod_ids: [...build.stat_mod_ids],
         play: page.play,
         win: page.win,
-        pick_rate: page.pick_rate
+        pick_rate: page.pick_rate,
+        is_group_total: true as const
       }
     ]
   })

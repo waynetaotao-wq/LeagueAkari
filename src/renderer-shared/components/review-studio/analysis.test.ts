@@ -171,6 +171,122 @@ describe('review timeline evidence', () => {
     expect(parse(fixture).quality.eventCoverage).toBe('complete')
   })
 
+  describe('who is dead at a snapshot', () => {
+    const stateAt = (fixture: ReturnType<typeof createReviewFixture>, minute: number, id = 8) =>
+      parse(fixture).frames[minute].participants.find((p) => p.participantId === id)!.alive
+    const setFrame = (
+      fixture: ReturnType<typeof createReviewFixture>,
+      minute: number,
+      values: { health: number; healthMax?: number; position?: { x: number; y: number } },
+      id = 8
+    ) => {
+      const frame = fixture.details.json.frames[minute].participantFrames[String(id)]
+      frame.championStats = {
+        health: values.health,
+        healthMax: values.healthMax ?? 1500
+      } as typeof frame.championStats
+      if (values.position) frame.position = values.position
+    }
+    // Killed at 9:40 on (7500, 7500).
+    const killed = () => {
+      const fixture = createReviewFixture()
+      fixture.summary.json.participants[0].deaths = 1
+      addReviewEvent(fixture.details, reviewKill(580_000))
+      return fixture
+    }
+
+    it('counts a body that still lies where it fell, even when it reports some health', () => {
+      const fixture = killed()
+      setFrame(fixture, 10, { health: 12, position: { x: 7500, y: 7500 } })
+      expect(stateAt(fixture, 10)).toBe(false)
+      // The snapshot before the death and the one after the respawn are untouched.
+      expect(stateAt(fixture, 9)).toBe(true)
+      expect(stateAt(fixture, 11)).toBe(true)
+    })
+
+    it('keeps a long death dead in the second snapshot as well', () => {
+      const fixture = killed()
+      setFrame(fixture, 10, { health: 12, position: { x: 7500, y: 7500 } })
+      setFrame(fixture, 11, { health: 40, position: { x: 7500, y: 7500 } })
+      expect(stateAt(fixture, 11)).toBe(false)
+    })
+
+    it('does not take someone standing next to the spot, or back at full health, for a body', () => {
+      const near = killed()
+      setFrame(near, 10, { health: 900, position: { x: 7530, y: 7500 } })
+      expect(stateAt(near, 10)).toBe(true)
+
+      const respawned = killed()
+      setFrame(respawned, 10, { health: 1500, healthMax: 1500, position: { x: 7500, y: 7500 } })
+      expect(stateAt(respawned, 10)).toBe(true)
+    })
+
+    it('counts a snapshot taken seconds after the kill as dead even a few steps off the spot', () => {
+      // Killed at 9:58, two seconds before the 10:00 snapshot: nobody has respawned by then.
+      const fresh = () => {
+        const fixture = createReviewFixture()
+        fixture.summary.json.participants[0].deaths = 1
+        addReviewEvent(fixture.details, reviewKill(598_000))
+        return fixture
+      }
+      const displaced = fresh()
+      setFrame(displaced, 10, { health: 1, position: { x: 7538, y: 7500 } })
+      expect(stateAt(displaced, 10)).toBe(false)
+
+      // Back at full health within seconds is a revive, not a body.
+      const revived = fresh()
+      setFrame(revived, 10, { health: 1500, healthMax: 1500, position: { x: 800, y: 900 } })
+      expect(stateAt(revived, 10)).toBe(true)
+    })
+
+    it('counts zero health after a recorded death wherever the snapshot puts the player', () => {
+      const fixture = killed()
+      setFrame(fixture, 10, { health: 0, position: { x: 9000, y: 9000 } })
+      expect(stateAt(fixture, 10)).toBe(false)
+    })
+
+    it('does not call zero health a death when the kill log is complete and has none', () => {
+      const fixture = createReviewFixture()
+      setFrame(fixture, 10, { health: 0 })
+      expect(stateAt(fixture, 10)).toBe(true)
+      // A death that is two minutes old explains nothing about this snapshot either.
+      const stale = killed()
+      setFrame(stale, 12, { health: 0 })
+      expect(stateAt(stale, 12)).toBe(true)
+    })
+
+    it('falls back to health when that player’s deaths cannot be reconciled', () => {
+      const fixture = createReviewFixture()
+      fixture.summary.json.participants[0].deaths = 1
+      setFrame(fixture, 10, { health: 0 })
+      expect(stateAt(fixture, 10)).toBe(false)
+    })
+
+    it('leaves the state unknown when the snapshot has no health', () => {
+      const fixture = killed()
+      const frame = fixture.details.json.frames[10].participantFrames['8']
+      Reflect.deleteProperty(frame, 'championStats')
+      expect(stateAt(fixture, 10)).toBeNull()
+    })
+  })
+
+  it('marks a monster nobody took instead of leaving its owner unknown', () => {
+    const fixture = createReviewFixture()
+    addReviewEvent(fixture.details, {
+      type: 'ELITE_MONSTER_KILL',
+      timestamp: 1_185_000,
+      killerId: 0,
+      killerTeamId: 300,
+      monsterType: 'RIFTHERALD',
+      position: { x: 5000, y: 10_400 }
+    })
+    addReviewEvent(fixture.details, reviewDragon(600_000))
+    const [dragon, herald] = parse(fixture).events
+    expect(dragon).toMatchObject({ monsterType: 'DRAGON', teamId: 200 })
+    expect(dragon.unclaimed).toBeUndefined()
+    expect(herald).toMatchObject({ monsterType: 'RIFTHERALD', teamId: null, unclaimed: true })
+  })
+
   it('keeps missing gold, CS and position independent; real zero is retained', () => {
     const fixture = createReviewFixture()
     const frame = fixture.details.json.frames[10].participantFrames['8']

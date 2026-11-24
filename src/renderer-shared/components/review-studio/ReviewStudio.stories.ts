@@ -1,5 +1,8 @@
 import { AiCoachRenderer } from '@renderer-shared/shards/ai-coach'
 import { useAiCoachStore } from '@renderer-shared/shards/ai-coach/store'
+import { ChampionDataRenderer } from '@renderer-shared/shards/champion-data'
+import { AkariIpcRenderer } from '@renderer-shared/shards/ipc'
+import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
 import { RankLogRenderer } from '@renderer-shared/shards/rank-log'
 import { useRankLogStore } from '@renderer-shared/shards/rank-log/store'
@@ -7,13 +10,20 @@ import { SettingUtilsRenderer } from '@renderer-shared/shards/setting-utils'
 import { SgpRenderer } from '@renderer-shared/shards/sgp'
 import { useSgpStore } from '@renderer-shared/shards/sgp/store'
 import type { AkariManager } from '@shared/akari-shard'
+import type { ChampionDataDetails, ChampionDataQuery } from '@shared/data-adapter/champion-data'
 import type {
   AiCoachChatRequest,
   AiCoachChatResult,
   AiCoachProvider
 } from '@shared/shards/ai-coach'
 import { type RankLogEntryDto, fromAbsoluteLp } from '@shared/shards/rank-log'
-import type { Item } from '@shared/types/league-client/game-data'
+import type {
+  ChampionSimple,
+  Item,
+  Perk,
+  Style,
+  SummonerSpell
+} from '@shared/types/league-client/game-data'
 import type { SummonerInfo } from '@shared/types/league-client/summoner'
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import { NButton, NTag } from 'naive-ui'
@@ -75,14 +85,268 @@ function fixtures(partial: boolean) {
   })
 }
 
+const stats = (...lines: string[]) =>
+  `<mainText><stats>${lines.join('<br>')}</stats><br><br></mainText>`
 const STORY_ITEMS = Object.fromEntries(
   [
-    { id: 1055, priceTotal: 450, from: [] as number[], categories: ['Damage'] },
-    { id: 1036, priceTotal: 350, from: [] as number[], categories: ['Damage'] },
-    { id: 3158, priceTotal: 900, from: [1001], categories: ['Boots'] },
-    { id: 6699, priceTotal: 3000, from: [1036, 1036], categories: ['Damage'] }
+    {
+      id: 1055,
+      name: '多兰之刃',
+      description: stats('<attention> 10</attention> 攻击力', '<attention> 80</attention> 生命值'),
+      priceTotal: 450,
+      from: [] as number[],
+      categories: ['Damage']
+    },
+    {
+      id: 1036,
+      name: '长剑',
+      description: stats('<attention> 10</attention> 攻击力'),
+      priceTotal: 350,
+      from: [] as number[],
+      categories: ['Damage']
+    },
+    {
+      id: 3158,
+      name: '明朗之靴',
+      description: stats(
+        '<attention> 10</attention> 技能急速',
+        '<attention> 45</attention> 移动速度'
+      ),
+      priceTotal: 900,
+      from: [1001],
+      categories: ['Boots']
+    },
+    {
+      id: 6699,
+      name: '幽梦之灵',
+      description:
+        '<mainText><stats><attention> 55</attention> 攻击力<br><attention>18</attention> 穿甲</stats><br><br><active>幽影疾步</active><br>获得<speed>0移动速度</speed>，持续6秒。</mainText>',
+      priceTotal: 3000,
+      from: [1036, 1036],
+      categories: ['Damage']
+    }
   ].map((item) => [item.id, item as unknown as Item])
 )
+
+// A cut-down rune book, spell list and champion list for the coach stories. Invented wording:
+// it only has to look like the client's game data.
+const rune = (id: number, name: string, text: string, stat?: string) => ({
+  id,
+  name,
+  shortDesc: text,
+  longDesc: text,
+  endOfGameStatDescs: stat ? [stat] : []
+})
+const STORY_PERKS = Object.fromEntries(
+  [
+    rune(
+      8112,
+      '电刑',
+      '3秒内命中同一英雄三次，造成额外<b>自适应伤害</b>。<br>冷却时间：20秒',
+      '已造成伤害合计：@eogvar1@'
+    ),
+    rune(
+      8128,
+      '黑暗收割',
+      '对生命值低于50%的英雄造成额外伤害并收割灵魂。<br>冷却时间：35秒',
+      '已造成伤害合计：@eogvar1@'
+    ),
+    rune(8143, '猛然冲击', '位移或脱离潜行后，下一次伤害造成额外真实伤害。', '额外伤害：@eogvar1@'),
+    rune(8126, '恶意中伤', '伤害行动受限的英雄时造成额外真实伤害。', '总伤害：@eogvar1@'),
+    rune(
+      8140,
+      '恐怖纪念品',
+      '每次参与击杀收集一个纪念品，提供饰品急速。',
+      '已收集纪念品：@eogvar1@'
+    ),
+    rune(8137, '第六感', '感知附近没有被发现的守卫。', '已感知守卫：@eogvar1@'),
+    rune(8106, '终极猎人', '大招获得技能急速，每层赏金猎人再提高一些。', '总叠加层数：@eogvar1@'),
+    rune(8135, '寻宝猎人', '首次击杀每名敌方英雄时获得额外金币。', '已搜集金钱：@eogvar1@'),
+    rune(
+      8369,
+      '先攻',
+      '率先对英雄出手时造成额外伤害并获得金币。<br>冷却时间：25-15秒',
+      '造成伤害：@eogvar1@'
+    ),
+    rune(
+      8304,
+      '神奇之鞋',
+      '12分钟时获得一双免费的鞋子。',
+      '鞋子送达时间：@eogvar1@:@eogvar2@@eogvar3@'
+    ),
+    rune(8306, '海克斯科技闪现罗网', '闪现冷却时可以引导一次海克斯闪现。'),
+    rune(8345, '饼干配送', '每2分钟获得一块饼干，直到6分钟。', '已获得干粮：@eogvar1@'),
+    rune(8313, '三重补药', '在3、6、9级各获得一瓶药剂。'),
+    rune(8347, '星界洞悉', '+18 召唤师技能急速，+10 装备急速。'),
+    rune(8316, '多面手', '每从装备获得一种不同的属性，获得技能急速。'),
+    rune(5008, '适应之力', '+9 适应之力'),
+    rune(5005, '攻击速度', '+10% 攻击速度'),
+    rune(5007, '技能急速', '+8 技能急速'),
+    rune(5010, '移动速度', '+2.5% 移动速度'),
+    rune(5001, '成长生命值', '+10-180 生命值（随等级提升）'),
+    rune(5011, '生命值', '+65 生命值'),
+    rune(5013, '韧性和减速抗性', '+15% 韧性和减速抗性')
+  ].map((entry) => [entry.id, entry as unknown as Perk])
+)
+const runeSlot = (type: string, perks: number[]) => ({ type, slotLabel: '', perks })
+const SHARD_SLOTS = [
+  runeSlot('kStatMod', [5008, 5005, 5007]),
+  runeSlot('kStatMod', [5008, 5010, 5001]),
+  runeSlot('kStatMod', [5011, 5013, 5001])
+]
+const STORY_STYLES = {
+  8100: {
+    id: 8100,
+    name: '主宰',
+    tooltip: '爆发伤害与接近目标',
+    slots: [
+      runeSlot('kKeyStone', [8112, 8128]),
+      runeSlot('kMixedRegularSplashable', [8126, 8143]),
+      runeSlot('kMixedRegularSplashable', [8137, 8140]),
+      runeSlot('kMixedRegularSplashable', [8135, 8106]),
+      ...SHARD_SLOTS
+    ]
+  },
+  8300: {
+    id: 8300,
+    name: '启迪',
+    tooltip: '创造性的工具与打破规则',
+    slots: [
+      runeSlot('kKeyStone', [8369]),
+      runeSlot('kMixedRegularSplashable', [8306, 8304]),
+      runeSlot('kMixedRegularSplashable', [8313, 8345]),
+      runeSlot('kMixedRegularSplashable', [8347, 8316]),
+      ...SHARD_SLOTS
+    ]
+  }
+} as unknown as Record<number, Style>
+const STORY_SPELLS = Object.fromEntries(
+  [
+    { id: 4, name: '闪现', cooldown: 300, description: '向光标方向传送一小段距离。' },
+    { id: 12, name: '传送', cooldown: 300, description: '引导后传送到友方单位身边。' },
+    { id: 14, name: '引燃', cooldown: 180, description: '持续造成真实伤害，并降低目标受到的治疗。' }
+  ].map((spell) => [spell.id, { ...spell, gameModes: ['CLASSIC'] } as unknown as SummonerSpell])
+)
+const STORY_CHAMPIONS = Object.fromEntries(
+  (
+    [
+      [238, '劫', ['assassin']],
+      [103, '阿狸', ['mage', 'assassin']],
+      [61, '奥莉安娜', ['mage']],
+      [7, '乐芙兰', ['assassin', 'mage']],
+      [245, '艾克', ['assassin', 'mage']],
+      [122, '德莱厄斯', ['fighter', 'tank']],
+      [64, '李青', ['fighter', 'assassin']],
+      [51, '凯特琳', ['marksman']],
+      [412, '锤石', ['support', 'tank']],
+      [114, '菲奥娜', ['fighter']],
+      [59, '嘉文四世', ['tank', 'fighter']],
+      [222, '金克丝', ['marksman']],
+      [117, '璐璐', ['support', 'mage']]
+    ] as const
+  ).map(([id, name, roles]) => [id, { id, name, roles } as unknown as ChampionSimple])
+)
+
+/** A stand-in for the client's full champion entry: the coach reads the kits from these. */
+const storyChampionDetails = (id: number) => {
+  const champion = STORY_CHAMPIONS[id] as unknown as { name: string; roles: string[] } | undefined
+  const name = champion?.name ?? `英雄 ${id}`
+  const mage = champion?.roles.includes('mage')
+  return {
+    id,
+    name,
+    tacticalInfo: {
+      style: 1,
+      difficulty: 2,
+      damageType: mage ? 'kMagic' : 'kPhysical',
+      attackType: champion?.roles.includes('marksman') || mage ? 'ranged' : 'melee'
+    },
+    playstyleInfo: { damage: 3, durability: 1, crowdControl: 2, mobility: 2, utility: 1 },
+    passive: { name: `${name}的被动`, description: '演示用的被动说明。' },
+    spells: (['q', 'w', 'e', 'r'] as const).map((spellKey, index) => ({
+      spellKey,
+      name: `${name}的 ${spellKey.toUpperCase()}`,
+      description: '演示用的技能说明。',
+      cooldownCoefficients: index === 3 ? [120, 100, 80, 80, 80, 80] : [8, 8, 8, 8, 8, 8],
+      maxLevel: index === 3 ? 3 : 5
+    }))
+  }
+}
+
+const storyPerformance = (games: number, wins: number, pickRate: number | null = null) => ({
+  games,
+  wins,
+  winRate: wins / games,
+  pickRate,
+  rank: null,
+  averagePlacement: null,
+  firstPlaceRate: null
+})
+/** What the stand-in statistics source says about one champion in the middle lane. */
+function storyStatistics(championId: number, patch: string): ChampionDataDetails {
+  return {
+    metadata: { source: 'opgg', mode: 'ranked', patch, dataDate: null, updatedAt: null },
+    championId,
+    summary: {
+      championId,
+      position: 'middle',
+      performance: {
+        games: 16_860,
+        wins: null,
+        winRate: 0.504,
+        pickRate: 0.073,
+        banRate: null,
+        kda: null,
+        rank: null,
+        rankChange: null,
+        strengthTier: null,
+        averagePlacement: null,
+        firstPlaceRate: null
+      },
+      counterChampionIds: []
+    },
+    sections: {
+      matchups: [103, 61, 7, 245].map((opponent, index) => ({
+        championId: opponent,
+        relationship: 'unknown' as const,
+        performance: storyPerformance(260 + index * 40, 128 + index * 22)
+      })),
+      summonerSpells: [
+        { spellIds: [4, 14], performance: storyPerformance(11_900, 6045, 0.78) },
+        { spellIds: [4, 12], performance: storyPerformance(2360, 1138, 0.155) }
+      ],
+      runePages: [
+        {
+          primaryStyleId: 8300,
+          secondaryStyleId: 8100,
+          primaryRuneIds: [8369, 8304, 8345, 8347],
+          secondaryRuneIds: [8143, 8106],
+          statShardIds: [5008, 5008, 5011],
+          performance: storyPerformance(8420, 4336, 0.5)
+        },
+        {
+          primaryStyleId: 8100,
+          secondaryStyleId: 8300,
+          primaryRuneIds: [8112, 8143, 8140, 8106],
+          secondaryRuneIds: [8304, 8345],
+          statShardIds: [5008, 5008, 5011],
+          performance: storyPerformance(1660, 754, 0.1)
+        }
+      ],
+      itemBuilds: [
+        {
+          slot: 'starting',
+          options: [{ itemIds: [1055], performance: storyPerformance(6850, 3473, 0.44) }]
+        },
+        {
+          slot: 'boots',
+          options: [{ itemIds: [3158], performance: storyPerformance(12_100, 6232, 0.8) }]
+        },
+        { slot: 'last', options: [{ itemIds: [6699], performance: storyPerformance(9180, 4856) }] }
+      ]
+    }
+  }
+}
 
 /**
  * Thirty synthetic games with deaths, purchases, wards and plates, so the cross-game views have
@@ -404,9 +668,9 @@ const COACH_ANSWER = `**一句话总结**：这一局输在 10 到 15 分钟之�
 
 ## 最关键的三个时刻
 
-1. **5:10 第一次回城**：回城前兵线停在河道，回来时少了一波兵的经验。更好的选择是先把这波兵推进塔下再回。
+1. **3:25 单杀之后**：拿到一血以后兵线停在河道，回城再回来时少了一波兵的经验。更好的选择是先把这波兵推进塔下再回。
 2. **10:20 河道阵亡**：这是程序标出的片段。阵亡前 30 秒敌方打野没有出现在地图上，资料里看不出当时有没有视野，这一点需要你自己回看确认。
-3. **13:45 小龙团前阵亡**：你比队友早到了大约 20 秒，在人数不齐的时候被先手。等到 14:05 队友到位再靠近，这条龙有机会拿。
+3. **12:30 峡谷先锋**：你比队友早到了大约 20 秒，在人数不齐的时候被先手。等到 12:50 队友到位再靠近，这个先锋有机会拿。
 
 ## 做得好的地方
 
@@ -415,7 +679,22 @@ const COACH_ANSWER = `**一句话总结**：这一局输在 10 到 15 分钟之�
 
 ## 下一局只改一件事
 
-**去河道和野区之前，先看一眼小地图上敌方打野最后出现的位置和时间。** 打完之后检查：每一次阵亡前，你能不能说出敌方打野当时大概在哪。`
+**去河道和野区之前，先看一眼小地图上敌方打野最后出现的位置和时间。** 打完之后检查：每一次阵亡前，你能不能说出敌方打野当时大概在哪。
+
+## 符文、召唤师技能和出装
+
+**符文**：这一套在这个对位下说得通，问题出在基石没打出来。
+
+- 基石 电刑：整局的记录远低于你的总伤害，说明三连命中的机会很少。对面中期就做了保命装，换成先攻更稳。
+- 猛然冲击、恐怖纪念品、终极猎人：都正常发挥，不用动。
+- 副系 神奇之鞋、饼干配送：没问题。
+- 属性碎片：没问题。
+
+**召唤师技能**：闪现用了 4 次、引燃 3 次，两次单杀里都有引燃的伤害，这一局带引燃是对的。
+
+**出装**：出门装和鞋都和同段位的主流一致。第一件成装 10:20 才做出来，比你平时晚，是那两次阵亡拖的。
+
+**下次遇到这个对位**：先攻，其余不变；闪现加引燃。`
 const COACH_FOLLOW_UP = `对线期整体是合格的，主要有两点可以更好：
 
 - **2:40 到 4:30** 你一直在推线，资料里这段时间没有插眼的记录。推线时在河道草丛留一个眼，被抓的风险会小很多。
@@ -546,12 +825,47 @@ const meta = {
           Object.assign(coachStore.settings, { [key]: value })
         }
       }
+      // The coach also reads same-rank statistics; a stand-in source answers after a moment.
+      const answer = <T>(data: T) => ({
+        status: 'success' as const,
+        data,
+        preferredSource: 'opgg' as const,
+        effectiveSource: 'opgg' as const,
+        fallbackReason: null,
+        attempts: []
+      })
+      const championData = {
+        loadPatches: async () => {
+          await wait()
+          return answer(['16.22', '16.21'])
+        },
+        loadDetails: async (statisticsQuery: ChampionDataQuery, championId: number) => {
+          await new Promise((resolve) => setTimeout(resolve, 600))
+          return answer(storyStatistics(championId, statisticsQuery.patch ?? '16.22'))
+        }
+      }
+      // The only direct call is the matchup-only statistics, which this source does not have.
+      const ipc = { call: async () => ({ targetVerified: false, overlay: null }) }
+      // The champion kits are read from the client one champion at a time.
+      const leagueClient = {
+        api: {
+          gameData: {
+            getChampDetails: async (championId: number) => {
+              await wait()
+              return { data: storyChampionDetails(championId) }
+            }
+          }
+        }
+      }
       appContext.config.globalProperties.$akariManager = {
         getInstance: (constructor: unknown) => {
           if (constructor === SettingUtilsRenderer) return storedSettings
           if (constructor === SgpRenderer) return { api: { matchHistoryQuery: query } }
           if (constructor === RankLogRenderer) return rankLog
           if (constructor === AiCoachRenderer) return aiCoach
+          if (constructor === ChampionDataRenderer) return championData
+          if (constructor === AkariIpcRenderer) return ipc
+          if (constructor === LeagueClientRenderer) return leagueClient
           throw new Error('Unexpected shard requested by review preview')
         }
       } as AkariManager
@@ -563,12 +877,25 @@ const meta = {
         leagueServers: sgpStore.leagueServers,
         summoner: lcs.summoner.me,
         items: lcs.gameData.items,
+        perks: lcs.gameData.perks,
+        perkstyles: lcs.gameData.perkstyles,
+        summonerSpells: lcs.gameData.summonerSpells,
+        champions: lcs.gameData.champions,
+        connectionState: lcs.connectionState,
         rankAvailable: rankStore.state.available,
         rankEnabled: rankStore.settings.enabled
       }
       rankStore.state.available = true
       rankStore.settings.enabled = true
       lcs.gameData.items = STORY_ITEMS
+      if (isCoachStory) {
+        lcs.gameData.perks = STORY_PERKS
+        lcs.gameData.perkstyles = { schemaVersion: 2, styles: STORY_STYLES }
+        lcs.gameData.summonerSpells = STORY_SPELLS
+        lcs.gameData.champions = STORY_CHAMPIONS
+        // The kits are only asked for while the client is connected.
+        lcs.connectionState = 'connected'
+      }
       sgpStore.availability.sgpServerId = 'REVIEW_STORY'
       sgpStore.isTokenReady = context.name !== 'Disconnected'
       sgpStore.leagueServers = {
@@ -616,6 +943,11 @@ const meta = {
         sgpStore.leagueServers = previousState.leagueServers
         lcs.summoner.me = previousState.summoner
         lcs.gameData.items = previousState.items
+        lcs.gameData.perks = previousState.perks
+        lcs.gameData.perkstyles = previousState.perkstyles
+        lcs.gameData.summonerSpells = previousState.summonerSpells
+        lcs.gameData.champions = previousState.champions
+        lcs.connectionState = previousState.connectionState
         rankStore.state.available = previousState.rankAvailable
         rankStore.settings.enabled = previousState.rankEnabled
         Object.assign(coachStore.settings, previousCoach.settings)

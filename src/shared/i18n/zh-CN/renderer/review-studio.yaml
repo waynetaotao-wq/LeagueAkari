@@ -634,6 +634,15 @@ reviewStudio:
       noForm: 近期排位状态：暂无
       noFormOther: 近期排位状态：只在复盘自己的对局时提供
       tips: 这个对位的对线心得：有
+      loadout: 符文、召唤师技能和出装：有，附客户端里的说明原文和这一局的结算数字
+      loadoutKits: 符文、召唤师技能、出装和对面英雄的技能：有，附客户端里的说明原文和这一局的结算数字
+      noLoadout: 符文、召唤师技能和出装：只有名字（客户端没连上，取不到说明原文）
+      statistics: '同段位统计：有，OP.GG {{region}} · {{tier}} · 版本 {{patch}}'
+      statisticsLoading: 同段位统计：正在读取…
+      noStatistics: 同段位统计：这次没取到。复盘照常进行，只是不会引用使用率和胜率
+      history: '你以往的带法：有，来自本机档案里这个英雄的另外 {{games}} 局'
+      noHistory: 你以往的带法：暂无，本机档案里没有这个英雄这个位置的其它对局
+      waitStatistics: 正在读取同段位统计和英雄技能说明，读完就可以开始，最多等十几秒。
       privacy: 发送的内容不含任何玩家的名字或账号，只用英雄和位置指代。
       focusPlaceholder: 想重点了解什么？可以不填。例如：中期为什么崩了
       action: 开始复盘
@@ -663,12 +672,14 @@ reviewStudio:
     usage: '{{model}} · 读入 {{input}} · 写出 {{output}}（单位 token）'
     usageCached: '{{model}} · 读入 {{input}}，其中 {{cached}} 来自缓存 · 写出 {{output}}（单位 token）'
     disclaimer: AI 只看得到战绩和时间线数据，看不到录像。它的结论可能有错，仅供参考。
+    unknownTime: 发给教练的资料里没有这个时刻：可能是它估的，也可能是记错了
     detail: '服务返回：{{message}}'
     quick:
       laning: 对线期怎么打更好？
       deaths: 每次阵亡分别错在哪？
       items: 出装和回城时机有问题吗？
       midgame: 中期我应该去哪里、做什么？
+      loadout: 换一套符文和召唤师技能会怎样？把可选的方案逐个比一比
     errors:
       not-configured: 接口还没填完整。
       no-key: 还没有填写密钥。

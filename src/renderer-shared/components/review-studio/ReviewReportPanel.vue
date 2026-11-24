@@ -711,7 +711,11 @@ const deathRows = computed(() =>
       title: death?.killer
         ? t('report.deaths.killedBy', { killer: resources.champions.name(death.killer.championId) })
         : t('report.deaths.executed'),
-      gold: bounty === null && shutdown === null ? null : (bounty ?? 0) + (shutdown ?? 0)
+      // 被处决时记录里也有一个金额，但没有人拿到它，不能算作送出的金币。
+      gold:
+        (death && !death.killer) || (bounty === null && shutdown === null)
+          ? null
+          : (bounty ?? 0) + (shutdown ?? 0)
     }
   })
 )

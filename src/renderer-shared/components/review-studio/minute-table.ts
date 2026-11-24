@@ -1,5 +1,6 @@
 import { REVIEW_SNAPSHOT_TOLERANCE_MS } from './analysis'
 import { type ReviewDeathZone, classifyReviewDeathZone } from './death-map'
+import { REVIEW_CHECKPOINT_MINUTES } from './match-report'
 import type { ReviewMatch, ReviewParticipantFrame, ReviewPosition } from './types'
 
 // [lolps] 逐分钟表：时间线每分钟留一次快照，这里把它整理成本人和对位的累计数字、
@@ -7,7 +8,7 @@ import type { ReviewMatch, ReviewParticipantFrame, ReviewPosition } from './type
 // 这里就是 null，不补不估。
 
 /** 各路经济差按这几个时间点给，和单局报告的检查点一致。 */
-export const REVIEW_LANE_DIFF_MINUTES = [5, 10, 15, 20, 25, 30] as const
+export const REVIEW_LANE_DIFF_MINUTES = REVIEW_CHECKPOINT_MINUTES
 
 const LANE_ROLES: ReviewPosition[] = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY']
 
@@ -20,6 +21,19 @@ export interface ReviewMinuteSide {
   level: number | null
   /** Cumulative damage dealt to champions. */
   damage: number | null
+  /**
+   * Cumulative damage taken, from champions, minions, monsters and turrets alike.
+   * 实测 16.23：280 个视角的结算快照与战绩里的承伤逐一相等，逐行只增不减。
+   */
+  damageTaken: number | null
+  /** Health at the instant of the snapshot and its maximum. */
+  health: number | null
+  healthMax: number | null
+  /**
+   * false when the player is dead at the snapshot. Not the same as zero health: a body lying
+   * where it fell can report a few points of health (see `settleAlive` in analysis.ts).
+   */
+  alive: boolean | null
 }
 
 export interface ReviewMinutePlace {
@@ -51,12 +65,19 @@ export interface ReviewMinuteRow {
   places: ReviewMinutePlace[]
 }
 
+// 快照里还有一个「资源」数（蓝量、能量、怒气……）。实测 16.23：不耗蓝的英雄报出来的数
+// 各不相同，有的是 0，有的是 10000，亚索、弗拉基米尔、雷恩加尔等报的既不是 0 也不是整百；
+// 不知道英雄用的是哪种资源就没法解读，所以不取。
 const sideOf = (frame: ReviewParticipantFrame | undefined): ReviewMinuteSide => ({
   gold: frame?.gold ?? null,
   unspentGold: frame?.unspentGold ?? null,
   cs: frame?.cs ?? null,
   level: frame?.level ?? null,
-  damage: frame?.damage ?? null
+  damage: frame?.damage ?? null,
+  damageTaken: frame?.damageTaken ?? null,
+  health: frame?.health ?? null,
+  healthMax: frame?.healthMax ?? null,
+  alive: frame?.alive ?? null
 })
 
 /**

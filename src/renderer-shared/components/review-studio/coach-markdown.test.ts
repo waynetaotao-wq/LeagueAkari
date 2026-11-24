@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { readReviewCoachTime, renderReviewCoachMarkdown } from './coach-markdown'
+import {
+  collectReviewCoachTimes,
+  readReviewCoachTime,
+  renderReviewCoachMarkdown
+} from './coach-markdown'
 
 const render = (text: string, durationMs?: number) =>
   renderReviewCoachMarkdown(text, { durationMs })
 const times = (html: string) =>
-  [...html.matchAll(/data-coach-time="(\d+)">([^<]*)</g)].map((match) => [
+  [...html.matchAll(/data-coach-time="(\d+)"[^>]*>([^<]*)</g)].map((match) => [
     Number(match[1]),
     match[2]
   ])
@@ -97,6 +101,44 @@ describe('renderReviewCoachMarkdown', () => {
   it('renders an unfinished answer without failing', () => {
     expect(() => render('## 关键时刻\n\n1. **12:3')).not.toThrow()
     expect(render('')).toBe('')
+  })
+
+  it('marks a time the document does not mention, and still lets it be clicked', () => {
+    const knownTimes = collectReviewCoachTimes('9:30 中路己方半场：阿狸击杀。\n10:00｜本人 4100金')
+    const html = renderReviewCoachMarkdown('你在 9:30 阵亡，10:00 丢了小龙，大约 9:45 复活。', {
+      durationMs: 30 * 60_000,
+      knownTimes,
+      unknownTimeTitle: '资料里没有 "这个" 时刻'
+    })
+
+    expect(times(html)).toEqual([
+      [570_000, '9:30'],
+      [600_000, '10:00'],
+      [585_000, '9:45']
+    ])
+    expect(html).toContain(
+      '<button type="button" class="coach-time" data-coach-time="570000">9:30<'
+    )
+    expect(html).toContain(
+      '<button type="button" class="coach-time coach-time-unknown" data-coach-time="585000" title="资料里没有 &quot;这个&quot; 时刻">9:45<'
+    )
+    expect(html.match(/coach-time-unknown/g)).toHaveLength(1)
+  })
+
+  it('marks nothing when it is not told which times the document has', () => {
+    expect(render('大约 9:45 复活。', 30 * 60_000)).not.toContain('coach-time-unknown')
+  })
+})
+
+describe('collectReviewCoachTimes', () => {
+  it('collects every game time of a text in seconds', () => {
+    expect([
+      ...collectReviewCoachTimes('4:06 中路：击杀。成装完成时间：电涌环剑 9:52；第 3 场 8:04–8:38')
+    ]).toEqual([246, 592, 484, 518])
+  })
+
+  it('skips what only looks like a time', () => {
+    expect(collectReviewCoachTimes('比分 3:2，版本 16.23，血744/744，1.12:30').size).toBe(0)
   })
 })
 

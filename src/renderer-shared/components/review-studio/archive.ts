@@ -265,6 +265,22 @@ function parseDigest(value: unknown): ReviewDigest | null {
       challenges[key] = counter
     }
   }
+  // 符文及其结算数字是后来才存的：旧存档没有这一项，算作未知。
+  let runes: number[][] | null = null
+  if (digest.runes != null) {
+    if (!Array.isArray(digest.runes) || digest.runes.length > 9) return null
+    runes = []
+    for (const entry of digest.runes) {
+      if (
+        !Array.isArray(entry) ||
+        entry.length !== 4 ||
+        !positiveInteger(entry[0]) ||
+        !entry.slice(1).every(finite)
+      )
+        return null
+      runes.push([...entry])
+    }
+  }
   return {
     metrics,
     coreItems,
@@ -272,7 +288,8 @@ function parseDigest(value: unknown): ReviewDigest | null {
     keystone: digest.keystone,
     summonerSpells: [...digest.summonerSpells],
     skillPriority: priority === null ? null : [...priority],
-    challenges
+    challenges,
+    runes
   }
 }
 

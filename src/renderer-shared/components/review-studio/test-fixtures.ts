@@ -151,12 +151,13 @@ export function reviewWard(
 export function reviewPlate(
   timestamp: number,
   teamId: number,
-  laneType: LaneType = 'MID_LANE'
+  laneType: LaneType = 'MID_LANE',
+  killerId = 0
 ): DetailedGameEvent {
   return {
     type: 'TURRET_PLATE_DESTROYED',
     timestamp,
-    killerId: 0,
+    killerId,
     laneType,
     position: teamId === 100 ? { x: 5846, y: 6396 } : { x: 8955, y: 8510 },
     teamId
@@ -183,6 +184,9 @@ export function reviewTakedown(
     position?: { x: number; y: number }
     received?: Partial<DamageDetail>[]
     dealt?: Partial<DamageDetail>[]
+    /** The record's wider "teamfight" lists; real records carry them next to the plain ones. */
+    fightReceived?: Partial<DamageDetail>[]
+    fightDealt?: Partial<DamageDetail>[]
     bounty?: number
     shutdownBounty?: number
   } = {}
@@ -210,8 +214,30 @@ export function reviewTakedown(
     shutdownBounty: options.shutdownBounty ?? 0,
     killStreakLength: 0,
     victimDamageReceived: (options.received ?? []).map(damage),
-    ...(options.dealt ? { victimDamageDealt: options.dealt.map(damage) } : {})
+    ...(options.dealt ? { victimDamageDealt: options.dealt.map(damage) } : {}),
+    ...(options.fightReceived
+      ? { victimTeamfightDamageReceived: options.fightReceived.map(damage) }
+      : {}),
+    ...(options.fightDealt ? { victimTeamfightDamageDealt: options.fightDealt.map(damage) } : {})
   }
+}
+
+/** The trailing team may collect objective bounties from `start` on; teamId is that team. */
+export function reviewBountyStart(
+  timestamp: number,
+  teamId: number,
+  start = timestamp + 15_000
+): DetailedGameEvent {
+  return { type: 'OBJECTIVE_BOUNTY_PRESTART', timestamp, teamId, actualStartTime: start }
+}
+
+export function reviewBountyEnd(timestamp: number, teamId: number): DetailedGameEvent {
+  return { type: 'OBJECTIVE_BOUNTY_FINISH', timestamp, teamId }
+}
+
+/** teamId 0 marks the rift taking this element; 100 / 200 is a team receiving the soul. */
+export function reviewSoul(timestamp: number, name: string, teamId: number): DetailedGameEvent {
+  return { type: 'DRAGON_SOUL_GIVEN', timestamp, name, teamId }
 }
 
 export function reviewMonster(

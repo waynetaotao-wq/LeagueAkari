@@ -163,6 +163,14 @@ export interface SgpParticipantLol {
   lane: string
   role: string
   teamPosition: string
+  /** 匹配分到的位置；与 teamPosition 不同说明选人阶段换过位置。 */
+  positionAssignedByMatchmaking?: string
+  /**
+   * 排队时选的位置，形如 `MIDDLE.PRIMARY.MIDDLE.TOP.FILL`：实际位置、它是第几选择
+   * （PRIMARY / SECONDARY / AUTOFILL / FILL_PRIMARY）、第一选择、第二选择。
+   */
+  selectedRolePreferences?: string
+  wasAfk?: boolean
 
   // 装备
   item0: number
@@ -568,6 +576,7 @@ export type DetailedGameEventType =
   | 'ELITE_MONSTER_KILL'
   | 'DRAGON_SOUL_GIVEN'
   | 'OBJECTIVE_BOUNTY_PRESTART'
+  | 'OBJECTIVE_BOUNTY_FINISH'
   | 'GAME_END'
   | 'TURRET_PLATE_DESTROYED'
 
@@ -710,9 +719,15 @@ export interface DetailedDragonSoulGivenEvent extends BaseDetailedGameEvent {
   teamId: number
 }
 
+/** teamId 是落后、可以领取目标赏金的一方。 */
 export interface DetailedObjectiveBountyPrestartEvent extends BaseDetailedGameEvent {
   type: 'OBJECTIVE_BOUNTY_PRESTART'
   actualStartTime: number
+  teamId: number
+}
+
+export interface DetailedObjectiveBountyFinishEvent extends BaseDetailedGameEvent {
+  type: 'OBJECTIVE_BOUNTY_FINISH'
   teamId: number
 }
 
@@ -732,6 +747,7 @@ export type DetailedGameEvent =
   | DetailedEliteMonsterKillEvent
   | DetailedDragonSoulGivenEvent
   | DetailedObjectiveBountyPrestartEvent
+  | DetailedObjectiveBountyFinishEvent
   | GameEndEvent
   | DetailedTurretPlateDestroyedEvent
 

@@ -32,6 +32,14 @@ export interface ReviewParticipantFrame {
   damageTaken?: number | null
   /** Gold in the purse at this snapshot. */
   unspentGold?: number | null
+  /** Health at this snapshot and its maximum. */
+  health?: number | null
+  healthMax?: number | null
+  /** Attack damage, ability power, armor and magic resistance at this snapshot. */
+  attackDamage?: number | null
+  abilityPower?: number | null
+  armor?: number | null
+  magicResist?: number | null
 }
 
 export interface ReviewFrame {
@@ -51,6 +59,11 @@ export interface ReviewEvent {
   assistingParticipantIds: number[]
   /** Team receiving the kill/objective; never the destroyed building's team. */
   teamId: 100 | 200 | null
+  /**
+   * Monsters only: the record credits no player and names the neutral team, so nobody took it
+   * (实测 16.23：两局的峡谷先锋都是 19:45 这样记的，那是它到时间离场的时刻). Absent otherwise.
+   */
+  unclaimed?: boolean
   position: ReviewPoint | null
   shutdownBounty: number | null
   buildingType: string | null
@@ -146,6 +159,13 @@ export interface ReviewRunes {
   subStyle: number | null
   /** Keystone first, then the remaining selections in page order. */
   perks: number[]
+  /** How many of `perks` belong to the primary tree; the rest are from the secondary tree. */
+  primaryCount: number
+  /**
+   * The three end-of-game numbers the server records for each rune of `perks`, in the same
+   * order. What they mean is said by the rune's own stat labels in the client's game data.
+   */
+  stats: number[][]
   /** Offense, flex and defense shards. */
   shards: number[]
 }
@@ -184,9 +204,18 @@ export interface ReviewPlayerLine {
   magicDamage: number | null
   trueDamage: number | null
   damageTaken: number | null
+  /** Damage taken by type; tells which kind of defence would have mattered. */
+  physicalDamageTaken: number | null
+  magicDamageTaken: number | null
+  trueDamageTaken: number | null
   damageMitigated: number | null
   objectiveDamage: number | null
   turretDamage: number | null
+  /**
+   * Damage to epic monsters. 实测 16.23（280 个视角）：官方的「对地图目标」等于它加上对防御塔的，
+   * 相差不超过 1。Absent in lines built before this was read.
+   */
+  epicMonsterDamage?: number | null
   healing: number | null
   allyHealing: number | null
   allyShielding: number | null
@@ -223,6 +252,23 @@ export interface ReviewPlayerLine {
   goldShare: number | null
   /** Selected counters from the server's own challenge tracking; null when the summary has none. */
   challenges: Record<string, number> | null
+  /** The server flagged this player as away from the keyboard; null when the summary does not say. */
+  afk: boolean | null
+  /** How often each kind of ping was used; kinds the summary does not carry are left out. */
+  pings: Record<string, number> | null
+}
+
+/** How the position played relates to what the player queued for. */
+export interface ReviewRoleAssignment {
+  /**
+   * `primary` / `secondary`: the position played was the first / second choice in the queue;
+   * `fill`: the player queued as fill; `autofill`: it was neither choice.
+   */
+  choice: 'primary' | 'secondary' | 'fill' | 'autofill'
+  /** What was chosen in the queue, first choice first; a slot left open is missing. */
+  preferences: Array<Exclude<ReviewPosition, 'UNKNOWN'> | 'FILL'>
+  /** The position matchmaking handed out, when it is not the one played. */
+  assigned: ReviewPosition | null
 }
 
 export interface ReviewTeamLine {
@@ -264,7 +310,10 @@ export interface ReviewShopVisit {
   timestamp: number
   /** The stop follows an own death instead of a recall. */
   afterDeath: boolean
+  /** Items bought during the stop and kept; empty when everything was undone or only sold. */
   itemIds: number[]
+  /** Items sold during the stop and not taken back; absent when there are none. */
+  soldIds?: number[]
 }
 
 export interface ReviewBuild {
@@ -275,6 +324,11 @@ export interface ReviewBuild {
   coreItems: Array<{ timestamp: number; itemId: number }>
   /** First upgraded pair of boots. */
   boots: { timestamp: number; itemId: number } | null
+  /**
+   * For each item that left the inventory (used up, combined into something, or turned into
+   * another item): when it did so for the last time and how often. Absent when not read.
+   */
+  destroyed?: Record<number, { timestamp: number; count: number }>
   visits: ReviewShopVisit[]
   /** Ability level-ups in order: 1 = Q, 2 = W, 3 = E, 4 = R. */
   skills: Array<{ timestamp: number; slot: 1 | 2 | 3 | 4 }>
@@ -327,6 +381,18 @@ export interface ReviewTakedown {
   bounty: number | null
   shutdownBounty: number | null
   firstBlood: boolean
+  /** What the reviewed player did to the victim; null when the kill record lists none of it. */
+  damage: ReviewOwnDamage | null
+}
+
+/** The reviewed player's damage on one victim, from the damage list of the kill record. */
+export interface ReviewOwnDamage {
+  total: number
+  slots: ReviewDamageSlots
+  /** The part of `slots.summoner` that is Ignite. */
+  ignite: number
+  /** Everything the victim took according to the same list, this player's part included. */
+  victimTotal: number
 }
 
 export interface ReviewDamageSlots {
@@ -362,8 +428,17 @@ export interface ReviewDeathDetail {
   damageTaken: number | null
   /** Damage the victim dealt according to the same record. */
   damageDealt: number | null
+  /**
+   * The same two totals from the record's wider "teamfight" lists, which are never smaller;
+   * null when the record has no such list.
+   */
+  fightDamageTaken: number | null
+  fightDamageDealt: number | null
   bounty: number | null
-  /** Own and killer levels in the last snapshot at or before the death. */
+  /**
+   * Own and killer levels right before the death: the last recorded level-up before it, or the
+   * last snapshot when the timeline has no level-up to go by.
+   */
   level: number | null
   killerLevel: number | null
   /** Index into `ReviewReport.fights`; null for a death outside any fight. */
@@ -385,9 +460,19 @@ export interface ReviewObjective {
   own: boolean | null
   /** The reviewed player is the killer or an assistant. */
   credited: boolean
+  /**
+   * The enemy took it, yet the record lists the reviewed player among those who fought it.
+   * Absent when not.
+   */
+  contested?: boolean
+  /** Nobody took it: the record credits the neutral team, as when a monster leaves the map. */
+  unclaimed?: boolean
   /** Milliseconds since the reviewed player's last death, when that was at most 90 s earlier. */
   sinceDeath: number | null
-  /** Distance between the objective and own position in the nearest snapshot, in map units. */
+  /**
+   * Distance between the objective and own position in the nearest snapshot, in map units;
+   * null when there is no such snapshot or the player is dead in it.
+   */
   distance: number | null
   /** How far that snapshot is from the event in milliseconds; negative means earlier. */
   snapshotOffset: number | null
@@ -402,9 +487,15 @@ export interface ReviewFight {
   point: ReviewPoint | null
   /** Where each located kill of the fight happened, in order. */
   killPoints: ReviewPoint[]
-  /** Kills scored by the reviewed player's team and by the enemy. */
+  /** Champions that died on the enemy side and on the reviewed player's side. */
   kills: number
   deaths: number
+  /**
+   * How many of those were executed (turret, minion or monster, no champion credited), which
+   * is nobody's kill. Absent when none.
+   */
+  enemyExecutions?: number
+  allyExecutions?: number
   /** Distinct champions credited on each side: killers, assistants and victims. */
   allies: number
   enemies: number
@@ -431,6 +522,37 @@ export interface ReviewVision {
   cleared: ReviewWardEvent[]
 }
 
+/** One turret plate falling. */
+export interface ReviewPlate {
+  timestamp: number
+  lane: string | null
+  /** True when the reviewed player's team took it; null when the record does not say whose turret. */
+  own: boolean | null
+  /** The reviewed player is recorded as the one who broke it. */
+  byPlayer: boolean
+}
+
+/** What the timeline says about a kill beyond the kill itself. */
+export interface ReviewKillMark {
+  timestamp: number
+  killerId: number
+  /** 2 for a double kill, 3 for a triple…; null when this mark is only an ace. */
+  multiKill: number | null
+  /** The kill took down the last living enemy. */
+  ace: boolean
+}
+
+/** A period in which the trailing team could collect bounties on objectives. */
+export interface ReviewObjectiveBounty {
+  /** When the bounty was announced and when it went live. */
+  announcedAt: number
+  start: number
+  /** Null when it was still running at the end of the game. */
+  end: number | null
+  /** True when the reviewed player's team was the one that could collect; null if unknown. */
+  own: boolean | null
+}
+
 /**
  * Everything the summary and the timeline record about one game from the reviewed player's
  * side. Lives in memory with a freshly parsed match; archives keep only `ReviewDigest`.
@@ -443,6 +565,16 @@ export interface ReviewReport {
   players: ReviewPlayerLine[]
   teams: ReviewTeamLine[]
   build: ReviewBuild
+  /** The lane opponent's purchases and level-ups; null without an identified lane opponent. */
+  opponentBuild: ReviewBuild | null
+  /** Null when the summary does not say what the player queued for. */
+  assignment: ReviewRoleAssignment | null
+  /** The element the rift turned into, which is also the dragon soul on offer; null if it never did. */
+  riftElement: { timestamp: number; name: string } | null
+  plates: ReviewPlate[]
+  bounties: ReviewObjectiveBounty[]
+  /** Multi-kills and aces the timeline marks, for any of the ten players, in time order. */
+  killMarks: ReviewKillMark[]
   levels: ReviewLevelTiming[]
   checkpoints: ReviewCheckpoint[]
   takedowns: ReviewTakedown[]
@@ -466,6 +598,13 @@ export interface ReviewDigest {
   skillPriority: Array<1 | 2 | 3> | null
   /** The server's own challenge counters for the reviewed player; null when the summary has none. */
   challenges: Record<string, number> | null
+  /**
+   * The rune page with the three numbers the server recorded for each rune, one entry
+   * `[rune, n1, n2, n3]` per rune in page order (keystone first). Kept so that a later game can
+   * be told whether a rune did more or less than it usually does. Missing in archives saved
+   * before runes were kept.
+   */
+  runes?: number[][] | null
 }
 
 export interface ReviewMatch {

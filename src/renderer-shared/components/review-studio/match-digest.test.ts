@@ -200,6 +200,30 @@ describe('review game digest', () => {
     })
   })
 
+  it('keeps every rune of the page with the three numbers the server recorded for it', () => {
+    const fixture = scenario()
+    const perks = fixture.summary.json.participants.find((p) => p.participantId === 8)!.perks!
+    perks.styles[0].selections = [
+      { perk: 8369, var1: 1192, var2: 836, var3: 0 },
+      { perk: 8304, var1: 9, var2: 4, var3: 5 }
+    ]
+    perks.styles[1].selections = [{ perk: 8345, var1: 3, var2: 0, var3: 183 }]
+
+    // Page order: the primary tree first, keystone in front; stat shards are not runes.
+    expect(parse(fixture).digest!.runes).toEqual([
+      [8369, 1192, 836, 0],
+      [8304, 9, 4, 5],
+      [8345, 3, 0, 183]
+    ])
+
+    // A summary without a rune page has nothing to keep.
+    Reflect.deleteProperty(
+      fixture.summary.json.participants.find((p) => p.participantId === 8)!,
+      'perks'
+    )
+    expect(parse(fixture).digest).toMatchObject({ runes: null, keystone: null })
+  })
+
   it('leaves event counts empty when the event log cannot be reconciled', () => {
     const fixture = scenario()
     // The summary now claims a death the timeline does not show.
@@ -246,5 +270,26 @@ describe('review game digest', () => {
     // Records written before the digest existed simply have none.
     delete stored.digest
     expect(toReviewArchiveRecord(stored).match.digest).toBeNull()
+  })
+
+  it('reads a digest saved before the runes were kept, and refuses malformed rune numbers', () => {
+    const match = parse(scenario())
+    const stored = () => JSON.parse(JSON.stringify(toReviewArchiveRecord(match).match))
+    expect(match.digest!.runes).toHaveLength(3)
+
+    const older = stored()
+    delete older.digest.runes
+    expect(toReviewArchiveRecord(older).match.digest).toEqual({ ...match.digest, runes: null })
+
+    for (const damage of [
+      (runes: unknown[][]) => (runes[0] = [8112, 0, 0]),
+      (runes: unknown[][]) => (runes[1] = [8143, 0, 'many', 0]),
+      (runes: unknown[][]) => (runes[2] = [-1, 0, 0, 0]),
+      (runes: unknown[][]) => runes.push(...Array.from({ length: 8 }, () => [8304, 0, 0, 0]))
+    ]) {
+      const damaged = stored()
+      damage(damaged.digest.runes)
+      expect(toReviewArchiveRecord(damaged).match.digest).toBeNull()
+    }
   })
 })

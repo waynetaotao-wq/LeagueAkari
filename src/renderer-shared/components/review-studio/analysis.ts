@@ -25,6 +25,13 @@ import type {
 // [lolps] 时间均为服务端毫秒。只使用接近整点的实际快照，不插值。
 export const REVIEW_SNAPSHOT_TOLERANCE_MS = 10_000
 export const REVIEW_MAX_FRAME_GAP_MS = 75_000
+/**
+ * 阵亡多久以内的快照，还可能照到没复活的人。实测 16.23（28 局）最长的一次是阵亡后 59 秒；
+ * 后期的复活时间会更长，所以留出余量。
+ */
+export const REVIEW_CORPSE_MAX_MS = 120_000
+/** 阵亡后这么短的时间里不可能已经走完复活时间。 */
+export const REVIEW_CERTAIN_DEATH_MS = 5000
 export const REVIEW_ALLOWED_QUEUES = [420, 440, 400, 430, 490] as const
 
 export function getReviewPatch(version: unknown): string {
@@ -138,7 +145,8 @@ function readFrame(
     const valid = p?.participantId === participant.participantId ? p : undefined
     const cs = nonnegative(valid?.minionsKilled)
     const jungleCs = nonnegative(valid?.jungleMinionsKilled)
-    const health = nonnegative(valid?.championStats?.health)
+    const stats = valid?.championStats
+    const health = nonnegative(stats?.health)
     return {
       participantId: participant.participantId,
       gold: nonnegative(valid?.totalGold),
@@ -149,7 +157,13 @@ function readFrame(
       xp: nonnegative(valid?.xp),
       damage: nonnegative(valid?.damageStats?.totalDamageDoneToChampions),
       damageTaken: nonnegative(valid?.damageStats?.totalDamageTaken),
-      unspentGold: nonnegative(valid?.currentGold)
+      unspentGold: nonnegative(valid?.currentGold),
+      health,
+      healthMax: nonnegative(stats?.healthMax),
+      attackDamage: nonnegative(stats?.attackDamage),
+      abilityPower: nonnegative(stats?.abilityPower),
+      armor: finite(stats?.armor) ? stats.armor : null,
+      magicResist: finite(stats?.magicResist) ? stats.magicResist : null
     }
   })
   const own = parsed.find((p) => p.participantId === self.participantId)
@@ -257,6 +271,15 @@ function readEvents(
             ? selected.monsterSubType
             : null
       }
+      // 没有击杀者、击杀方又写的是中立队伍（300）：没有人拿下它，是它自己离场了。
+      if (
+        selected.type === 'ELITE_MONSTER_KILL' &&
+        killerId === null &&
+        finite(selected.killerTeamId) &&
+        team(selected.killerTeamId) === null &&
+        selected.killerTeamId > 0
+      )
+        parsed.unclaimed = true
       const key = JSON.stringify(parsed)
       if (!found.has(key)) {
         parsed.id = `event-${found.size}-${selected.timestamp}`
@@ -265,6 +288,54 @@ function readEvents(
     }
   }
   return [...found.values()].sort((a, b) => a.timestamp - b.timestamp || a.id.localeCompare(b.id))
+}
+
+/**
+ * 快照里的血量不能单独用来判断死活，要和击杀记录对着看。实测 16.23（28 局、8430 个快照格）：
+ * - 阵亡后还没复活的人停在自己的阵亡坐标上一动不动，其中 181 格的血量不是 0（1、12、365……，
+ *   像是尸体在回血）。复活走开的人坐标一定变了；离阵亡坐标不到 100 却不完全相同的 4 格里，
+ *   有 3 格是复活后走回来的活人。所以只认坐标完全相同的，并且不能是满血：满血站在自己阵亡
+ *   的那个点上，只能是在泉水里被杀、又在原地复活的人。
+ * - 阵亡后几秒之内的快照，人一定还没复活（一级的复活时间也有十秒左右；实测阵亡后 12 秒内
+ *   的 336 格里，已经复活的 3 格都在 9 秒以后，而且都是满血）。这时哪怕坐标差了一点
+ *   （实测 1 格：阵亡 2 秒后、离阵亡坐标 38、血量 1）也算阵亡，同样要求不是满血。
+ * - 反过来，血量是 0、之前两分钟内却没有阵亡记录的有 1 格（札克的被动）：那不是阵亡。
+ *   只有这名玩家的击杀记录和摘要里的死亡数对得上时才这样改判，记录不全就仍按血量算。
+ */
+function settleAlive(
+  frames: ReviewFrame[],
+  events: ReviewEvent[],
+  /** Participants whose recorded deaths add up to the summary's count. */
+  reconciled: ReadonlySet<number>
+) {
+  const deathsOf = new Map<number, ReviewEvent[]>()
+  for (const event of events) {
+    if (event.type !== 'kill' || event.victimId === null) continue
+    if (!deathsOf.has(event.victimId)) deathsOf.set(event.victimId, [])
+    deathsOf.get(event.victimId)!.push(event)
+  }
+  for (const frame of frames) {
+    for (const entry of frame.participants) {
+      const health = entry.health
+      if (health == null) continue
+      const last = deathsOf
+        .get(entry.participantId)
+        ?.filter((event) => event.timestamp <= frame.timestamp)
+        .at(-1)
+      if (last && frame.timestamp - last.timestamp <= REVIEW_CORPSE_MAX_MS) {
+        const onTheSpot =
+          !!last.position &&
+          !!entry.position &&
+          entry.position.x === last.position.x &&
+          entry.position.y === last.position.y
+        const fullHealth = entry.healthMax != null && health >= entry.healthMax
+        const justDied = frame.timestamp - last.timestamp <= REVIEW_CERTAIN_DEATH_MS
+        entry.alive = !(health === 0 || (!fullHealth && (justDied || onTheSpot)))
+      } else if (health === 0 && reconciled.has(entry.participantId)) {
+        entry.alive = true
+      }
+    }
+  }
 }
 
 function readSnapshots(frames: ReviewFrame[], durationMs: number): ReviewSnapshot[] {
@@ -561,14 +632,19 @@ export function parseReviewMatch(
     new Map(participants.map((p) => [p.participantId, p.teamId])),
     durationMs
   )
-  const deathCountsMatch = summary.json.participants.every(
-    (participant) =>
-      nonnegative(participant.deaths) !== null &&
-      participant.deaths ===
-        events.filter(
-          (event) => event.type === 'kill' && event.victimId === participant.participantId
-        ).length
+  const deathsReconciled = new Set(
+    summary.json.participants
+      .filter(
+        (participant) =>
+          nonnegative(participant.deaths) !== null &&
+          participant.deaths ===
+            events.filter(
+              (event) => event.type === 'kill' && event.victimId === participant.participantId
+            ).length
+      )
+      .map((participant) => participant.participantId)
   )
+  const deathCountsMatch = deathsReconciled.size === summary.json.participants.length
   const eventsComplete = validEventSlots === expectedFrames && deathCountsMatch
   if (!opponent) warnings.push('未能唯一确认同位置对手，对位经济与补刀差不计算。')
   if (validSlots < expectedFrames) warnings.push('时间线存在缺失或不完整快照；图表保留断档。')
@@ -576,6 +652,7 @@ export function parseReviewMatch(
     warnings.push(
       '事件记录或死亡数量与摘要无法完整核对，次数仅表示已记录事件，不能据此断言没有其他事件。'
     )
+  settleAlive(frames, events, deathsReconciled)
   if (duplicates) warnings.push('服务端包含重复时间帧，重复帧已去重。')
   if (conflictingFrames.size)
     warnings.push('同一时刻的玩家快照互相冲突，已留空，避免任选一份产生错误差值。')
